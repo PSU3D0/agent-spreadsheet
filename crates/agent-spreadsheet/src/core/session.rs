@@ -41,6 +41,14 @@ impl WorkbookSession {
         self.spreadsheet
     }
 
+    pub(crate) fn spreadsheet(&self) -> &Spreadsheet {
+        &self.spreadsheet
+    }
+
+    pub(crate) fn spreadsheet_mut(&mut self) -> &mut Spreadsheet {
+        &mut self.spreadsheet
+    }
+
     /// Open a workbook session from raw XLSX bytes.
     pub fn from_bytes(bytes: impl AsRef<[u8]>) -> Result<Self> {
         let workbook_bytes = bytes.as_ref();

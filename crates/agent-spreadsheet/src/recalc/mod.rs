@@ -29,6 +29,11 @@ pub use fire_and_forget::FireAndForgetExecutor;
 pub use formualizer_backend::{EvaluatorCounters, FormualizerBackend, recalculate_bytes_sync};
 #[cfg(feature = "recalc-formualizer")]
 pub use resident::{CalculationStamp, ExportStamp, ResidentRevision, ResidentWorkbook};
+#[cfg(feature = "recalc-formualizer")]
+pub(crate) use resident::{
+    ResidentCalculationEffect, ResidentMaterializedCell, ResidentMaterializedValue,
+    ResidentPreparedCellEffect, materialize_umya_cell,
+};
 #[cfg(feature = "recalc-libreoffice")]
 pub use screenshot::{ScreenshotExecutor, ScreenshotResult};
 

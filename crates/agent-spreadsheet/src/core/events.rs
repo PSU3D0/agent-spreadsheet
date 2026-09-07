@@ -419,6 +419,20 @@ impl OpEvent {
         self
     }
 
+    pub fn verify_integrity(&self) -> bool {
+        if self.canonical_payload_hash != canonical_payload_hash(&self.payload) {
+            return false;
+        }
+        let Some(expected) = &self.event_hash else {
+            return false;
+        };
+        let mut unsigned = self.clone();
+        unsigned.event_hash = None;
+        let json = serde_json::to_string(&unsigned).unwrap_or_default();
+        let actual = format!("sha256:{:x}", Sha256::digest(json.as_bytes()));
+        &actual == expected
+    }
+
     /// Compute and set the event hash over the full serialized record.
     pub fn seal(&mut self) {
         let json = serde_json::to_string(self).unwrap_or_default();

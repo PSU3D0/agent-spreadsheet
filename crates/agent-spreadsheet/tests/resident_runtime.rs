@@ -21,6 +21,36 @@ fn fixture() -> Vec<u8> {
 }
 
 #[test]
+fn warm_reads_disclose_dirty_state_and_do_not_implicitly_calculate() {
+    let mut resident = ResidentWorkbook::from_bytes(fixture()).unwrap();
+    resident.recalculate(None).unwrap();
+    resident
+        .apply_write_matrix(
+            "Sheet1",
+            "A1",
+            vec![vec![Some(SessionMatrixCell::Value(json!(5)))]],
+            true,
+        )
+        .unwrap();
+    assert!(matches!(
+        resident.calculation_stamp(),
+        CalculationStamp::Dirty { .. }
+    ));
+    let stale = resident.range_values("Sheet1", "B1").unwrap();
+    assert!(matches!(
+        stale[0].rows.as_ref().unwrap()[0][0],
+        Some(agent_spreadsheet::model::CellValue::Number(value)) if value == 2.0
+    ));
+    assert_eq!(resident.evaluator_counters().evaluations, 1);
+    resident.recalculate(None).unwrap();
+    let current = resident.range_values("Sheet1", "B1").unwrap();
+    assert!(matches!(
+        current[0].rows.as_ref().unwrap()[0][0],
+        Some(agent_spreadsheet::model::CellValue::Number(value)) if value == 10.0
+    ));
+}
+
+#[test]
 fn retained_engine_recalculates_dependencies_without_reingest() {
     let mut resident = ResidentWorkbook::from_bytes(fixture()).unwrap();
     let first = resident.recalculate(None).unwrap();

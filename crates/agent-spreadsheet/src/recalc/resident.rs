@@ -14,6 +14,35 @@ use crate::model::{EvaluationCoverage, EvaluationFreshness, EvaluationSource};
 use crate::utils::hash_bytes_sha256_hex;
 use anyhow::{Result, anyhow};
 use formualizer::workbook::{SpreadsheetReader, UmyaAdapter};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
+pub(crate) enum ResidentMaterializedValue {
+    Empty,
+    String(String),
+    RichText(String),
+    Lazy(String),
+    Number(f64),
+    Bool(bool),
+    Error(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct ResidentMaterializedCell {
+    pub value: ResidentMaterializedValue,
+    pub formula: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct ResidentPreparedCellEffect {
+    pub sheet_name: String,
+    pub column: u32,
+    pub row: u32,
+    pub source_op_indices: Vec<usize>,
+    pub expected_before: Option<ResidentMaterializedCell>,
+    pub after: ResidentMaterializedCell,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResidentRevision {
@@ -49,6 +78,12 @@ pub struct ExportStamp {
     pub content_sha256: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) enum ResidentCalculationEffect {
+    Preserve,
+    Invalidate,
+}
+
 /// One portable resident workbook. It is deliberately not `Clone`, wrapped in
 /// a global mutex, or marked Send/Sync: an adapter chooses an appropriate owner
 /// lane and serializes commits around it.
@@ -58,6 +93,7 @@ pub struct ResidentWorkbook {
     revisions: ResidentRevision,
     calculation: CalculationStamp,
     counters: EvaluatorCounters,
+    serializations: std::cell::Cell<u64>,
     last_export: Option<ExportStamp>,
 }
 
@@ -85,6 +121,7 @@ impl ResidentWorkbook {
                 ..Default::default()
             },
             last_export: None,
+            serializations: std::cell::Cell::new(0),
         })
     }
 
@@ -102,6 +139,237 @@ impl ResidentWorkbook {
         self.counters
     }
 
+    /// Warm read using the existing WorkbookSession semantic helper. No XLSX
+    /// serialization or reader reconstruction occurs.
+    pub fn range_values(
+        &self,
+        sheet_name: &str,
+        ranges: impl Into<crate::core::session::SessionRangeSelection>,
+    ) -> Result<Vec<crate::model::RangeValuesEntry>> {
+        self.document.range_values(sheet_name, ranges)
+    }
+
+    /// Warm page read using the shared session projection implementation.
+    pub fn sheet_page(
+        &self,
+        params: crate::core::session::SessionSheetPageParams,
+    ) -> Result<crate::model::SheetPageResponse> {
+        self.document.sheet_page(params)
+    }
+
+    pub fn state_revision_id(&self) -> String {
+        format!(
+            "resident:{}:{}:{}",
+            self.revisions.epoch, self.revisions.document, self.revisions.state
+        )
+    }
+
+    pub fn serialization_count(&self) -> u64 {
+        self.serializations.get()
+    }
+
+    pub(crate) fn snapshot_bytes(&self) -> Result<Vec<u8>> {
+        self.serializations.set(self.serializations.get() + 1);
+        self.document.to_bytes()
+    }
+
+    pub(crate) fn spreadsheet(&self) -> &umya_spreadsheet::Spreadsheet {
+        self.document.spreadsheet()
+    }
+
+    pub(crate) fn materialized_cell(
+        &self,
+        sheet_name: &str,
+        column: u32,
+        row: u32,
+    ) -> Result<Option<ResidentMaterializedCell>> {
+        let sheet = self
+            .document
+            .spreadsheet()
+            .get_sheet_by_name(sheet_name)
+            .ok_or_else(|| anyhow!("sheet '{sheet_name}' not found"))?;
+        Ok(sheet.get_cell((column, row)).map(materialize_umya_cell))
+    }
+
+    pub(crate) fn publish_prepared_cells(
+        &mut self,
+        effects: &[ResidentPreparedCellEffect],
+    ) -> Result<String> {
+        self.publish_prepared_cells_inner(effects, true)
+    }
+
+    pub(crate) fn recover_prepared_cells(
+        &mut self,
+        effects: &[ResidentPreparedCellEffect],
+    ) -> Result<String> {
+        self.publish_prepared_cells_inner(effects, false)
+    }
+
+    fn publish_prepared_cells_inner(
+        &mut self,
+        effects: &[ResidentPreparedCellEffect],
+        check_before: bool,
+    ) -> Result<String> {
+        for effect in effects {
+            let current = self.materialized_cell(&effect.sheet_name, effect.column, effect.row)?;
+            let matches = if check_before {
+                current == effect.expected_before
+            } else {
+                logical_predecessor_matches(current.as_ref(), effect.expected_before.as_ref())
+            };
+            if !matches {
+                return Err(anyhow!(
+                    "prepared cell logical precondition changed at {}!{}",
+                    effect.sheet_name,
+                    crate::utils::cell_address(effect.column, effect.row)
+                ));
+            }
+        }
+        for effect in effects {
+            let sheet = self
+                .document
+                .spreadsheet_mut()
+                .get_sheet_by_name_mut(&effect.sheet_name)
+                .ok_or_else(|| anyhow!("sheet '{}' not found", effect.sheet_name))?;
+            assign_materialized_cell(
+                sheet.get_cell_mut((effect.column, effect.row)),
+                &effect.after,
+            )?;
+        }
+        if effects.is_empty() {
+            return Ok(self.state_revision_id());
+        }
+        self.revisions.document += 1;
+        self.revisions.state += 1;
+        self.calculation = CalculationStamp::Dirty {
+            document_revision: self.revisions.document,
+        };
+        if let Some(evaluator) = self.evaluator.as_mut() {
+            for effect in effects {
+                let update =
+                    self.document
+                        .evaluator_cell(&effect.sheet_name, effect.column, effect.row)?;
+                let synchronized = match update {
+                    SessionEvaluatorCell::Formula(formula) => evaluator.set_formula(
+                        &effect.sheet_name,
+                        effect.row,
+                        effect.column,
+                        &formula,
+                    ),
+                    SessionEvaluatorCell::Value(value) => {
+                        evaluator.set_value(&effect.sheet_name, effect.row, effect.column, value)
+                    }
+                };
+                if synchronized.is_err() {
+                    self.evaluator = None;
+                    break;
+                }
+            }
+        }
+        Ok(self.state_revision_id())
+    }
+
+    pub(crate) fn restore_revision_identity(&mut self, epoch: String, document: u64, state: u64) {
+        self.revisions = ResidentRevision {
+            epoch,
+            document,
+            state,
+        };
+        self.calculation = CalculationStamp::Dirty {
+            document_revision: document,
+        };
+        self.evaluator = None;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fail_next_evaluation_for_test(&mut self) {
+        self.evaluator.as_mut().unwrap().invalidate_for_test();
+    }
+
+    pub(crate) fn prepare_calculation(
+        &mut self,
+        timeout_ms: Option<u64>,
+    ) -> Result<(
+        super::formualizer_backend::EvaluatorEvaluation,
+        formualizer::eval::engine::DateSystem,
+    )> {
+        self.ensure_evaluator()?;
+        self.counters.evaluations += 1;
+        let evaluator = self.evaluator.as_mut().expect("evaluator ensured");
+        match evaluator.evaluate(timeout_ms) {
+            Ok(evaluation) => Ok((evaluation, evaluator.date_system())),
+            Err(error) => {
+                // Derived partial work is disposable; publication/proof belongs to
+                // the durable owner and must not precede its commit.
+                self.evaluator = None;
+                Err(error)
+            }
+        }
+    }
+
+    pub(crate) fn publish_prepared_calculation(
+        &mut self,
+        evaluation: super::formualizer_backend::EvaluatorEvaluation,
+        date_system: formualizer::eval::engine::DateSystem,
+        mut coverage: EvaluationCoverage,
+    ) -> Result<String> {
+        self.publish_formula_caches(&evaluation.cache_updates, date_system)?;
+        self.revisions.state += 1;
+        coverage.revision_id = self.state_revision_id();
+        self.calculation = CalculationStamp::Current {
+            document_revision: self.revisions.document,
+            coverage,
+        };
+        Ok(self.state_revision_id())
+    }
+
+    pub(crate) fn advance_metadata_state(&mut self) -> String {
+        self.revisions.state += 1;
+        self.state_revision_id()
+    }
+
+    pub(crate) fn mark_restart_boundary(&mut self) {
+        self.evaluator = None;
+        self.revisions.state += 1;
+        self.calculation = CalculationStamp::Dirty {
+            document_revision: self.revisions.document,
+        };
+    }
+
+    pub(crate) fn replace_from_bytes(
+        &mut self,
+        bytes: &[u8],
+        effect: ResidentCalculationEffect,
+    ) -> Result<String> {
+        let replacement = WorkbookSession::from_bytes(bytes)?;
+        self.document = replacement;
+        self.revisions.document += 1;
+        self.revisions.state += 1;
+        let new_revision = self.state_revision_id();
+        match effect {
+            ResidentCalculationEffect::Preserve => match &mut self.calculation {
+                CalculationStamp::Current {
+                    document_revision,
+                    coverage,
+                } => {
+                    *document_revision = self.revisions.document;
+                    coverage.revision_id = new_revision.clone();
+                }
+                CalculationStamp::NotEvaluated { document_revision }
+                | CalculationStamp::Dirty { document_revision } => {
+                    *document_revision = self.revisions.document;
+                }
+            },
+            ResidentCalculationEffect::Invalidate => {
+                self.evaluator = None;
+                self.calculation = CalculationStamp::Dirty {
+                    document_revision: self.revisions.document,
+                };
+            }
+        }
+        Ok(new_revision)
+    }
+
     /// Apply the common cell/matrix hot path to the authoritative document and
     /// synchronize each committed effect into the retained evaluator. If engine
     /// synchronization fails, the document remains committed and the evaluator
@@ -113,32 +381,76 @@ impl ResidentWorkbook {
         rows: Vec<Vec<Option<SessionMatrixCell>>>,
         overwrite_formulas: bool,
     ) -> Result<SessionApplySummary> {
-        let sheet_name = sheet_name.into();
-        let anchor = anchor.into();
-        // Record formula-preservation decisions before the authoritative mutation;
-        // this is effect metadata, not a document copy.
-        let (anchor_col, anchor_row) = parse_cell(&anchor)?;
-        let mut skipped = std::collections::HashSet::new();
-        if !overwrite_formulas {
-            for (row_offset, values) in rows.iter().enumerate() {
-                for (col_offset, value) in values.iter().enumerate() {
-                    if value.is_some() {
-                        let row = anchor_row + row_offset as u32;
-                        let col = anchor_col + col_offset as u32;
-                        if self.document.cell_is_formula(&sheet_name, col, row)? {
-                            skipped.insert((row, col));
+        self.apply_write_matrices(&[crate::core::session::SessionTransformOp::WriteMatrix {
+            sheet_name: sheet_name.into(),
+            anchor: anchor.into(),
+            rows,
+            overwrite_formulas,
+        }])
+    }
+
+    pub(crate) fn preflight_write_matrices(
+        &self,
+        ops: &[crate::core::session::SessionTransformOp],
+    ) -> Result<()> {
+        for op in ops {
+            let crate::core::session::SessionTransformOp::WriteMatrix {
+                sheet_name,
+                anchor,
+                rows,
+                ..
+            } = op;
+            let (anchor_col, anchor_row) = parse_cell(anchor)?;
+            if self.document.sheet_by_name(sheet_name).is_none() {
+                return Err(anyhow!("sheet '{}' not found", sheet_name));
+            }
+            let max_width = rows.iter().map(Vec::len).max().unwrap_or(0) as u32;
+            let end_row = anchor_row
+                .checked_add(rows.len().saturating_sub(1) as u32)
+                .ok_or_else(|| anyhow!("matrix row range overflows"))?;
+            let end_col = anchor_col
+                .checked_add(max_width.saturating_sub(1))
+                .ok_or_else(|| anyhow!("matrix column range overflows"))?;
+            if end_row > 1_048_576 || end_col > 16_384 {
+                return Err(anyhow!("matrix exceeds XLSX worksheet bounds"));
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn apply_write_matrices(
+        &mut self,
+        ops: &[crate::core::session::SessionTransformOp],
+    ) -> Result<SessionApplySummary> {
+        // Preflight the complete batch before mutating the authoritative document.
+        self.preflight_write_matrices(ops)?;
+        let mut skip_sets = Vec::with_capacity(ops.len());
+        for op in ops {
+            let crate::core::session::SessionTransformOp::WriteMatrix {
+                sheet_name,
+                anchor,
+                rows,
+                overwrite_formulas,
+            } = op;
+            let mut skipped = std::collections::HashSet::new();
+            let (anchor_col, anchor_row) = parse_cell(anchor)?;
+            if !overwrite_formulas {
+                for (row_offset, values) in rows.iter().enumerate() {
+                    for (col_offset, value) in values.iter().enumerate() {
+                        if value.is_some() {
+                            let row = anchor_row + row_offset as u32;
+                            let col = anchor_col + col_offset as u32;
+                            if self.document.cell_is_formula(sheet_name, col, row)? {
+                                skipped.insert((row, col));
+                            }
                         }
                     }
                 }
             }
+            skip_sets.push(skipped);
         }
-        // WorkbookSession validates the complete operation before mutation.
-        let summary = self.document.apply_write_matrix(
-            sheet_name.clone(),
-            anchor.clone(),
-            rows.clone(),
-            overwrite_formulas,
-        )?;
+
+        let summary = self.document.apply_ops(ops)?;
         let effects = summary.cells_value_set + summary.cells_formula_set;
         if effects == 0 {
             return Ok(summary);
@@ -151,16 +463,19 @@ impl ResidentWorkbook {
         };
 
         if let Some(evaluator) = self.evaluator.as_mut() {
-            let sync = synchronize_matrix(
-                &self.document,
-                evaluator,
-                &sheet_name,
-                &anchor,
-                &rows,
-                &skipped,
-            );
-            if sync.is_err() {
-                self.evaluator = None;
+            for (op, skipped) in ops.iter().zip(&skip_sets) {
+                let crate::core::session::SessionTransformOp::WriteMatrix {
+                    sheet_name,
+                    anchor,
+                    rows,
+                    ..
+                } = op;
+                if synchronize_matrix(&self.document, evaluator, sheet_name, anchor, rows, skipped)
+                    .is_err()
+                {
+                    self.evaluator = None;
+                    break;
+                }
             }
         }
         Ok(summary)
@@ -220,7 +535,7 @@ impl ResidentWorkbook {
     /// Export an immutable snapshot through Umya. Export does not edit logical
     /// state or trigger calculation.
     pub fn export_bytes(&mut self) -> Result<Vec<u8>> {
-        let bytes = self.document.to_bytes()?;
+        let bytes = self.snapshot_bytes()?;
         self.last_export = Some(ExportStamp {
             epoch: self.revisions.epoch.clone(),
             document_revision: self.revisions.document,
@@ -247,6 +562,11 @@ impl ResidentWorkbook {
 
     /// Revoking published proof is a workbook-state transition, but not a
     /// document edit or export. Repeated failure while already dirty is not.
+    pub(crate) fn revoke_calculation_proof(&mut self) -> String {
+        self.invalidate_calculation_proof();
+        self.state_revision_id()
+    }
+
     fn invalidate_calculation_proof(&mut self) {
         self.evaluator = None;
         if !matches!(
@@ -265,7 +585,7 @@ impl ResidentWorkbook {
         if self.evaluator.is_some() {
             return Ok(());
         }
-        let bytes = self.document.to_bytes()?;
+        let bytes = self.snapshot_bytes()?;
         let mut adapter = UmyaAdapter::open_bytes(bytes)
             .map_err(|error| anyhow!("failed to rebuild evaluator adapter: {error}"))?;
         self.evaluator = Some(RetainedEvaluator::ingest(&mut adapter)?);
@@ -300,6 +620,101 @@ fn synchronize_matrix(
                 SessionEvaluatorCell::Value(value) => {
                     evaluator.set_value(sheet, row, col, value)?
                 }
+            }
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn materialize_umya_cell(cell: &umya_spreadsheet::Cell) -> ResidentMaterializedCell {
+    use umya_spreadsheet::CellRawValue;
+    let value = match cell.get_cell_value().get_raw_value() {
+        CellRawValue::Empty => ResidentMaterializedValue::Empty,
+        CellRawValue::String(value) => ResidentMaterializedValue::String(value.to_string()),
+        CellRawValue::RichText(value) => {
+            ResidentMaterializedValue::RichText(value.get_text().to_string())
+        }
+        CellRawValue::Lazy(value) => ResidentMaterializedValue::Lazy(value.to_string()),
+        CellRawValue::Numeric(value) => ResidentMaterializedValue::Number(*value),
+        CellRawValue::Bool(value) => ResidentMaterializedValue::Bool(*value),
+        CellRawValue::Error(value) => ResidentMaterializedValue::Error(value.to_string()),
+    };
+    let formula = cell.get_formula();
+    ResidentMaterializedCell {
+        value,
+        formula: (!formula.is_empty()).then(|| formula.to_string()),
+    }
+}
+
+fn logical_predecessor_matches(
+    current: Option<&ResidentMaterializedCell>,
+    expected: Option<&ResidentMaterializedCell>,
+) -> bool {
+    match (current, expected) {
+        (None, None) => true,
+        (Some(current), Some(expected)) => match &expected.formula {
+            Some(formula) => current.formula.as_ref() == Some(formula),
+            None => current == expected,
+        },
+        _ => false,
+    }
+}
+
+fn error_value(value: &str) -> Result<umya_spreadsheet::CellErrorType> {
+    Ok(match value {
+        "#DIV/0!" => umya_spreadsheet::CellErrorType::Div0,
+        "#NAME?" => umya_spreadsheet::CellErrorType::Name,
+        "#N/A" => umya_spreadsheet::CellErrorType::NA,
+        "#NUM!" => umya_spreadsheet::CellErrorType::Num,
+        "#VALUE!" => umya_spreadsheet::CellErrorType::Value,
+        "#REF!" => umya_spreadsheet::CellErrorType::Ref,
+        "#NULL!" => umya_spreadsheet::CellErrorType::Null,
+        "#DATA!" => umya_spreadsheet::CellErrorType::Data,
+        _ => return Err(anyhow!("unsupported prepared cell error '{value}'")),
+    })
+}
+
+fn assign_materialized_cell(
+    cell: &mut umya_spreadsheet::Cell,
+    materialized: &ResidentMaterializedCell,
+) -> Result<()> {
+    use ResidentMaterializedValue as Value;
+    if let Some(formula) = &materialized.formula {
+        cell.set_formula(formula);
+        match &materialized.value {
+            Value::Empty => {
+                cell.set_formula_result_blank();
+            }
+            Value::String(value) | Value::RichText(value) | Value::Lazy(value) => {
+                cell.set_formula_result_string(value);
+            }
+            Value::Number(value) => {
+                cell.set_formula_result_number(*value);
+            }
+            Value::Bool(value) => {
+                cell.set_formula_result_bool(*value);
+            }
+            Value::Error(value) => {
+                cell.set_formula_result_error(error_value(value)?);
+            }
+        }
+    } else {
+        match &materialized.value {
+            Value::Empty => {
+                cell.set_value("");
+            }
+            Value::String(value) | Value::RichText(value) | Value::Lazy(value) => {
+                // This is already a normalized literal. Never run type guessing again.
+                cell.set_value_string(value);
+            }
+            Value::Number(value) => {
+                cell.set_value_number(*value);
+            }
+            Value::Bool(value) => {
+                cell.set_value_bool(*value);
+            }
+            Value::Error(value) => {
+                cell.set_value(value);
             }
         }
     }

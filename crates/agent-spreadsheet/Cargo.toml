@@ -83,6 +83,8 @@ agent-spreadsheet-render = { version = "0.15.0", path = "../agent-spreadsheet-re
 quick-xml = { version = "0.31", optional = true }
 xxhash-rust = { version = "0.8", features = ["xxh64"], optional = true }
 tempfile = { version = "3.10", optional = true }
+fs2 = { version = "0.4", optional = true }
+libc = { version = "0.2", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1.37", features = ["rt-multi-thread", "fs", "signal", "net", "process"] }
@@ -104,7 +106,7 @@ default = ["recalc-formualizer", "sheetport", "cli", "native-fs", "render"]
 cli = ["native-fs", "dep:clap", "dep:serde_yaml", "dep:tracing-subscriber"]
 
 # Host filesystem surface: path-backed workspace discovery, temp-file staging.
-native-fs = ["dep:tempfile", "dep:walkdir", "dep:globset"]
+native-fs = ["dep:tempfile", "dep:walkdir", "dep:globset", "dep:fs2", "dep:libc"]
 
 recalc = ["async-trait", "uuid", "quick-xml", "xxhash-rust"]
 recalc-formualizer = ["recalc", "dep:formualizer"]

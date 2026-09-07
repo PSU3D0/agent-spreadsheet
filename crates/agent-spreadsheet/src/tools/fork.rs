@@ -2860,7 +2860,8 @@ fn copy_or_move_range(
                     formula_value_copies += 1;
                 }
 
-                let src_value = src_cell.get_value().to_string();
+                let mut src_value = src_cell.get_cell_value().clone();
+                src_value.remove_formula();
                 let src_style = src_cell.get_style().clone();
 
                 let dest_cell = sheet.get_cell_mut((dest_col, dest_row));
@@ -2874,7 +2875,7 @@ fn copy_or_move_range(
                     dest_cell.set_formula_result_default("");
                 }
                 if set_value {
-                    dest_cell.set_value(src_value);
+                    dest_cell.set_cell_value(src_value);
                 }
             }
         }
@@ -2956,7 +2957,8 @@ fn copy_or_move_range(
                     formula_value_copies += 1;
                 }
 
-                let src_value = src_cell.get_value().to_string();
+                let mut src_value = src_cell.get_cell_value().clone();
+                src_value.remove_formula();
                 let src_style = src_cell.get_style().clone();
 
                 let dest_cell = dest_sheet.get_cell_mut((dest_col, dest_row));
@@ -2970,7 +2972,7 @@ fn copy_or_move_range(
                     dest_cell.set_formula_result_default("");
                 }
                 if set_value {
-                    dest_cell.set_value(src_value);
+                    dest_cell.set_cell_value(src_value);
                 }
             }
         }

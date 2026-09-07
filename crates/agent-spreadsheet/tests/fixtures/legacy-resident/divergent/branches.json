@@ -1,0 +1,15 @@
+{
+  "branches": [
+    {
+      "name": "main",
+      "tip_op_id": "op_001a079eebfac_1f5a1322",
+      "created_at": "2026-09-07T03:34:44.854855591Z"
+    },
+    {
+      "name": "feature",
+      "tip_op_id": "op_001a079eebf99_8e570b36",
+      "fork_point": "op_001a079eebf7f_a16ff054",
+      "created_at": "2026-09-07T03:34:44.873609404Z"
+    }
+  ]
+}
