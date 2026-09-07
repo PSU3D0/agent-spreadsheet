@@ -5,6 +5,12 @@ Owner: Tranche 35 (tickets/35-js-surface-migration)
 
 This matrix is the planning baseline for cross-surface migration.
 
+## Resident session amendment (implementation planned)
+
+`resident-session-runtime.md` extends explicit session bindings across native CLI/MCP and portable WASM/SDK/just-bash. File-bound CLI/just-bash remains ephemeral. Session mutation/evaluation/history semantics belong to the shared Rust runtime; host adapters own storage and process/VFS lifecycle. Native session commands may auto-start a private host. Portable memory-only versus host-backed persistence is explicit; stage/checkpoint catalogs have separate generations from workbook CAS revisions. Atomic implementations may use bounded reversible changes instead of full-state copies when the shared recovery guarantees hold.
+
+These are authorized design boundaries, **not current capability claims**. Existing catalog rows and live discovery remain authoritative until their resident implementations and cross-surface gates land. The old `MCP_ONLY` orchestration classification does not prohibit implementing the same session semantics through other backed hosts; adapter-specific discovery must still reflect actual support.
+
 ## Legend
 
 - **Classification**

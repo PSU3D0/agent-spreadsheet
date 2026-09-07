@@ -56,7 +56,162 @@ impl RecalcBackend for FormualizerBackend {
     }
 }
 
-type FormualizerEngine = Engine<WBResolver>;
+pub(crate) type FormualizerEngine = Engine<WBResolver>;
+
+/// Deterministic lifecycle counters for retained-evaluator reuse assertions.
+/// These count events, not time, and are also useful to adapter diagnostics.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct EvaluatorCounters {
+    pub constructions: u64,
+    pub ingests: u64,
+    pub evaluations: u64,
+    pub rebuilds: u64,
+}
+
+pub(crate) struct RetainedEvaluator {
+    engine: FormualizerEngine,
+    formula_cells: HashSet<(String, u32, u32)>,
+    usable: bool,
+}
+
+pub(crate) struct EvaluatorEvaluation {
+    pub cells_evaluated: u64,
+    pub cache_updates: Vec<FormulaCacheUpdate>,
+    pub eval_errors: Vec<String>,
+    pub error_formula_cells: u64,
+    pub formula_cells: u64,
+}
+
+impl RetainedEvaluator {
+    pub(crate) fn ingest(adapter: &mut UmyaAdapter) -> Result<Self> {
+        let eval_config = EvalConfig {
+            defer_graph_building: true,
+            formula_parse_policy: FormulaParsePolicy::CoerceToError,
+            ..Default::default()
+        };
+        let mut engine = FormualizerEngine::new(WBResolver::default(), eval_config);
+        adapter
+            .stream_into_engine(&mut engine)
+            .map_err(|e| anyhow!("failed to ingest workbook into formualizer engine: {e}"))?;
+        Ok(Self {
+            engine,
+            formula_cells: adapter.formula_cells().into_iter().collect(),
+            usable: true,
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn invalidate_for_test(&mut self) {
+        self.usable = false;
+    }
+
+    pub(crate) fn set_value(
+        &mut self,
+        sheet: &str,
+        row: u32,
+        col: u32,
+        value: LiteralValue,
+    ) -> Result<()> {
+        if !self.usable {
+            return Err(anyhow!("evaluator requires rebuild"));
+        }
+        self.engine
+            .set_cell_value(sheet, row, col, value)
+            .map_err(|e| anyhow!("failed to synchronize evaluator value: {e}"))?;
+        self.formula_cells.remove(&(sheet.to_string(), row, col));
+        Ok(())
+    }
+
+    pub(crate) fn set_formula(
+        &mut self,
+        sheet: &str,
+        row: u32,
+        col: u32,
+        formula: &str,
+    ) -> Result<()> {
+        if !self.usable {
+            return Err(anyhow!("evaluator requires rebuild"));
+        }
+        let normalized = if formula.starts_with('=') {
+            formula.to_string()
+        } else {
+            format!("={formula}")
+        };
+        let ast = formualizer_parse::parser::parse(&normalized)
+            .map_err(|e| anyhow!("failed to parse formula for evaluator synchronization: {e}"))?;
+        self.engine
+            .set_cell_formula(sheet, row, col, ast)
+            .map_err(|e| anyhow!("failed to synchronize evaluator formula: {e}"))?;
+        self.formula_cells.insert((sheet.to_string(), row, col));
+        Ok(())
+    }
+
+    pub(crate) fn evaluate(&mut self, timeout_ms: Option<u64>) -> Result<EvaluatorEvaluation> {
+        if !self.usable {
+            return Err(anyhow!("evaluator requires rebuild"));
+        }
+        let (cells_evaluated, cycle_errors, changed_cells) =
+            match evaluate_with_optional_timeout(&mut self.engine, timeout_ms) {
+                Ok(result) => result,
+                Err(error) if timeout_ms.is_some() => {
+                    // A cancelled engine may contain partial derived state. Never reuse or
+                    // publish it as coverage; the owner must rebuild before another attempt.
+                    self.usable = false;
+                    return Err(anyhow!(
+                        "evaluation interrupted before complete coverage: {error}"
+                    ));
+                }
+                Err(error) => return Err(anyhow!("formualizer evaluate_all failed: {error}")),
+            };
+        let mut eval_errors = Vec::new();
+        if cycle_errors > 0 {
+            eval_errors.push(format!(
+                "Detected {} circular reference cycle(s). Cells in cycles are reported as #CIRC! by this backend; workbooks built with Excel's iterative calculation need an iterative backend.",
+                cycle_errors
+            ));
+        }
+        let _changed_cells = changed_cells;
+        let mut cache_updates = Vec::with_capacity(self.formula_cells.len());
+        let mut error_formula_cells = 0;
+        for (sheet_name, row, col) in &self.formula_cells {
+            let value = self
+                .engine
+                .get_cell_value(sheet_name, *row, *col)
+                .unwrap_or(LiteralValue::Empty);
+            if let LiteralValue::Error(err) = &value {
+                error_formula_cells += 1;
+                if eval_errors.len() < 200 {
+                    eval_errors.push(format!(
+                        "{}!{}{}: {}",
+                        sheet_name,
+                        column_number_to_name(*col),
+                        row,
+                        err
+                    ));
+                }
+            }
+            // Complete calculation publishes a coherent cache snapshot. Delta metrics are
+            // retained separately; they are not a safe filter for newly replaced formulas.
+            cache_updates.push(FormulaCacheUpdate {
+                sheet: sheet_name.clone(),
+                row: *row,
+                col: *col,
+                value,
+            });
+        }
+        Ok(EvaluatorEvaluation {
+            cells_evaluated,
+            cache_updates,
+            eval_errors,
+            error_formula_cells,
+            formula_cells: self.formula_cells.len() as u64,
+        })
+    }
+
+    pub(crate) fn date_system(&self) -> formualizer::common::DateSystem {
+        self.engine.config.date_system
+    }
+}
 
 fn recalc_sync(path: &Path, timeout_ms: Option<u64>) -> Result<RecalcResult> {
     let start = Instant::now();
@@ -105,112 +260,62 @@ fn recalculate_adapter_sync(
     open_ms: u64,
     persistence: RecalcPersistence<'_>,
 ) -> Result<(RecalcResult, Option<Vec<u8>>)> {
-    let formula_cells = adapter.formula_cells();
-    let formula_cells_len = formula_cells.len();
-
-    // Fast recalc path by default for agentic/stateless workflows:
-    // - defer graph building during ingest (dramatically reduces load time)
-    // - coerce malformed formulas to errors so one bad sheet doesn't abort the full run
-    let eval_config = EvalConfig {
-        defer_graph_building: true,
-        formula_parse_policy: FormulaParsePolicy::CoerceToError,
-        ..Default::default()
-    };
-
-    let mut engine = FormualizerEngine::new(WBResolver::default(), eval_config);
-
     let stream_start = Instant::now();
-    adapter
-        .stream_into_engine(&mut engine)
-        .map_err(|e| anyhow!("failed to ingest workbook into formualizer engine: {e}"))?;
+    let mut evaluator = RetainedEvaluator::ingest(&mut adapter)?;
     let stream_ms = stream_start.elapsed().as_millis() as u64;
 
     let eval_start = Instant::now();
-    let (cells_evaluated, cycle_errors, changed_cells, incomplete, interruption) =
-        match evaluate_with_optional_timeout(&mut engine, timeout_ms) {
-            Ok((cells, cycles, changed)) => (cells, cycles, changed, false, None),
-            Err(error) if timeout_ms.is_some() => (
-                0,
-                0,
-                None,
-                true,
-                Some(format!(
-                    "evaluation interrupted before complete coverage: {error}"
-                )),
-            ),
-            Err(error) => return Err(anyhow!("formualizer evaluate_all failed: {error}")),
-        };
+    let evaluation = match evaluator.evaluate(timeout_ms) {
+        Ok(evaluation) => evaluation,
+        Err(error) if timeout_ms.is_some() => {
+            // Stateless compatibility: interruption is a partial result, but no cache or
+            // current coverage is ever published.
+            let (unchanged_bytes, revision_id) = match persistence {
+                RecalcPersistence::Path(path) => (None, hash_file_sha256_hex(path)?),
+                RecalcPersistence::Bytes => {
+                    let bytes = adapter
+                        .save_to_bytes()
+                        .map_err(|e| anyhow!("failed to serialize unchanged workbook: {e}"))?;
+                    let revision = hash_bytes_sha256_hex(&bytes);
+                    (Some(bytes), revision)
+                }
+            };
+            return Ok((
+                RecalcResult {
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    was_warm: false,
+                    backend_name: "formualizer",
+                    cells_evaluated: Some(0),
+                    eval_errors: Some(vec![error.to_string()]),
+                    evaluation_coverage: crate::model::EvaluationCoverage {
+                        formula_cells: evaluator.formula_cells.len() as u64,
+                        evaluated_formula_cells: 0,
+                        unsupported_formula_cells: 0,
+                        error_formula_cells: 0,
+                        source: crate::model::EvaluationSource::None,
+                        freshness: crate::model::EvaluationFreshness::Unknown,
+                        revision_id,
+                    },
+                    incomplete: true,
+                },
+                unchanged_bytes,
+            ));
+        }
+        Err(error) => return Err(error),
+    };
     let evaluate_ms = eval_start.elapsed().as_millis() as u64;
-
-    let mut eval_errors = Vec::new();
-    if let Some(interruption) = interruption {
-        eval_errors.push(interruption);
-    }
-    if cycle_errors > 0 {
-        eval_errors.push(format!(
-            "Detected {} circular reference cycle(s). Cells in cycles are reported as #CIRC! by this backend; workbooks built with Excel's iterative calculation (common in financial models with interest/cash-sweep circularity) need a backend that iterates. If LibreOffice is installed, retry with SPREADSHEET_MCP_RECALC_BACKEND=libreoffice. Do not try to 'fix' intentional circular references.",
-            cycle_errors
-        ));
-    }
-
-    let build_updates_start = Instant::now();
-    let date_system = engine.config.date_system;
-    let changed_filter = changed_cells.as_ref();
-    let mut cache_updates = Vec::with_capacity(formula_cells_len);
-    let mut error_formula_cells = 0u64;
-    for (sheet_name, row, col) in formula_cells {
-        let value = engine
-            .get_cell_value(&sheet_name, row, col)
-            .unwrap_or(LiteralValue::Empty);
-
-        if let LiteralValue::Error(err) = &value {
-            error_formula_cells += 1;
-            if eval_errors.len() < 200 {
-                let addr = format!("{}{}", column_number_to_name(col), row);
-                eval_errors.push(format!("{}!{}: {}", sheet_name, addr, err));
-            }
-        }
-
-        let should_write = if incomplete {
-            false
-        } else if let Some(changed) = changed_filter {
-            match engine
-                .sheet_id(&sheet_name)
-                .and_then(|sid| PackedSheetCell::try_from_excel_1based(sid, row, col))
-            {
-                Some(packed) => changed.contains(&packed),
-                None => true,
-            }
-        } else {
-            true
-        };
-
-        if should_write {
-            cache_updates.push(FormulaCacheUpdate {
-                sheet: sheet_name,
-                row,
-                col,
-                value,
-            });
-        }
-    }
-    let build_updates_ms = build_updates_start.elapsed().as_millis() as u64;
-
-    let updates_len = cache_updates.len();
-
-    let mut write_formula_caches_batch_ms = 0u64;
-
-    if !cache_updates.is_empty() {
-        let write_start = Instant::now();
+    let updates_len = evaluation.cache_updates.len();
+    let write_start = Instant::now();
+    if !evaluation.cache_updates.is_empty() {
         adapter
-            .write_formula_caches_batch(&cache_updates, date_system)
+            .write_formula_caches_batch(&evaluation.cache_updates, evaluator.date_system())
             .map_err(|e| anyhow!("failed to write formula caches in batch: {e}"))?;
-        write_formula_caches_batch_ms = write_start.elapsed().as_millis() as u64;
     }
+    let write_formula_caches_batch_ms = write_start.elapsed().as_millis() as u64;
     let save_start = Instant::now();
     let (evaluated_bytes, revision_id) = match persistence {
         RecalcPersistence::Path(path) => {
-            if !cache_updates.is_empty() {
+            if !evaluation.cache_updates.is_empty() {
                 adapter
                     .save_as_path(path)
                     .map_err(|e| anyhow!("failed to save recalculated workbook {:?}: {e}", path))?;
@@ -226,48 +331,31 @@ fn recalculate_adapter_sync(
         }
     };
     let save_as_path_ms = save_start.elapsed().as_millis() as u64;
-
     let total_ms = start.elapsed().as_millis() as u64;
-
-    tracing::trace!(
-        target: "asp::recalc::timing",
-        open_ms,
-        stream_into_engine_ms = stream_ms,
-        evaluate_ms,
-        build_updates_ms,
-        write_formula_caches_batch_ms,
-        save_as_path_ms,
-        formula_cells_len,
-        updates_len,
-        total_ms,
-        "formualizer recalc timing"
-    );
+    tracing::trace!(target: "asp::recalc::timing", open_ms,
+        stream_into_engine_ms = stream_ms, evaluate_ms,
+        write_formula_caches_batch_ms, save_as_path_ms,
+        formula_cells_len = evaluation.formula_cells, updates_len, total_ms,
+        "formualizer recalc timing");
 
     Ok((
         RecalcResult {
             duration_ms: total_ms,
-            was_warm: true,
+            // This API creates and ingests an ephemeral evaluator for every invocation.
+            was_warm: false,
             backend_name: "formualizer",
-            cells_evaluated: Some(cells_evaluated),
-            eval_errors: if eval_errors.is_empty() {
-                None
-            } else {
-                Some(eval_errors)
-            },
+            cells_evaluated: Some(evaluation.cells_evaluated),
+            eval_errors: (!evaluation.eval_errors.is_empty()).then_some(evaluation.eval_errors),
             evaluation_coverage: crate::model::EvaluationCoverage {
-                formula_cells: formula_cells_len as u64,
-                evaluated_formula_cells: if incomplete {
-                    0
-                } else {
-                    formula_cells_len as u64
-                },
+                formula_cells: evaluation.formula_cells,
+                evaluated_formula_cells: evaluation.formula_cells,
                 unsupported_formula_cells: 0,
-                error_formula_cells,
+                error_formula_cells: evaluation.error_formula_cells,
                 source: crate::model::EvaluationSource::Formualizer,
                 freshness: crate::model::EvaluationFreshness::CurrentRevision,
                 revision_id,
             },
-            incomplete,
+            incomplete: false,
         },
         evaluated_bytes,
     ))

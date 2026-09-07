@@ -58,8 +58,8 @@ ahash = "0.8"
 smallvec = "1.13"
 umya-spreadsheet = "2.3.2"
 ovba = "0.7.1"
-formualizer-parse = { version = "3.0.0" }
-formualizer = { version = "0.8.4", default-features = false, features = ["eval", "workbook", "umya", "common"], optional = true }
+formualizer-parse = { version = "3.1.1" }
+formualizer = { version = "0.9.0", default-features = false, features = ["eval", "workbook", "umya", "common"], optional = true }
 web-time = "1.1"
 walkdir = { version = "2.5", optional = true }
 globset = { version = "0.4", optional = true }
@@ -91,7 +91,7 @@ jsonschema = { version = "0.33", default-features = false }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 umya-spreadsheet = { version = "2.3.2", features = ["js"] }
 getrandom = { version = "0.3", features = ["wasm_js"] }
-formualizer = { version = "0.8.4", default-features = false, features = ["js-runtime"], optional = true }
+formualizer = { version = "0.9.0", default-features = false, features = ["js-runtime"], optional = true }
 
 [features]
 # Native consumers get the historical surface: recalc + CLI arg parsing + a

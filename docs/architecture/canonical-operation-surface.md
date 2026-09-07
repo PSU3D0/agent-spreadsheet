@@ -272,7 +272,7 @@ Target: approximately **27 default operations and 31 fully enabled operations**,
 
 ## Normative cross-cutting contracts (Gate 1)
 
-This section resolves Wave 0's five blocking contract questions and overrides any earlier illustrative sketch that conflicts with it.
+This section resolves Wave 0's five blocking contract questions and overrides any earlier illustrative sketch that conflicts with it. The later [resident-session contract](resident-session-runtime.md) narrowly extends explicit session binding, shared persistence ownership, workbook-versus-catalog revisions, and non-copying atomic implementation choices. Existing ephemeral file semantics remain unchanged; new capabilities are advertised only after implementation.
 
 ### Resource binding and identity
 
@@ -328,9 +328,9 @@ The Wave 1 compatibility responses use these additive field names:
 - `apply` mutates the target.
 - `stage` creates exactly one ordered approval bundle with its `base_revision`; it is not the default cautious workflow.
 
-`atomic` defaults to `true`. Every request fully parses and statically validates all ops before mutation. Atomic execution uses a temporary workbook/state and atomic swap: failure leaves the original revision unchanged and reports `rolled_back: true`. `atomic:false` is explicit; partial execution returns `status:"partial"`, exact applied/skipped counts, and one result per op. A side-effecting call never communicates partial effects only through a transport error.
+`atomic` defaults to `true`. Every request fully parses and statically validates all ops before mutation. Atomic execution uses a temporary workbook/state and atomic swap, or validated bounded prepared deltas/inverses for resident operations under the shared recovery contract: failure leaves the original state/revision unchanged and reports `rolled_back: true`. `atomic:false` is explicit; partial execution returns `status:"partial"`, exact applied/skipped counts, and one result per op. A side-effecting call never communicates partial effects only through a transport error.
 
-Every mutation requires `expected_revision`. Preview → apply is safe because apply uses the previewed revision as CAS. Staged apply requires `base_revision == current revision`; stale bundles are rejected, not implicitly rebased. Staging requires `atomic:true`; unsupported non-atomic staging is rejected rather than recorded with misleading semantics. Every write op kind is stageable/applicable through the same dispatcher.
+Every mutation requires `expected_revision`. Preview → apply is safe because apply uses the previewed revision as CAS. Staged apply requires `base_revision == current workbook state revision`; stale bundles are rejected, not implicitly rebased. In resident mode creating/discarding approvals advances a separate catalog generation, not the workbook revision, so immediate stage/apply and alternative bundles remain coherent. A published calculation or other workbook revision transition invalidates older approvals. Staging requires `atomic:true`; unsupported non-atomic staging is rejected rather than recorded with misleading semantics. Every write op kind is stageable/applicable through the same dispatcher.
 
 Canonical write responses are a closed union keyed by top-level `status`: `previewed`, `staged`, `applied`, `partial`, `failed`, or `rolled_back`. Per-op failures carry structured `code`, `message`, `path`, and `retryable` fields. `asp op write` exits 0 for complete preview/stage/apply, 1 for `failed` or `rolled_back`, and 2 for `partial`; partial output is exported before exit so the response and workbook agree.
 

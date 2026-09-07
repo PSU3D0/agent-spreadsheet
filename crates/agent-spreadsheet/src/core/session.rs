@@ -26,6 +26,12 @@ pub struct WorkbookSession {
     spreadsheet: Spreadsheet,
 }
 
+#[cfg(feature = "recalc-formualizer")]
+pub(crate) enum SessionEvaluatorCell {
+    Value(formualizer::common::LiteralValue),
+    Formula(String),
+}
+
 impl WorkbookSession {
     pub(crate) fn from_spreadsheet(spreadsheet: Spreadsheet) -> Self {
         Self { spreadsheet }
@@ -907,6 +913,89 @@ impl WorkbookSession {
         self.apply_ops(&[op])
     }
 
+    /// Publish complete evaluator results into formula caches without replacing the
+    /// authoritative Umya document or round-tripping through XLSX.
+    #[cfg(feature = "recalc-formualizer")]
+    pub(crate) fn apply_formula_cache_updates(
+        &mut self,
+        updates: &[formualizer::workbook::FormulaCacheUpdate],
+        date_system: formualizer::eval::engine::DateSystem,
+    ) -> Result<()> {
+        use formualizer::common::LiteralValue;
+
+        // Validate the complete publication set before changing any cache. With
+        // `&mut self` held, these invariants cannot change between the passes.
+        for update in updates {
+            let sheet = self.sheet_by_name_required(&update.sheet)?;
+            let cell = sheet.get_cell((update.col, update.row)).ok_or_else(|| {
+                anyhow!(
+                    "formula cache target {}!{}{} does not exist",
+                    update.sheet,
+                    crate::utils::column_number_to_name(update.col),
+                    update.row
+                )
+            })?;
+            if !cell.is_formula() {
+                return Err(anyhow!(
+                    "formula cache target {}!{}{} is not a formula",
+                    update.sheet,
+                    crate::utils::column_number_to_name(update.col),
+                    update.row
+                ));
+            }
+        }
+
+        for update in updates {
+            let sheet = self
+                .spreadsheet
+                .get_sheet_by_name_mut(&update.sheet)
+                .expect("cache target sheet was preflighted");
+            let cell = sheet.get_cell_mut((update.col, update.row));
+            match &update.value {
+                LiteralValue::Empty => {
+                    cell.set_formula_result_default("");
+                }
+                LiteralValue::Int(value) => {
+                    cell.set_formula_result_number(*value as f64);
+                }
+                LiteralValue::Number(value) => {
+                    cell.set_formula_result_number(*value);
+                }
+                LiteralValue::Boolean(value) => {
+                    cell.set_formula_result_bool(*value);
+                }
+                LiteralValue::Text(value) => {
+                    cell.set_formula_result_string(value.clone());
+                }
+                LiteralValue::Error(error) => {
+                    cell.set_formula_result_default(error.kind.to_string());
+                }
+                LiteralValue::Date(value) => {
+                    cell.set_formula_result_number(formualizer::common::datetime_to_serial_for(
+                        date_system,
+                        &value.and_hms_opt(0, 0, 0).expect("midnight is valid"),
+                    ));
+                }
+                LiteralValue::DateTime(value) => {
+                    cell.set_formula_result_number(formualizer::common::datetime_to_serial_for(
+                        date_system,
+                        value,
+                    ));
+                }
+                LiteralValue::Time(value) => {
+                    cell.set_formula_result_number(formualizer::common::time_to_fraction(value));
+                }
+                LiteralValue::Duration(value) => {
+                    cell.set_formula_result_number(value.num_seconds() as f64 / 86_400.0);
+                }
+                LiteralValue::Pending | LiteralValue::Array(_) => {
+                    cell.set_formula_result_default("#VALUE!");
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Serialize the current in-memory workbook state back to XLSX bytes.
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
         let mut bytes = Vec::new();
@@ -992,6 +1081,76 @@ impl WorkbookSession {
             short_id,
             None,
         )
+    }
+
+    /// Return whether a cell currently contains a formula.
+    pub(crate) fn cell_is_formula(&self, sheet_name: &str, col: u32, row: u32) -> Result<bool> {
+        Ok(self
+            .sheet_by_name_required(sheet_name)?
+            .get_cell((col, row))
+            .is_some_and(|cell| cell.is_formula()))
+    }
+
+    /// Read the authoritative, Umya-normalized cell representation used to
+    /// synchronize a retained evaluator after a committed document write.
+    #[cfg(feature = "recalc-formualizer")]
+    pub(crate) fn evaluator_cell(
+        &self,
+        sheet_name: &str,
+        col: u32,
+        row: u32,
+    ) -> Result<SessionEvaluatorCell> {
+        use formualizer::common::{ExcelError, ExcelErrorKind, LiteralValue};
+        use umya_spreadsheet::CellRawValue;
+
+        let Some(cell) = self
+            .sheet_by_name_required(sheet_name)?
+            .get_cell((col, row))
+        else {
+            return Ok(SessionEvaluatorCell::Value(LiteralValue::Empty));
+        };
+        if cell.is_formula() {
+            return Ok(SessionEvaluatorCell::Formula(format!(
+                "={}",
+                cell.get_formula()
+            )));
+        }
+        let raw = cell.get_raw_value();
+        let value = if raw.is_error() {
+            let kind = match cell.get_value().as_ref() {
+                "#DIV/0!" => ExcelErrorKind::Div,
+                "#N/A" => ExcelErrorKind::Na,
+                "#NAME?" => ExcelErrorKind::Name,
+                "#NULL!" => ExcelErrorKind::Null,
+                "#NUM!" => ExcelErrorKind::Num,
+                "#REF!" => ExcelErrorKind::Ref,
+                "#VALUE!" => ExcelErrorKind::Value,
+                _ => ExcelErrorKind::Value,
+            };
+            LiteralValue::Error(ExcelError::new(kind))
+        } else {
+            match raw {
+                CellRawValue::Numeric(value) => LiteralValue::Number(*value),
+                CellRawValue::Bool(value) => LiteralValue::Boolean(*value),
+                CellRawValue::String(value) => LiteralValue::Text(value.to_string()),
+                CellRawValue::RichText(value) => LiteralValue::Text(value.get_text().to_string()),
+                CellRawValue::Lazy(value) => {
+                    let value = value.as_ref();
+                    if let Ok(number) = value.parse::<f64>() {
+                        LiteralValue::Number(number)
+                    } else if value.eq_ignore_ascii_case("TRUE") {
+                        LiteralValue::Boolean(true)
+                    } else if value.eq_ignore_ascii_case("FALSE") {
+                        LiteralValue::Boolean(false)
+                    } else {
+                        LiteralValue::Text(value.to_string())
+                    }
+                }
+                CellRawValue::Error(_) => unreachable!("handled by is_error"),
+                CellRawValue::Empty => LiteralValue::Empty,
+            }
+        };
+        Ok(SessionEvaluatorCell::Value(value))
     }
 
     /// Look up a sheet by name, returning `Some` if found.
