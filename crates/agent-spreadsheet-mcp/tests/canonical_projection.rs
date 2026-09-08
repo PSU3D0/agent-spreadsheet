@@ -65,7 +65,7 @@ async fn live_json_rpc_projects_every_available_canonical_descriptor() -> Result
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(native_parent.path(), std::fs::Permissions::from_mode(0o700))?;
     }
-    let native_root = agent_spreadsheet::native_host::provision_root(native_parent.path(), "host")?;
+    let native_root = agent_spreadsheet::native_host::provision_root(&native_parent.path().canonicalize()?, "host")?;
     let _host_cleanup = OwnedNativeHost(native_root.clone());
     let child_root = native_root.clone();
     let root = workspace.root().to_path_buf();

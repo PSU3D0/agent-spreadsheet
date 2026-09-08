@@ -92,7 +92,7 @@ async fn actual_session_family_starts_stages_applies_reads_and_navigates() {
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(root.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
     std::fs::set_permissions(workspace.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
-    let host_root = provision_root(root.path(), "host").unwrap();
+    let host_root = provision_root(&root.path().canonicalize().unwrap(), "host").unwrap();
     // Only the optional managed root is provisioned; no workbook binding or host.
     let root = host_root;
     let _cleanup = AutoHostCleanup(root.clone());
@@ -517,7 +517,7 @@ async fn pending_forced_export_cannot_overwrite_newer_destination() {
     use std::os::unix::fs::PermissionsExt;
     let workspace = tempfile::tempdir().unwrap();
     std::fs::set_permissions(workspace.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
-    let root = provision_root(workspace.path(), "host").unwrap();
+    let root = provision_root(&workspace.path().canonicalize().unwrap(), "host").unwrap();
     let _cleanup = AutoHostCleanup(root.clone());
     let out = workspace.path().join("out");
     std::fs::create_dir(&out).unwrap();
@@ -670,7 +670,7 @@ async fn actual_cli_branch_at_retains_labels_and_original_retry_after_restart() 
     let directory = tempfile::tempdir().unwrap();
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
-    let root = provision_root(directory.path(), "host").unwrap();
+    let root = provision_root(&directory.path().canonicalize().unwrap(), "host").unwrap();
     let source = directory.path().join("source.xlsx");
     umya_spreadsheet::writer::xlsx::write(&umya_spreadsheet::new_file(), &source).unwrap();
     let (state, _) = agent_spreadsheet::runtime::stateless::StatelessRuntime
@@ -748,7 +748,7 @@ async fn actual_native_configured_libreoffice_retains_document_and_retry() {
     use std::os::unix::fs::PermissionsExt;
     let directory = tempfile::tempdir().unwrap();
     std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
-    let root = provision_root(directory.path(), "host").unwrap();
+    let root = provision_root(&directory.path().canonicalize().unwrap(), "host").unwrap();
     let source = directory.path().join("source.xlsx");
     let mut book = umya_spreadsheet::new_file();
     let sheet = book.get_sheet_mut(&0).unwrap();
@@ -885,7 +885,7 @@ async fn actual_cli_processes_share_owner_and_recover_original_outcomes() {
     let directory = tempfile::tempdir().unwrap();
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
-    let root = provision_root(directory.path(), "host").unwrap();
+    let root = provision_root(&directory.path().canonicalize().unwrap(), "host").unwrap();
     let source = directory.path().join("source.xlsx");
     let mut book = umya_spreadsheet::new_file();
     book.get_sheet_mut(&0)
@@ -1240,7 +1240,7 @@ async fn actual_cli_autostart_races_aliases_and_live_unreachable_owner() {
     use std::os::unix::fs::PermissionsExt;
     let directory = tempfile::tempdir().unwrap();
     std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
-    let root = provision_root(directory.path(), "automatic").unwrap();
+    let root = provision_root(&directory.path().canonicalize().unwrap(), "automatic").unwrap();
     let _cleanup = AutoHostCleanup(root.clone());
     let source = directory.path().join("source.xlsx");
     umya_spreadsheet::writer::xlsx::write(&umya_spreadsheet::new_file(), &source).unwrap();
@@ -1435,7 +1435,7 @@ async fn actual_cli_canonical_creation_keeps_owner_and_original_outcome() {
     use std::os::unix::fs::PermissionsExt;
     let directory = tempfile::tempdir().unwrap();
     std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
-    let root = provision_root(directory.path(), "created-host").unwrap();
+    let root = provision_root(&directory.path().canonicalize().unwrap(), "created-host").unwrap();
     let _cleanup = AutoHostCleanup(root.clone());
     let source = directory.path().join("source.xlsx");
     let mut book = umya_spreadsheet::new_file();

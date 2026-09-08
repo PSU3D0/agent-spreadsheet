@@ -28,10 +28,6 @@ pkg-url = "{ repo }/releases/download/v{ version }/agent-spreadsheet-macos-x86_6
 [package.metadata.binstall.overrides.aarch64-apple-darwin]
 pkg-url = "{ repo }/releases/download/v{ version }/agent-spreadsheet-macos-aarch64.tar.gz"
 
-[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
-pkg-fmt = "zip"
-pkg-url = "{ repo }/releases/download/v{ version }/agent-spreadsheet-windows-x86_64.zip"
-
 
 [[bin]]
 name = "agent-spreadsheet"

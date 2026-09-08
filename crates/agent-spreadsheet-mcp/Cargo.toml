@@ -27,9 +27,6 @@ pkg-url = "{ repo }/releases/download/v{ version }/agent-spreadsheet-mcp-macos-x
 [package.metadata.binstall.overrides.aarch64-apple-darwin]
 pkg-url = "{ repo }/releases/download/v{ version }/agent-spreadsheet-mcp-macos-aarch64"
 
-[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
-pkg-url = "{ repo }/releases/download/v{ version }/agent-spreadsheet-mcp-windows-x86_64.exe"
-
 [[bin]]
 name = "agent-spreadsheet-mcp"
 path = "src/main.rs"

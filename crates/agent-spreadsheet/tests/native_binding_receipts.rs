@@ -11,7 +11,9 @@ use std::os::unix::fs::PermissionsExt;
 async fn child_creation_retry_checks_base_and_reserves_pending_namespace() {
     let directory = tempfile::tempdir().unwrap();
     std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
-    let root = provision_root(directory.path(), "host").unwrap();
+    // macOS temporary paths may pass through /var -> /private/var. Keep the
+    // production no-symlink ancestor policy: provision using the real path.
+    let root = provision_root(&directory.path().canonicalize().unwrap(), "host").unwrap();
     let source = directory.path().join("source.xlsx");
     umya_spreadsheet::writer::xlsx::write(&umya_spreadsheet::new_file(), &source).unwrap();
     let (state, _) = agent_spreadsheet::runtime::stateless::StatelessRuntime

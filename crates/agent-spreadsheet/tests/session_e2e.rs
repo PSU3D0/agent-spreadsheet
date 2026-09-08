@@ -21,7 +21,7 @@ impl TestHost {
     fn new() -> Self {
         let parent = tempdir().unwrap();
         #[cfg(unix)] { use std::os::unix::fs::PermissionsExt; std::fs::set_permissions(parent.path(), std::fs::Permissions::from_mode(0o700)).unwrap(); }
-        let root = agent_spreadsheet::native_host::provision_root(parent.path(), "host").unwrap();
+        let root = agent_spreadsheet::native_host::provision_root(&parent.path().canonicalize().unwrap(), "host").unwrap();
         Self { _parent: parent, root }
     }
 }
