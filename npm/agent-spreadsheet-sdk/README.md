@@ -359,7 +359,7 @@ override them with `maxWorkbookBytes` and `maxParamsBytes`.
 
 The 0.14 surface — `McpBackend`, `WasmBackend`, the legacy camel-case method layer, and
 `stateless-byte-adapter` — moved to `agent-spreadsheet-sdk/compat` for one release. Every
-export there is `@deprecated` and will be removed in the release after 0.15.
+export there is `@deprecated`. These compatibility exports remain present, but legacy parity is outside the 0.16 resident-runtime acceptance scope; use the canonical SDK interfaces above for new integrations.
 
 Migration: replace `new WasmBackend({ bindings })` with
 `createLocalSpreadsheet({ runtime })` plus `local.open(bytes)`. Replace
