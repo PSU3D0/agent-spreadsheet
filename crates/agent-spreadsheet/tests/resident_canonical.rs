@@ -905,6 +905,50 @@ async fn portable_history_supports_calculate_write_undo_redo_and_divergent_branc
 }
 
 #[tokio::test]
+async fn branch_at_is_atomic_validated_labeled_and_recoverable() {
+    use agent_spreadsheet::canonical_write::create_branch_at_durable;
+    use agent_spreadsheet::core::resident_storage::PortableHistoryState;
+    let base = fixture();
+    let dir = tempfile::tempdir().unwrap();
+    let journal = NativeResidentJournal::open(dir.path()).unwrap();
+    let mut session = ResidentWriteSession::from_bytes("session:test", &base).unwrap();
+    for (id, value) in [("one", 5), ("two", 6)] {
+        let write = request(&session, "apply", true, json!([
+            {"kind":"set_cells","sheet_name":"Sheet1","cells":{"A1":{"kind":"value","value":value}}}
+        ]));
+        execute_durable_write_on_resident(&mut session, &journal, id, write).await.unwrap();
+    }
+    let before = journal.load("test").await.unwrap();
+    let target = before[0].commit_id.clone();
+    let revision = session.revision();
+    let counters = session.diagnostic_workbook().serialization_count();
+    assert!(create_branch_at_durable(&mut session, &journal, "bad", "bad", Some("missing"), None).await.is_err());
+    assert_eq!(journal.load("test").await.unwrap().len(), before.len());
+    assert_eq!(session.revision(), revision);
+    create_branch_at_durable(&mut session, &journal, "branch_at", "past", Some(&target), Some("retained label")).await.unwrap();
+    create_branch_at_durable(&mut session, &journal, "base_branch", "base_copy", Some("base"), None).await.unwrap();
+    assert_eq!(session.diagnostic_workbook().serialization_count(), counters);
+    let records = journal.load("test").await.unwrap();
+    let history = PortableHistoryState::replay(&records).unwrap();
+    assert_eq!(history.head, before.last().unwrap().resulting_head);
+    assert_eq!(history.current_branch, "main");
+    assert_eq!(history.branches["past"], Some(target.clone()));
+    assert_eq!(history.branches["base_copy"], None);
+    assert_eq!(history.branch_labels["past"], "retained label");
+    assert!(create_branch_at_durable(&mut session, &journal, "branch_at", "past", Some(&target), Some("changed")).await.is_err());
+    let count = records.len();
+    create_branch_at_durable(&mut session, &journal, "branch_at", "past", Some(&target), Some("retained label")).await.unwrap();
+    assert_eq!(journal.load("test").await.unwrap().len(), count);
+    let mut recovered = recover_durable_resident_session("session:test", &base, &journal).await.unwrap();
+    create_branch_at_durable(&mut recovered, &journal, "branch_at", "past", Some(&target), Some("retained label")).await.unwrap();
+    switch_branch_durable(&mut recovered, &journal, "switch_past", "past", &base).await.unwrap();
+    assert_eq!(exported_cell(&mut recovered, "A1"), "5");
+    let mut forged = records;
+    forged.last_mut().unwrap().effects[0]["branch_target"] = json!("missing");
+    assert!(PortableHistoryState::replay(&forged).is_err());
+}
+
+#[tokio::test]
 async fn durable_atomic_failure_preserves_apply_rollback_contract_and_writes_no_record() {
     let dir = tempfile::tempdir().unwrap();
     let journal = NativeResidentJournal::open(dir.path()).unwrap();
@@ -1142,4 +1186,225 @@ fn structural_fallback_rebuilds_but_style_fallback_preserves_evaluator() {
         session.diagnostic_workbook().evaluator_counters().rebuilds,
         1
     );
+}
+
+struct LostNativeAcknowledgement {
+    inner: NativeResidentJournal,
+    refuse_reconciliation: bool,
+    committed: std::cell::Cell<bool>,
+}
+#[async_trait::async_trait(?Send)]
+impl ResidentCommitStorage for LostNativeAcknowledgement {
+    fn outcome_retention(&self) -> agent_spreadsheet::core::resident_storage::OutcomeRetention { self.inner.outcome_retention() }
+    async fn load(&self, session_id: &str) -> anyhow::Result<Vec<agent_spreadsheet::core::resident_storage::PreparedResidentCommit>> { self.inner.load(session_id).await }
+    async fn commit(&self, prepared: &agent_spreadsheet::core::resident_storage::PreparedResidentCommit) -> anyhow::Result<agent_spreadsheet::core::resident_storage::DurableCommitOutcome> {
+        self.inner.commit(prepared).await?;
+        self.committed.set(true);
+        anyhow::bail!("injected acknowledgement loss after durable commit")
+    }
+    async fn reconcile(&self, session_id: &str, request_id: &str, fingerprint: &str) -> anyhow::Result<agent_spreadsheet::core::resident_storage::ReconcileOutcome> {
+        if self.refuse_reconciliation && self.committed.get() { anyhow::bail!("injected reconciliation failure"); }
+        self.inner.reconcile(session_id,request_id,fingerprint).await
+    }
+}
+
+#[tokio::test]
+async fn canonical_same_record_outcomes_reconcile_lost_acknowledgements_and_fence_unknowns() {
+    use agent_spreadsheet::operations::{CanonicalErrorCode,decode_operation};
+    for refuse_reconciliation in [false,true] {
+        let (_directory,runtime,base)=canonical_runtime().await;
+        let mut runtime=agent_spreadsheet::session::ResidentSessionRuntime::new(runtime.owner,LostNativeAcknowledgement {inner:runtime.storage,refuse_reconciliation,committed:std::cell::Cell::new(false)},runtime.config,serde_json::from_value(json!("session:test")).unwrap()).unwrap();
+        let mut payload=canonical_write_payload(runtime.owner.revision(),9,"apply");
+        payload["resource_id"]=json!("session:test");
+        let result=runtime.execute("lost-ack",decode_operation("write",payload.clone()).unwrap()).await;
+        let records=runtime.storage.inner.load("test").await.unwrap();
+        assert_eq!(records.len(),1);
+        let original=records[0].effects.iter().find_map(|e|e.pointer("/canonical_outcome/response")).cloned().unwrap();
+        if refuse_reconciliation {
+            assert_eq!(result.unwrap_err().error.code,CanonicalErrorCode::OutcomeUnknown);
+            assert!(runtime.owner.poison_reason().is_some());
+            let error=runtime.execute("read",decode_operation("describe_workbook",json!({"resource_id":"session:test"})).unwrap()).await.unwrap_err();
+            assert_eq!(error.error.code,CanonicalErrorCode::RecoveryRequired);
+            let status=runtime.execute("status",decode_operation("session_history",json!({"resource_id":"session:test","action":"status"})).unwrap()).await.unwrap();
+            assert_eq!(status.data["health"],"poisoned");
+            assert!(status.revision_id.is_none());
+            assert!(status.data["revision_id"].is_null());
+            assert_eq!(status.data["poisoned_request_id"],"lost-ack");
+            let outcome=runtime.execute("query",decode_operation("session_history",json!({"resource_id":"session:test","action":"outcome","request_id":"lost-ack"})).unwrap()).await.unwrap();
+            assert_eq!(outcome.data["state"],"unknown");
+            assert!(outcome.data["response"].is_null());
+            let owner=recover_durable_resident_session("session:test",&base,&runtime.storage.inner).await.unwrap();
+            let mut recovered=agent_spreadsheet::session::ResidentSessionRuntime::new(owner,runtime.storage.inner,runtime.config,serde_json::from_value(json!("session:test")).unwrap()).unwrap();
+            let retry=recovered.execute("lost-ack",decode_operation("write",payload).unwrap()).await.unwrap();
+            assert_eq!(serde_json::to_value(retry).unwrap(),original);
+        } else {
+            assert_eq!(serde_json::to_value(result.unwrap()).unwrap(),original);
+            assert!(!runtime.owner.poison_reason().is_some());
+        }
+    }
+}
+
+async fn canonical_runtime() -> (tempfile::TempDir, agent_spreadsheet::session::ResidentSessionRuntime<NativeResidentJournal>, Vec<u8>) {
+    let directory = tempfile::tempdir().unwrap();
+    let bytes = fixture();
+    let source = directory.path().join("base.xlsx");
+    std::fs::write(&source, &bytes).unwrap();
+    let (state, _) = agent_spreadsheet::runtime::stateless::StatelessRuntime.open_state_for_file(&source).await.unwrap();
+    let owner = ResidentWriteSession::from_bytes("session:test", &bytes).unwrap();
+    let storage = NativeResidentJournal::open(&directory.path().join("journal")).unwrap();
+    let runtime = agent_spreadsheet::session::ResidentSessionRuntime::new(owner, storage, state.config(), serde_json::from_value(json!("session:test")).unwrap()).unwrap();
+    (directory, runtime, bytes)
+}
+async fn runtime_call(runtime: &mut agent_spreadsheet::session::ResidentSessionRuntime<NativeResidentJournal>, request_id: &str, name: &str, mut payload: Value) -> agent_spreadsheet::operations::CanonicalResponse {
+    payload["resource_id"] = json!("session:test");
+    let operation = agent_spreadsheet::operations::decode_operation(name, payload).unwrap();
+    runtime.execute(request_id, operation).await.unwrap()
+}
+fn canonical_write_payload(revision: String, value: u64, mode: &str) -> Value {
+    json!({"expected_revision":revision,"mode":mode,"atomic":true,"label":"retained label","ops":[{"kind":"write_matrix","sheet_name":"Sheet1","anchor":"A1","rows":[[{"v":value}]]}]})
+}
+
+#[tokio::test]
+async fn canonical_dispatch_uses_one_retained_owner_and_original_same_record_outcomes() {
+    let (_directory, mut runtime, base) = canonical_runtime().await;
+    let mut saved = Vec::new();
+    for n in 2..5 {
+        let payload = canonical_write_payload(runtime.owner.revision(), n, "apply");
+        let response = runtime_call(&mut runtime, &format!("write-{n}"), "write", payload.clone()).await;
+        saved.push((format!("write-{n}"),"write",payload,response));
+        let payload = json!({"expected_revision":runtime.owner.revision()});
+        let response = runtime_call(&mut runtime, &format!("calc-{n}"), "recalculate", payload.clone()).await;
+        assert_eq!(response.data["state"], "clean");
+        saved.push((format!("calc-{n}"),"recalculate",payload,response));
+        let read = runtime_call(&mut runtime,"read","read_cells",json!({"sheet_name":"Sheet1","selection":{"kind":"range","ranges":["A1:B1"]},"format":"values"})).await;
+        assert_eq!(read.data["blocks"][0]["payload"]["values"][0][1], json!((n*2) as f64));
+        let describe = runtime_call(&mut runtime,"describe","describe_workbook",json!({"include_paths":true})).await;
+        assert!(describe.data["metadata"]["bytes"].is_null());
+        assert!(describe.data["paths"]["internal"].is_null());
+        assert!(describe.data["paths"]["client"].is_null());
+        runtime_call(&mut runtime,"map","formula_map",json!({"sheet_name":"Sheet1"})).await;
+    }
+    let history = runtime_call(&mut runtime,"history","get_changes",json!({"view":{"kind":"operations","offset":0,"limit":2}})).await;
+    assert_eq!(history.data["total"],6);
+    assert_eq!(history.data["next_offset"],2);
+    assert!(history.data["operations"][0]["timestamp"].is_null());
+    let head = runtime.owner.revision();
+    let count = runtime.storage.load("test").await.unwrap().len();
+    for (id, name, payload, original) in &saved {
+        let retry = runtime_call(&mut runtime,id,name,payload.clone()).await;
+        assert_eq!(serde_json::to_value(retry).unwrap(),serde_json::to_value(original).unwrap());
+        assert_eq!(runtime.owner.revision(),head);
+    }
+    assert_eq!(runtime.storage.load("test").await.unwrap().len(),count);
+    assert_eq!(runtime.owner.diagnostic_workbook().serialization_count(),0);
+    assert_eq!(runtime.owner.diagnostic_workbook().evaluator_counters().ingests,1);
+    assert_eq!(runtime.owner.diagnostic_workbook().evaluator_counters().evaluations,3);
+    let mut different=saved[0].2.clone();
+    different["resource_id"]=json!("session:test");
+    different["label"]=json!("different canonical input");
+    assert!(runtime.execute(&saved[0].0,agent_spreadsheet::operations::decode_operation("write",different).unwrap()).await.is_err());
+    let records=runtime.storage.load("test").await.unwrap();
+    for record in &records { assert!(record.effects.iter().any(|e|e.get("canonical_outcome").is_some())); }
+    let mut forged=records[0].clone();
+    let outcome=forged.effects.iter_mut().find_map(|e|e.get_mut("canonical_outcome")).unwrap();
+    outcome["response"]["data"]["ops_applied"]=json!(999);
+    let other=tempfile::tempdir().unwrap();
+    let journal=NativeResidentJournal::open(other.path()).unwrap();
+    assert!(journal.commit(&forged).await.unwrap_err().to_string().contains("canonical write outcome"));
+    assert!(journal.load("test").await.unwrap().is_empty());
+    let owner=recover_durable_resident_session("session:test",&base,&runtime.storage).await.unwrap();
+    let mut recovered=agent_spreadsheet::session::ResidentSessionRuntime::new(owner,runtime.storage,runtime.config,serde_json::from_value(json!("session:test")).unwrap()).unwrap();
+    let (_,name,payload,original)=&saved[1];
+    let retry=runtime_call(&mut recovered,&saved[1].0,name,payload.clone()).await;
+    assert_eq!(serde_json::to_value(retry).unwrap(),serde_json::to_value(original).unwrap());
+    assert_eq!(recovered.owner.diagnostic_workbook().evaluator_counters().evaluations,0);
+}
+
+#[tokio::test]
+async fn canonical_history_actions_and_outcomes_share_the_registry() {
+    let (_directory,mut runtime,_base)=canonical_runtime().await;
+    let mut saved=Vec::new();
+    let payload=json!({"action":"undo","expected_revision":runtime.owner.revision()});
+    let response=runtime_call(&mut runtime,"root-undo","session_history",payload.clone()).await;
+    saved.push(("root-undo",payload,response));
+    let payload=canonical_write_payload(runtime.owner.revision(),3,"apply");
+    runtime_call(&mut runtime,"first","write",payload).await;
+    let first=runtime.storage.load("test").await.unwrap().last().unwrap().resulting_head.clone().unwrap();
+    let payload=json!({"action":"create_branch","expected_revision":runtime.owner.revision(),"name":"feature"});
+    let response=runtime_call(&mut runtime,"branch","session_history",payload.clone()).await;
+    saved.push(("branch",payload,response));
+    let payload=canonical_write_payload(runtime.owner.revision(),4,"apply");
+    runtime_call(&mut runtime,"main-edit","write",payload).await;
+    for action in ["undo","redo"] {
+        let payload=json!({"action":action,"expected_revision":runtime.owner.revision()});
+        let response=runtime_call(&mut runtime,action,"session_history",payload.clone()).await;
+        saved.push((action,payload,response));
+    }
+    for (id,branch) in [("feature-switch","feature"),("main-switch","main")] {
+        let payload=json!({"action":"switch_branch","expected_revision":runtime.owner.revision(),"name":branch});
+        let response=runtime_call(&mut runtime,id,"session_history",payload.clone()).await;
+        saved.push((id,payload,response));
+        if branch=="feature" {let payload=canonical_write_payload(runtime.owner.revision(),9,"apply");runtime_call(&mut runtime,"feature-edit","write",payload).await;}
+    }
+    let payload=json!({"action":"checkout","expected_revision":runtime.owner.revision(),"target_commit_id":first});
+    let response=runtime_call(&mut runtime,"checkout","session_history",payload.clone()).await;
+    saved.push(("checkout",payload,response));
+    let head=runtime.owner.revision();
+    let count=runtime.storage.load("test").await.unwrap().len();
+    for (id,payload,original) in saved {
+        let retry=runtime_call(&mut runtime,id,"session_history",payload).await;
+        assert_eq!(serde_json::to_value(retry).unwrap(),serde_json::to_value(&original).unwrap());
+        assert_eq!(runtime.owner.revision(),head);
+        let outcome=runtime_call(&mut runtime,"query","session_history",json!({"action":"outcome","request_id":id})).await;
+        assert_eq!(outcome.data["state"],"committed");
+        assert_eq!(outcome.data["response"],serde_json::to_value(original).unwrap());
+    }
+    let list=runtime_call(&mut runtime,"list-history","session_history",json!({"action":"list","limit":2})).await;
+    assert_eq!(list.data["records"].as_array().unwrap().len(),2);
+    assert_eq!(list.data["total"],count);
+    assert!(list.data["records"][0].get("effects").is_none());
+    let status=runtime_call(&mut runtime,"status","session_history",json!({"action":"status"})).await;
+    assert_eq!(status.data["health"],"usable");
+    assert_eq!(status.data["revision_id"],head);
+    assert_eq!(runtime.storage.load("test").await.unwrap().len(),count);
+}
+
+#[tokio::test]
+async fn canonical_catalog_outcomes_survive_later_catalog_and_document_changes() {
+    let (_directory,mut runtime,_base)=canonical_runtime().await;
+    let mut saved=Vec::new();
+    let payload=json!({"action":"create","expected_revision":runtime.owner.revision(),"label":"original"});
+    let response=runtime_call(&mut runtime,"cp","checkpoint",payload.clone()).await;
+    saved.push(("cp","checkpoint",payload,response));
+    let payload=canonical_write_payload(runtime.owner.revision(),7,"stage");
+    let staged=runtime_call(&mut runtime,"stage","write",payload.clone()).await;
+    let id=staged.data["change_id"].as_str().unwrap().to_owned();
+    saved.push(("stage","write",payload,staged));
+    let list=runtime_call(&mut runtime,"list","staged_change",json!({"action":"list"})).await;
+    assert_eq!(list.data["staged_changes"][0]["label"],"retained label");
+    let payload=json!({"action":"apply","expected_revision":runtime.owner.revision(),"change_id":id});
+    let response=runtime_call(&mut runtime,"apply-stage","staged_change",payload.clone()).await;
+    saved.push(("apply-stage","staged_change",payload,response));
+    let payload=json!({"action":"restore","expected_revision":runtime.owner.revision(),"checkpoint_id":"cp"});
+    let response=runtime_call(&mut runtime,"restore","checkpoint",payload.clone()).await;
+    saved.push(("restore","checkpoint",payload,response));
+    let payload=json!({"action":"delete","expected_revision":runtime.owner.revision(),"checkpoint_id":"cp"});
+    let response=runtime_call(&mut runtime,"delete","checkpoint",payload.clone()).await;
+    saved.push(("delete","checkpoint",payload,response));
+    let payload=json!({"action":"discard","expected_revision":runtime.owner.revision(),"change_id":"missing"});
+    let response=runtime_call(&mut runtime,"discard","staged_change",payload.clone()).await;
+    assert_eq!(response.data["discarded"],false);
+    saved.push(("discard","staged_change",payload,response));
+    let payload=json!({"action":"create","expected_revision":runtime.owner.revision(),"label":"later"});
+    runtime_call(&mut runtime,"cp-later","checkpoint",payload).await;
+    let payload=json!({"expected_revision":runtime.owner.revision()});
+    runtime_call(&mut runtime,"calc-later","recalculate",payload).await;
+    let count=runtime.storage.load("test").await.unwrap().len();
+    let head=runtime.owner.revision();
+    for (id,name,payload,original) in saved {
+        let response=runtime_call(&mut runtime,id,name,payload).await;
+        assert_eq!(serde_json::to_value(response).unwrap(),serde_json::to_value(original).unwrap(),"{id}");
+        assert_eq!(runtime.owner.revision(),head);
+    }
+    assert_eq!(runtime.storage.load("test").await.unwrap().len(),count);
 }

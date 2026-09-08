@@ -27,6 +27,49 @@ async fn bound_state() -> (
     (state, workbook_id, resource_id)
 }
 
+#[tokio::test]
+async fn borrowed_resident_read_cells_uses_the_file_canonical_projection() {
+    use agent_spreadsheet::canonical_reads::{
+        ReadCellsRequest, execute_read_cells, read_cells_from_view,
+    };
+    use agent_spreadsheet::canonical_write::ResidentWriteSession;
+    let (state, workbook_id, resource_id) = bound_state().await;
+    let workbook = state.open_workbook(&workbook_id).await.unwrap();
+    let resident =
+        ResidentWriteSession::from_bytes("session:borrowed", &std::fs::read(fixture()).unwrap())
+            .unwrap();
+    let view = resident.read_view().unwrap();
+    assert!(view.describe().bytes.is_none());
+    assert!(workbook.describe().bytes.is_some());
+    for selection in [
+        json!({"kind":"range","ranges":["A1:D10"]}),
+        json!({"kind":"rows","start_row":1,"row_count":10}),
+    ] {
+        let request: ReadCellsRequest = serde_json::from_value(json!({"resource_id":resource_id,"sheet_name":workbook.sheet_names()[0],"selection":selection,"page_size":3})).unwrap();
+        let expected = execute_read_cells(state.clone(), &request, &workbook.revision_id)
+            .await
+            .unwrap();
+        let actual = read_cells_from_view(
+            &view,
+            &request,
+            &workbook.revision_id,
+            workbook.calculation_metadata(),
+            state.config().max_cells(),
+            state.config().max_payload_bytes(),
+        )
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(actual).unwrap(),
+            serde_json::to_value(expected).unwrap()
+        );
+    }
+    assert_eq!(resident.diagnostic_workbook().serialization_count(), 0);
+    assert_eq!(
+        resident.diagnostic_workbook().evaluator_counters().ingests,
+        1
+    );
+}
+
 fn with_resource(resource_id: &ResourceId, mut payload: Value) -> Value {
     payload
         .as_object_mut()
@@ -186,6 +229,7 @@ fn registry_schemas_are_closed_typed_and_discriminated() {
         "get_changes",
         "checkpoint",
         "staged_change",
+        "session_history",
     ]);
     assert_eq!(names, expected);
 
@@ -197,13 +241,15 @@ fn registry_schemas_are_closed_typed_and_discriminated() {
                 descriptor.is_available(&capabilities),
                 capabilities.screenshot_rendering
             );
+        } else if descriptor.name == "session_history" {
+            assert!(!descriptor.is_available(&capabilities));
         } else {
             assert!(descriptor.is_available(&capabilities));
         }
         assert_eq!(
             descriptor.risk_ceiling,
             match descriptor.name {
-                "write" | "discard_fork" | "checkpoint" | "staged_change" => {
+                "write" | "discard_fork" | "checkpoint" | "staged_change" | "session_history" => {
                     OperationRisk::Destructive
                 }
                 "recalculate" | "export_fork" => OperationRisk::High,
@@ -658,7 +704,7 @@ fn complete_registry_and_cli_discovery_are_distinct_projections() {
     assert!(registry.status.success());
     let registry: Value = serde_json::from_slice(&registry.stdout).unwrap();
     let descriptors = registry["operations"].as_array().unwrap();
-    assert_eq!(descriptors.len(), 31);
+    assert_eq!(descriptors.len(), 32);
     assert!(descriptors.iter().all(|descriptor| {
         descriptor.get("input_schema").is_some()
             && descriptor.get("output_schema").is_some()
@@ -694,6 +740,7 @@ fn complete_registry_and_cli_discovery_are_distinct_projections() {
         "get_changes",
         "checkpoint",
         "staged_change",
+        "session_history",
     ] {
         assert!(!names.contains(durable), "CLI advertised {durable}");
     }
@@ -716,6 +763,8 @@ fn just_bash_registry_plan_is_the_portable_wasm_subset() {
         );
         let expected = if matches!(descriptor.name, "write" | "recalculate") {
             AdapterPersistence::ExportRequired
+        } else if matches!(descriptor.name, "checkpoint" | "staged_change" | "session_history") {
+            AdapterPersistence::ResidentRequired
         } else if just_bash.is_supported() {
             AdapterPersistence::None
         } else {

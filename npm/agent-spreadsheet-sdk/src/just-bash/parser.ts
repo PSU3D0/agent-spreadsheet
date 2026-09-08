@@ -1,3 +1,4 @@
+import { decodeBytesToUtf8 } from "just-bash"
 import { canonicalRegistry as registry } from "../generated/registry-data.js"
 
 type Json = any
@@ -25,7 +26,7 @@ export function invalid(message: string, operation?: string, path = "$.argv"): n
   throw canonicalError("INVALID_REQUEST", message, operation, path)
 }
 
-export function parseOperationArgs(args: string[]): Json {
+export function parseOperationArgs(args: string[], resident = false): Json {
   if (args[0] !== "op" || !args[1] || args[1].startsWith("--")) {
     invalid("usage: asp op <operation> [--bind PATH] [--baseline PATH] [--json JSON] [--output PATH|--in-place]")
   }
@@ -38,7 +39,7 @@ export function parseOperationArgs(args: string[]): Json {
       options.inPlace = true
       continue
     }
-    if (!FLAG_NAMES.has(flag)) invalid(`unknown argument '${flag}'`, operation)
+    if (!FLAG_NAMES.has(flag) && !(resident && flag === "--request-id")) invalid(`unknown argument '${flag}'`, operation)
     const value = args[++index]
     if (value === undefined) invalid(`${flag} requires a value`, operation, flag)
     const key = flag.slice(2)
@@ -46,6 +47,21 @@ export function parseOperationArgs(args: string[]): Json {
     options[key] = value
   }
   return options
+}
+
+export function parseOperationParams(json: string | undefined, stdin: Parameters<typeof decodeBytesToUtf8>[0], limit: number, operation?: string): Json {
+  let text: string
+  try { text = json ?? decodeBytesToUtf8(stdin, limit) }
+  catch { invalid(`params JSON exceeds the ${limit}-byte adapter limit`, operation, "$.params") }
+  if (utf8Bytes(text) > limit) invalid(`params JSON exceeds the ${limit}-byte adapter limit`, operation, "$.params")
+  try { return JSON.parse(text) }
+  catch { invalid("invalid params JSON", operation, "$") }
+}
+
+export function validateFileBindings(operation: string, binding: string, bind: boolean, baseline: boolean): void {
+  const needsBind = binding !== "none", needsBaseline = binding === "two_resource"
+  if (needsBind !== bind) invalid(needsBind ? `canonical operation '${operation}' requires --bind <VFS_PATH>` : `canonical operation '${operation}' does not accept --bind`, operation, "--bind")
+  if (needsBaseline !== baseline) invalid(needsBaseline ? `canonical operation '${operation}' requires --baseline <VFS_PATH>` : "--baseline is only accepted by two-resource operations", operation, "--baseline")
 }
 
 export function utf8Bytes(value: string): number {

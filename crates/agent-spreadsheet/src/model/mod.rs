@@ -143,7 +143,8 @@ pub struct WorkbookDescription {
     pub path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub client_path: Option<String>,
-    pub bytes: u64,
+    /// Exact matching artifact size, or unknown for an unexported resident revision.
+    pub bytes: Option<u64>,
     pub sheet_count: usize,
     pub defined_names: usize,
     pub tables: usize,

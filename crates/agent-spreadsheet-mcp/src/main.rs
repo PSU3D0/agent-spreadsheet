@@ -4,6 +4,8 @@ use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    #[cfg(feature = "recalc-formualizer")]
+    if agent_spreadsheet::native_host::run_if_requested().await? { return Ok(()); }
     init_tracing();
     let cli = CliArgs::parse();
     let config = ServerConfig::from_args(cli)?;

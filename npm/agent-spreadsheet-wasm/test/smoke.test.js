@@ -32,7 +32,10 @@ test("the published loader drives a full session round trip", {
     assert.equal(described.resource_id, resourceId)
     assert.ok(typeof described.revision_id === "string" && described.revision_id.length > 0)
     assert.equal(described.data.metadata.sheet_count, 1)
-    assert.equal(described.data.metadata.bytes > 0, true)
+    // A resident document has no current file size until export; describing it
+    // must not serialize XLSX merely to populate filesystem metadata.
+    assert.equal(described.data.metadata.bytes, null)
+    assert.equal(JSON.parse(runtime.sessionMetadata(resourceId)).serializations, 0)
     assert.equal(described.data.capabilities.backend.backend, "xlsx_umya")
 
     const exported = runtime.exportWorkbook(resourceId)

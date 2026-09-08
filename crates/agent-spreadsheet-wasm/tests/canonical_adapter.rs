@@ -218,8 +218,12 @@ async fn canonical_write_persists_export_and_enforces_cas_and_stage_policy() {
             }).to_string(),
         )
         .await
-        .expect_err("stage is not durable in wasm");
-    assert_eq!(stage.error.code, CanonicalErrorCode::InvalidRequest);
+        .expect("stage retained in the volatile resident journal");
+    let stage: Value = serde_json::from_str(&stage).unwrap();
+    assert_eq!(stage["data"]["status"], "staged");
+    assert_eq!(stage["revision_id"], next_revision);
+    assert!(!stage["data"]["change_id"].as_str().unwrap().is_empty());
+    assert_eq!(api.session_metadata(&session_id).unwrap()["durability"], "memory");
 
     let partial: Value = serde_json::from_str(
         &api.execute_operation(

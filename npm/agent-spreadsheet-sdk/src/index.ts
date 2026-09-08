@@ -36,7 +36,7 @@ export type {
 } from "./registry.js"
 
 export { CanonicalApi, executeCanonical, isCanonicalEnvelope } from "./runtime.js"
-export type { CanonicalEnvelope, CanonicalRuntime } from "./runtime.js"
+export type { CanonicalEnvelope, CanonicalRuntime, DispatchOptions } from "./runtime.js"
 
 export {
   CLIENT_SURFACE_OPERATIONS,

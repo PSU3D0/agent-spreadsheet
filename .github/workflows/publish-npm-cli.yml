@@ -60,7 +60,7 @@ jobs:
             "agent-spreadsheet-linux-x86_64"
             "agent-spreadsheet-macos-x86_64"
             "agent-spreadsheet-macos-aarch64"
-            "agent-spreadsheet-windows-x86_64.exe"
+            "agent-spreadsheet-linux-aarch64"
           )
 
           wait_for_asset() {

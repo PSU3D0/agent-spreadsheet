@@ -28,7 +28,7 @@ impl ArtifactError {
         match self {
             Self::Malformed => "artifact handle must be 'artifact:sha256:<64 hex>'",
             Self::NotFound => "artifact handle is not known to this server",
-            Self::TooLarge => "artifact exceeds the 16 MiB ceiling",
+            Self::TooLarge => "artifact exceeds its media-type size ceiling",
         }
     }
 }
@@ -79,15 +79,22 @@ pub fn resolve_artifact(
     workspace_root: &Path,
     handle: &str,
 ) -> Result<ResolvedArtifact, ArtifactError> {
-    let hex = parse_handle(handle)?;
+    let (hex, extension, media_type, limit) = if let Some(hex) = handle.strip_prefix("artifact-") {
+        if hex.len() != 64 || !hex.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+            return Err(ArtifactError::Malformed);
+        }
+        (hex, "xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 64 * 1024 * 1024)
+    } else {
+        (parse_handle(handle)?, "png", "image/png", MAX_ARTIFACT_BYTES)
+    };
     let root = artifact_root(workspace_root)?;
-    let target = root.join(format!("{hex}.png"));
+    let target = root.join(format!("{hex}.{extension}"));
 
     let metadata = std::fs::symlink_metadata(&target).map_err(|_| ArtifactError::NotFound)?;
     if metadata.file_type().is_symlink() || !metadata.is_file() {
         return Err(ArtifactError::NotFound);
     }
-    if metadata.len() > MAX_ARTIFACT_BYTES as u64 {
+    if metadata.len() > limit as u64 {
         return Err(ArtifactError::TooLarge);
     }
     let canonical = target.canonicalize().map_err(|_| ArtifactError::NotFound)?;
@@ -96,7 +103,7 @@ pub fn resolve_artifact(
     }
 
     let bytes = std::fs::read(&canonical).map_err(|_| ArtifactError::NotFound)?;
-    if bytes.len() > MAX_ARTIFACT_BYTES {
+    if bytes.len() > limit {
         return Err(ArtifactError::TooLarge);
     }
     if format!("{:x}", Sha256::digest(&bytes)) != hex {
@@ -104,7 +111,7 @@ pub fn resolve_artifact(
     }
     Ok(ResolvedArtifact {
         bytes,
-        media_type: "image/png",
+        media_type,
     })
 }
 

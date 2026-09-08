@@ -2073,6 +2073,7 @@ async fn execute_human_canonical_write(
         "write",
         Some(source.to_path_buf()),
         None,
+        None,
         Some(payload.to_string()),
         output,
         in_place,

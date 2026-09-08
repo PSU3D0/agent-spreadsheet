@@ -32,7 +32,7 @@ test("the shim forwards every binding method and returns values verbatim", async
 
   assert.deepEqual([...WORKER_METHODS].sort(), [
     "createSession", "disposeArtifact", "disposeSession", "executeOperation",
-    "exportWorkbook", "operations", "readArtifact"
+    "exportWorkbook", "operations", "readArtifact", "sessionMetadata"
   ])
 
   const sessionId = await remote.createSession(Uint8Array.from([1, 2, 3]))

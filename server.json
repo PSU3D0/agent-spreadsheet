@@ -3,7 +3,7 @@
   "name": "io.github.PSU3D0/agent-spreadsheet",
   "title": "Agent Spreadsheet MCP",
   "description": "Agent-safe Excel workbook analysis, editing, recalc, and verification tools.",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "websiteUrl": "https://github.com/PSU3D0/agent-spreadsheet",
   "repository": {
     "url": "https://github.com/PSU3D0/agent-spreadsheet",
@@ -13,7 +13,7 @@
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/psu3d0/agent-spreadsheet:0.15.0-full",
+      "identifier": "ghcr.io/psu3d0/agent-spreadsheet:0.16.0-full",
       "runtimeHint": "docker",
       "runtimeArguments": [
         {

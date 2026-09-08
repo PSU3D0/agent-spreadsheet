@@ -60,7 +60,7 @@ pub(crate) type FormualizerEngine = Engine<WBResolver>;
 
 /// Deterministic lifecycle counters for retained-evaluator reuse assertions.
 /// These count events, not time, and are also useful to adapter diagnostics.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize)]
 pub struct EvaluatorCounters {
     pub constructions: u64,
     pub ingests: u64,

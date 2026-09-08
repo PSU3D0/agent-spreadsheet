@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub const RESIDENT_COMMIT_SCHEMA: &str = "resident.commit.v1";
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ResidentTransition {
     Mutation,
@@ -68,9 +68,15 @@ pub struct PortableHistoryState {
     pub head: Option<String>,
     pub current_branch: String,
     pub branches: BTreeMap<String, Option<String>>,
+    pub branch_labels: BTreeMap<String, String>,
+    pub file_export_plans: BTreeMap<String, crate::resident_export::FileExportPlan>,
+    pub file_export_results: BTreeMap<String, crate::resident_export::FileExportResult>,
     pub catalog_generation: u64,
     pub state_revision: Option<String>,
     pub checkpoints: BTreeMap<String, ResidentCheckpoint>,
+    pub(crate) calculation_current: bool,
+    /// A terminal resource tombstone, retained in the same authoritative stream.
+    pub discarded: bool,
     history_parents: BTreeMap<String, Option<String>>,
     catalog_ids: BTreeSet<String>,
 }
@@ -94,9 +100,14 @@ impl PortableHistoryState {
             head: None,
             current_branch: "main".into(),
             branches,
+            branch_labels: BTreeMap::new(),
+            file_export_plans: BTreeMap::new(),
+            file_export_results: BTreeMap::new(),
             catalog_generation: 0,
             state_revision: None,
             checkpoints: BTreeMap::new(),
+            calculation_current: false,
+            discarded: false,
             history_parents: BTreeMap::new(),
             catalog_ids: BTreeSet::new(),
         }
@@ -137,6 +148,9 @@ impl PortableHistoryState {
         let mut request_ids = BTreeSet::new();
         let mut visible_states = BTreeSet::new();
         for record in records {
+            if state.discarded {
+                anyhow::bail!("resident journal contains a transition after resource discard");
+            }
             if record.schema_version != RESIDENT_COMMIT_SCHEMA {
                 anyhow::bail!(
                     "unsupported required resident commit schema '{}'",
@@ -197,6 +211,21 @@ impl PortableHistoryState {
             {
                 anyhow::bail!("restart lacks explicit boundary");
             }
+            if state.file_export_plans.contains_key(&record.request_id)
+                && !record.effects.iter().any(|effect| effect.get("file_export_result").is_some())
+            {
+                anyhow::bail!("request identity reserved by a pending file export");
+            }
+            if record.effects.iter().any(|effect| effect.get("file_export_plan").is_some() || effect.get("file_export_result").is_some()) {
+                if record.transition != ResidentTransition::Receipt || record.effects.len() != 1
+                    || record.effects[0].as_object().is_none_or(|object| object.len() != 1)
+                { anyhow::bail!("file export must be a separate typed receipt"); }
+                let expected = crate::utils::hash_bytes_sha256_hex(&serde_json::to_vec(&(
+                    record.base_sha256.as_str(), &record.transition, &record.effects,
+                    &record.resulting_head, &record.resulting_branch, &record.resulting_branches,
+                ))?);
+                if expected != record.request_fingerprint { anyhow::bail!("file export request fingerprint mismatch"); }
+            }
             match record.transition {
                 ResidentTransition::Receipt => {
                     if let Some(operation) = record
@@ -223,6 +252,40 @@ impl PortableHistoryState {
                             ResidentTransition::CalculationInvalidate => {}
                             _ => anyhow::bail!("invalid no-op receipt operation/state"),
                         }
+                    } else if record.effects.iter().any(|effect| effect.get("resource_creation").is_some()) {
+                        if state.stream_tip.is_some() || record.parent_commit_id.is_some()
+                            || !record.effects.iter().any(|effect| effect.get("canonical_outcome").is_some())
+                        {
+                            anyhow::bail!("creation receipt must be the initial canonical outcome");
+                        }
+                    } else if record.effects.iter().any(|effect| effect.get("resource_discard").is_some()) {
+                        if !record.effects.iter().any(|effect| effect.get("canonical_outcome").is_some()) {
+                            anyhow::bail!("discard receipt requires its canonical outcome");
+                        }
+                        state.discarded = true;
+                    } else if record.effects.iter().any(|effect| effect.get("resource_export").is_some()) {
+                        if !record.effects.iter().any(|effect| effect.get("canonical_outcome").is_some()) {
+                            anyhow::bail!("export receipt requires its canonical outcome");
+                        }
+                    } else if let Some(value) = record.effects.iter().find_map(|effect| effect.get("file_export_plan")) {
+                        let plan: crate::resident_export::FileExportPlan = serde_json::from_value(value.clone())?;
+                        plan.validate(&state.session_id)?;
+                        if record.effects.len() != 1 || record.effects[0].as_object().is_none_or(|obj| obj.len() != 1)
+                            || record.request_id != crate::resident_export::plan_id(&plan.intent.request_id)
+                            || request_ids.contains(&plan.intent.request_id)
+                            || plan.revision_id != record.state_revision
+                            || plan.head != state.head || plan.events_replayed != state.active_ancestry()?.len()
+                            || state.file_export_plans.len() >= 128
+                            || state.file_export_plans.insert(plan.intent.request_id.clone(), plan).is_some()
+                        { anyhow::bail!("invalid or duplicate file export plan"); }
+                    } else if let Some(value) = record.effects.iter().find_map(|effect| effect.get("file_export_result")) {
+                        let result: crate::resident_export::FileExportResult = serde_json::from_value(value.clone())?;
+                        let plan = state.file_export_plans.get(&result.request_id).ok_or_else(|| anyhow::anyhow!("file export result lacks plan"))?;
+                        if record.effects.len() != 1 || record.effects[0].as_object().is_none_or(|obj| obj.len() != 1)
+                            || record.request_id != result.request_id
+                            || serde_json::to_value(plan.result())? != *value
+                            || state.file_export_results.insert(result.request_id.clone(), result).is_some()
+                        { anyhow::bail!("invalid file export result"); }
                     } else if record
                         .effects
                         .iter()
@@ -409,7 +472,31 @@ impl PortableHistoryState {
                     if state.branches.contains_key(name) {
                         anyhow::bail!("branch already exists");
                     }
-                    state.branches.insert(name.to_string(), state.head.clone());
+                    let target = match record.effects.iter().find_map(|e| e.get("branch_target")) {
+                        None => state.head.clone(), // older resident record
+                        Some(Value::Null) => None,
+                        Some(Value::String(target)) if state.history_parents.contains_key(target) => Some(target.clone()),
+                        _ => anyhow::bail!("branch-create references an invalid mutation target"),
+                    };
+                    if let Some(requested) = record.effects.iter().find_map(|e| e.get("requested_target")) {
+                        let matches = match requested {
+                            Value::Null => target == state.head,
+                            Value::String(value) if value == "base" => target.is_none(),
+                            Value::String(value) => target.as_ref() == Some(value),
+                            _ => false,
+                        };
+                        if !matches { anyhow::bail!("branch-create target differs from request"); }
+                    }
+                    if let Some(label) = record.effects.iter().find_map(|e| e.get("branch_label")) {
+                        match label {
+                            Value::Null => {},
+                            Value::String(label) if label.len() <= 1024 => {
+                                state.branch_labels.insert(name.to_string(), label.clone());
+                            },
+                            _ => anyhow::bail!("branch-create has invalid label"),
+                        }
+                    }
+                    state.branches.insert(name.to_string(), target);
                 }
                 ResidentTransition::BranchSwitch => {
                     let name = record
@@ -482,10 +569,25 @@ impl PortableHistoryState {
             {
                 anyhow::bail!("resident observable state ABA detected");
             }
+            match record.transition {
+                ResidentTransition::CalculationPublish => state.calculation_current = true,
+                ResidentTransition::CalculationInvalidate | ResidentTransition::Restart | ResidentTransition::Undo | ResidentTransition::Redo | ResidentTransition::Checkout => state.calculation_current = false,
+                ResidentTransition::BranchSwitch if head_before != record.resulting_head => state.calculation_current = false,
+                ResidentTransition::Mutation | ResidentTransition::StageApply if publishes_document => {
+                    let effect = record.effects.iter().find_map(|e| e.pointer("/prepared_transaction/publication/calculation_effect")).and_then(serde_json::Value::as_str);
+                    if effect != Some("Preserve") { state.calculation_current = false; }
+                },
+                _ => {},
+            }
+            crate::canonical_outcome::validate(record, &state)?;
             state.stream_tip = Some(record.commit_id.clone());
             state.state_revision = Some(record.state_revision.clone());
         }
         Ok(state)
+    }
+
+    pub fn staged_change_count(&self) -> usize {
+        self.catalog_ids.len()
     }
 
     pub fn history_parent(&self, commit_id: &str) -> Result<Option<String>> {
@@ -585,6 +687,7 @@ pub mod native {
 
     pub struct NativeResidentJournal {
         root: PathBuf,
+        max_bytes: u64,
         // Deterministic fault injection for the commit-after-fsync/before-ack branch.
         fail_before_write_once: AtomicBool,
         fail_sync_once: AtomicBool,
@@ -619,6 +722,7 @@ pub mod native {
             }
             Ok(Self {
                 root,
+                max_bytes: 128 * 1024 * 1024,
                 fail_before_write_once: AtomicBool::new(false),
                 fail_sync_once: AtomicBool::new(false),
                 fail_after_commit_once: AtomicBool::new(false),
@@ -903,6 +1007,10 @@ pub mod native {
                 lock.unlock()?;
                 return Err(anyhow!("injected failure before journal write"));
             }
+            let encoded = serde_json::to_string(&envelope)?;
+            if complete_len.checked_add(encoded.len() as u64 + 1).is_none_or(|bytes| bytes > self.max_bytes) {
+                bail!("resident journal lifetime byte quota reached; no acknowledged history or outcomes expired");
+            }
             let (path, _) = self.paths(&prepared.session_id)?;
             Self::validate_private_file(&path)?;
             let mut options = OpenOptions::new();
@@ -920,7 +1028,7 @@ pub mod native {
                 self.sync_file(&file)?;
             }
             file.seek(SeekFrom::End(0))?;
-            writeln!(file, "{}", serde_json::to_string(&envelope)?)?;
+            writeln!(file, "{}", encoded)?;
             if self.fail_sync_once.swap(false, Ordering::SeqCst) {
                 return Err(anyhow!("injected journal fsync failure; outcome uncertain"));
             }
@@ -1035,6 +1143,22 @@ pub mod native {
                     if parent.is_some() { 2 } else { 1 }
                 ),
             }
+        }
+
+        #[tokio::test]
+        async fn journal_quota_rejects_before_append_but_preserves_original_retry() {
+            let dir = tempdir().unwrap();
+            let mut journal = NativeResidentJournal::open(dir.path()).unwrap();
+            let first = record(None, "one");
+            let original = journal.commit(&first).await.unwrap();
+            let (path, _) = journal.paths("sess_test").unwrap();
+            let bytes = fs::read(&path).unwrap();
+            journal.max_bytes = bytes.len() as u64;
+            assert!(journal.commit(&record(Some("commit_one"), "two")).await.unwrap_err().to_string().contains("quota"));
+            assert_eq!(fs::read(&path).unwrap(), bytes);
+            assert_eq!(journal.commit(&first).await.unwrap().commit_id, original.commit_id);
+            let recovered = NativeResidentJournal::open(dir.path()).unwrap();
+            assert_eq!(recovered.load("sess_test").await.unwrap().len(), 1);
         }
 
         #[tokio::test]

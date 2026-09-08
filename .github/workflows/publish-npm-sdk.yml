@@ -9,6 +9,10 @@ jobs:
   publish-agent-spreadsheet-sdk:
     name: Publish agent-spreadsheet-sdk
     runs-on: ubuntu-latest
+    env:
+      ASP_BINARY: ${{ github.workspace }}/target/debug/asp
+      SPREADSHEET_MCP_BINARY: ${{ github.workspace }}/target/debug/agent-spreadsheet-mcp
+      AGENT_SPREADSHEET_WASM_PACKAGE: ${{ github.workspace }}/target/sdk-wasm-node
     permissions:
       contents: read
       id-token: write
@@ -21,12 +25,26 @@ jobs:
         with:
           node-version: '24'
 
+      - name: Set up Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+
+      - name: Build native and WASM test prerequisites
+        run: |
+          cargo build --locked -p agent-spreadsheet -p agent-spreadsheet-mcp
+          cargo install wasm-pack --locked
+
       - name: Install SDK test dependencies
         run: npm install --ignore-scripts --package-lock=false
         working-directory: npm/agent-spreadsheet-sdk
 
       - name: Run SDK tests
-        run: npm test
+        run: |
+          npm run build
+          node scripts/run-generated-wasm-integration.js --rebuild
+          npm test
         working-directory: npm/agent-spreadsheet-sdk
 
       - name: Set npm package version from tag

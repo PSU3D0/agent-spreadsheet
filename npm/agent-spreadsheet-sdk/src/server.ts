@@ -80,14 +80,16 @@ class ServerRuntime implements CanonicalRuntime {
 
   async dispatch<K extends OperationName>(
     operation: K,
-    input: Record<string, unknown>
+    input: Record<string, unknown>,
+    options: { requestId?: string } = {}
   ): Promise<OutputOf<K>> {
     const url = `${this.#root}/op/${encodeURIComponent(operation)}`
     let response: Awaited<ReturnType<FetchLike>>
     try {
       response = await this.#fetch(url, {
         method: "POST",
-        headers: { "content-type": "application/json", ...this.#headers },
+        headers: { "content-type": "application/json", ...this.#headers,
+          ...(options.requestId === undefined ? {} : { "X-Agent-Spreadsheet-Request-Id": options.requestId }) },
         body: JSON.stringify(input)
       })
     } catch (cause) {

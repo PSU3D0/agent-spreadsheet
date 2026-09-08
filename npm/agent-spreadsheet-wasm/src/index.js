@@ -3,8 +3,7 @@
 // wasm-bindgen's `--target web` glue expects the caller to supply the module.
 // In a browser that means fetching a URL; in Node it means reading the `.wasm`
 // that ships next to this file. `createWasmRuntime` hides that difference and
-// returns the same bindings object either way — the one the SDK's WasmBackend
-// consumes.
+// returns the same bindings object either way, consumed by the SDK local client.
 
 import initWasm, * as bindings from "../pkg/agent_spreadsheet_wasm.js"
 
@@ -32,7 +31,7 @@ async function defaultModuleSource() {
 /**
  * Instantiate the runtime and return its bindings.
  *
- * The module is instantiated at most once per process; repeated calls resolve
+ * The module is instantiated at most once per JavaScript module instance; repeated calls resolve
  * to the same bindings object, which also means sessions created through one
  * call are visible to the next.
  *

@@ -21,11 +21,13 @@ agent-spreadsheet ships a unified spreadsheet interaction layer across three sur
 
 | Surface | Binary / Package | Mode | Best for |
 | --- | --- | --- | --- |
-| **CLI** | `agent-spreadsheet` / `asp` | Stateless | One-shot reads, safe edits, pipelines, CI, agent tool calls |
+| **CLI** | `agent-spreadsheet` / `asp` | Stateless files + resident sessions | One-shot pipelines or retained multi-turn workbook editing |
 | **MCP server** | `agent-spreadsheet-mcp` | Stateful | Multi-turn agent sessions, workbook caching, fork/recalc workflows |
 | **TypeScript SDK** | `agent-spreadsheet-sdk` | Library | App integrations — drives the server's canonical `/v1` route, or runs fully in-process via the embedded WASM engine (no server required) |
 
 The WASM build (`agent-spreadsheet-wasm`) is the SDK's local runtime, not a separate product surface: JS and TypeScript code targets one object model and the execution substrate (server vs embedded engine) is a configuration choice.
+
+In 0.16 these surfaces share the resident Rust document/evaluator runtime and 32-operation registry. Explicit native sessions automatically start a private journal-backed host. SDK/WASM and genuine just-bash sessions retain their history in memory; XLSX export saves a document snapshot, not a restartable session journal. Warm edit/recalculate/read loops avoid XLSX serialization and repeated evaluator ingestion. See [runtime guarantees and limits](docs/architecture/resident-session-runtime.md) and the [SDK/just-bash examples](npm/agent-spreadsheet-sdk/README.md).
 
 Supported workbook modes:
 
@@ -34,7 +36,7 @@ Supported workbook modes:
 
 ## Powered by Formualizer
 
-Every computed value in this stack comes from **[Formualizer](https://github.com/PSU3D0/formualizer)** — a permissively licensed (MIT/Apache-2.0) spreadsheet engine written in Rust: formula parsing, dependency-graph recalculation, 400+ Excel functions, dynamic arrays, and deterministic evaluation built for agents. No Excel COM, no headless LibreOffice.
+Default in-process calculation uses **[Formualizer](https://github.com/PSU3D0/formualizer)** — a permissively licensed (MIT/Apache-2.0) spreadsheet engine written in Rust: formula parsing, dependency-graph recalculation, 400+ Excel functions, dynamic arrays, and deterministic evaluation built for agents. No Excel COM or headless LibreOffice is required. Optional LibreOffice integration remains available, but Formualizer is the release-critical backend.
 
 That native engine is why this project can offer what most spreadsheet tooling for agents cannot: **recalculate the actual workbook, trace which cells changed and why, and prove it** — not just read cached values or push blind edits.
 
@@ -100,7 +102,7 @@ The current surface is much stronger than a plain “read some cells” tool. Ma
 curl -fsSL https://raw.githubusercontent.com/PSU3D0/agent-spreadsheet/main/install.sh | sh
 ```
 
-The installer downloads a prebuilt CLI to `~/.local/bin` and creates the `asp` command. Pin a release with `ASP_VERSION=0.15.0`, set `ASP_INSTALL_DIR` to choose another destination, or pass `--mcp` to install the MCP server too:
+The installer downloads a prebuilt CLI to `~/.local/bin` and creates the `asp` command. Pin a release with `ASP_VERSION=0.16.0`, set `ASP_INSTALL_DIR` to choose another destination, or pass `--mcp` to install the MCP server too:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/PSU3D0/agent-spreadsheet/main/install.sh | sh -s -- --mcp
@@ -170,7 +172,7 @@ Published native assets include:
 - Linux arm64
 - macOS x86_64
 - macOS arm64
-- Windows x86_64
+- Windows native binaries are not shipped for 0.16; native release validation targets Linux and macOS
 
 ---
 

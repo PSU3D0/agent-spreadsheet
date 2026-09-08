@@ -84,7 +84,39 @@ static OOXML_TARGET_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r#"\bTarget="([^"]
 static OOXML_COORD_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r#"\br="([^"]+)""#).unwrap());
 static OOXML_TYPE_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r#"\bt="([^"]+)""#).unwrap());
 
-pub struct WorkbookContext {
+/// Read backing for the shared workbook projections. Resident callers borrow
+/// their authority; file callers retain the historical owned read cache.
+pub trait WorkbookReadSource {
+    type Guard<'a>: std::ops::Deref<Target = Spreadsheet>
+    where
+        Self: 'a;
+    fn read(&self) -> Self::Guard<'_>;
+    fn artifact_bytes(&self, bytes: u64) -> Option<u64> {
+        Some(bytes)
+    }
+}
+
+impl WorkbookReadSource for Arc<RwLock<Spreadsheet>> {
+    type Guard<'a> = parking_lot::RwLockReadGuard<'a, Spreadsheet>;
+    fn read(&self) -> Self::Guard<'_> {
+        self.as_ref().read()
+    }
+}
+
+impl WorkbookReadSource for &Spreadsheet {
+    type Guard<'a>
+        = &'a Spreadsheet
+    where
+        Self: 'a;
+    fn read(&self) -> Self::Guard<'_> {
+        self
+    }
+    fn artifact_bytes(&self, _bytes: u64) -> Option<u64> {
+        None
+    }
+}
+
+pub struct WorkbookContext<S = Arc<RwLock<Spreadsheet>>> {
     pub id: WorkbookId,
     pub short_id: String,
     pub revision_id: String,
@@ -93,7 +125,7 @@ pub struct WorkbookContext {
     pub caps: BackendCaps,
     pub bytes: u64,
     pub last_modified: Option<DateTime<Utc>>,
-    spreadsheet: Arc<RwLock<Spreadsheet>>,
+    spreadsheet: S,
     sheet_cache: RwLock<HashMap<String, Arc<SheetCacheEntry>>>,
     formula_atlas: Arc<FormulaAtlas>,
     imported_evaluation_coverage: OnceLock<crate::model::EvaluationCoverage>,
@@ -343,6 +375,80 @@ impl WorkbookContext {
             imported_evaluation_scans: AtomicU64::new(0),
         })
     }
+}
+
+#[cfg(test)]
+mod borrowed_view_tests {
+    use super::*;
+
+    #[test]
+    fn borrowed_context_projects_the_exact_authority_without_copying() {
+        let mut document = umya_spreadsheet::new_file();
+        document
+            .get_sheet_by_name_mut("Sheet1")
+            .unwrap()
+            .get_cell_mut("A1")
+            .set_value_number(7.0);
+        let view = WorkbookContext::borrowed(
+            &document,
+            WorkbookId("session_test".into()),
+            "resident:test:0:0".into(),
+        );
+        assert!(
+            view.with_spreadsheet(|book| std::ptr::eq(book, &document))
+                .unwrap()
+        );
+        assert_eq!(view.sheet_names(), vec!["Sheet1"]);
+        assert_eq!(
+            view.describe().revision_id.as_deref(),
+            Some("resident:test:0:0")
+        );
+        assert_eq!(
+            view.list_summaries(true).unwrap()[0].non_empty_cells,
+            Some(1)
+        );
+        assert_eq!(
+            view.with_sheet("Sheet1", |sheet| sheet
+                .get_cell("A1")
+                .unwrap()
+                .get_value()
+                .to_string())
+                .unwrap(),
+            "7"
+        );
+        assert!(view.named_items().unwrap().is_empty());
+    }
+}
+
+impl<'a> WorkbookContext<&'a Spreadsheet> {
+    pub fn borrowed(spreadsheet: &'a Spreadsheet, id: WorkbookId, revision_id: String) -> Self {
+        Self {
+            short_id: make_short_workbook_id("session", id.as_str()),
+            id,
+            revision_id,
+            slug: "session".into(),
+            path: PathBuf::from("virtual/session.xlsx"),
+            caps: BackendCaps::xlsx(),
+            bytes: 0,
+            last_modified: None,
+            spreadsheet,
+            sheet_cache: RwLock::new(HashMap::new()),
+            formula_atlas: Arc::new(FormulaAtlas::default()),
+            imported_evaluation_coverage: OnceLock::new(),
+            imported_evaluation_scans: AtomicU64::new(0),
+        }
+    }
+}
+
+impl<S: WorkbookReadSource> WorkbookContext<S> {
+    #[cfg(feature = "recalc")]
+    pub(crate) fn with_evaluation_coverage(
+        self,
+        coverage: crate::model::EvaluationCoverage,
+    ) -> Self {
+        let _ = self.imported_evaluation_coverage.set(coverage);
+        self
+    }
 
     pub fn sheet_names(&self) -> Vec<String> {
         let book = self.spreadsheet.read();
@@ -434,7 +540,7 @@ impl WorkbookContext {
             slug: self.slug.clone(),
             path: path_to_forward_slashes(&self.path),
             client_path: None,
-            bytes: self.bytes,
+            bytes: self.spreadsheet.artifact_bytes(self.bytes),
             sheet_count: book.get_sheet_collection().len(),
             defined_names: defined_names_count,
             tables: table_count,

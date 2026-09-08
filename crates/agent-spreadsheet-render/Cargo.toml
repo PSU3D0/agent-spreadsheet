@@ -1,6 +1,6 @@
 [package]
 name = "agent-spreadsheet-render"
-version = "0.15.0"
+version = "0.16.0"
 edition = "2024"
 description = "Bounded native raster renderer for spreadsheet ranges — scene extraction and deterministic PNG rasterization with structured fidelity warnings"
 authors = ["Frankie Colson"]

@@ -39,21 +39,27 @@ fn sync_revision(fork: &mut crate::fork::ForkContext) -> Result<String> {
     fork.sync_revisions()
 }
 
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CreateForkRequest {
     pub resource_id: ResourceId,
     pub expected_revision: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(length(max = 1024))]
+    pub label: Option<String>,
 }
 
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Serialize, JsonSchema, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CreateForkData {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
     pub base_resource_id: ResourceId,
     pub base_revision_id: String,
     pub fork_resource_id: ResourceId,
     pub revision_id: String,
-    pub ttl_seconds: u64,
+    /// Null means no automatic resource expiry (idle detach is separate).
+    pub ttl_seconds: Option<u64>,
     pub warnings: Vec<Warning>,
 }
 
@@ -84,32 +90,35 @@ pub async fn create_fork(
         ResourceId::bind_workbook(&WorkbookId(fork_id.clone())).map_err(anyhow::Error::msg)?;
     let revision_id = registry.with_fork_mut(&fork_id, sync_revision)?;
     Ok(CreateForkData {
+        label: request.label,
         base_resource_id: request.resource_id,
         base_revision_id: actual_revision,
         fork_resource_id,
         revision_id,
-        ttl_seconds: registry.ttl().as_secs(),
+        ttl_seconds: Some(registry.ttl().as_secs()),
         warnings: Vec::new(),
     })
 }
 
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ListForksRequest {}
 
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Serialize, JsonSchema, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CanonicalForkDescriptor {
     pub resource_id: ResourceId,
-    pub revision_id: String,
-    pub age_seconds: u64,
+    /// No live CAS exists for an inactive durable owner.
+    pub revision_id: Option<String>,
+    /// Unknown when the durable catalog has no authoritative creation clock.
+    pub age_seconds: Option<u64>,
     pub operation_count: usize,
     pub staged_change_count: usize,
     pub checkpoint_count: usize,
     pub recalc_needed: bool,
 }
 
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Serialize, JsonSchema, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ListForksData {
     pub forks: Vec<CanonicalForkDescriptor>,
@@ -136,8 +145,8 @@ pub fn list_forks(state: Arc<AppState>, _request: ListForksRequest) -> Result<Li
             })?;
         forks.push(CanonicalForkDescriptor {
             resource_id,
-            revision_id,
-            age_seconds: info.created_at.elapsed().as_secs(),
+            revision_id: Some(revision_id),
+            age_seconds: Some(info.created_at.elapsed().as_secs()),
             operation_count,
             staged_change_count,
             checkpoint_count,
@@ -151,7 +160,7 @@ pub fn list_forks(state: Arc<AppState>, _request: ListForksRequest) -> Result<Li
     })
 }
 
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RecalculateRequest {
     pub resource_id: ResourceId,
@@ -162,7 +171,7 @@ pub struct RecalculateRequest {
     pub backend: Option<RecalcBackendKind>,
 }
 
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Serialize, JsonSchema, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RecalculateData {
     pub revision_before: String,
@@ -269,7 +278,7 @@ pub async fn recalculate(
     })
 }
 
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct VerifyWorkbookRequest {
     pub resource_id: ResourceId,
@@ -334,8 +343,69 @@ pub async fn verify_workbook(
         }
     }
 
-    let mut config = (*state.config()).clone();
-    config.workspace_root = snapshot_dir.path().to_path_buf();
+    verify_snapshot_directory(state.config().as_ref().clone(), request, snapshot_dir.path(), revisions).await
+}
+
+/// Explicit cold verification input, captured by the binding adapter. It carries
+/// the revision of these exact bytes, never a revision inferred after evaluation.
+pub struct VerificationSnapshot {
+    pub bytes: Vec<u8>,
+    pub revision: String,
+}
+
+#[cfg(feature = "native-fs")]
+pub async fn verify_workbook_snapshots(
+    config: crate::config::ServerConfig,
+    request: VerifyWorkbookRequest,
+    baseline: VerificationSnapshot,
+    current: VerificationSnapshot,
+) -> Result<VerifyWorkbookData> {
+    let directory = crate::hostfs::tempdir()?;
+    fs::write(directory.path().join("baseline.xlsx"), baseline.bytes)?;
+    fs::write(directory.path().join("current.xlsx"), current.bytes)?;
+    verify_snapshot_directory(config, request, directory.path(), vec![baseline.revision, current.revision]).await
+}
+
+#[cfg(all(not(feature = "native-fs"), feature = "recalc-formualizer"))]
+pub async fn verify_workbook_snapshots(
+    _config: crate::config::ServerConfig,
+    request: VerifyWorkbookRequest,
+    baseline: VerificationSnapshot,
+    current: VerificationSnapshot,
+) -> Result<VerifyWorkbookData> {
+    let options = crate::verification::VerifyOptions {
+        targets: request.targets.iter().map(|target| match request.sheet_name.as_deref() {
+            Some(sheet) if !target.contains('!') => format!("{sheet}!{target}"),
+            _ => target.clone(),
+        }).collect(),
+        sheet_filter: request.sheet_name.clone(),
+        include_named_range_deltas: request.include_named_range_deltas,
+        errors_only: request.errors_only,
+        targets_only: request.targets_only,
+    };
+    options.validate()?;
+    let proof = crate::verification::verify_workbook_bytes(
+        request.baseline_resource_id.as_str(), &baseline.bytes, &baseline.revision,
+        request.resource_id.as_str(), &current.bytes, &current.revision, &options,
+    )?;
+    Ok(VerifyWorkbookData {
+        baseline_resource_id: request.baseline_resource_id,
+        current_resource_id: request.resource_id,
+        baseline_revision_id: baseline.revision,
+        current_revision_id: current.revision,
+        proof,
+        warnings: Vec::new(),
+    })
+}
+
+#[cfg(feature = "native-fs")]
+async fn verify_snapshot_directory(
+    mut config: crate::config::ServerConfig,
+    request: VerifyWorkbookRequest,
+    directory: &Path,
+    mut revisions: Vec<String>,
+) -> Result<VerifyWorkbookData> {
+    config.workspace_root = directory.to_path_buf();
     config.single_workbook = None;
     config.path_mappings.clear();
     let snapshot_state = Arc::new(AppState::new(Arc::new(config)));
@@ -381,13 +451,13 @@ pub async fn verify_workbook(
     })
 }
 
-#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Deserialize, JsonSchema, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ExportDestination {
     Workspace { name: String },
 }
 
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExportForkRequest {
     pub resource_id: ResourceId,
@@ -395,13 +465,13 @@ pub struct ExportForkRequest {
     pub destination: ExportDestination,
 }
 
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Serialize, JsonSchema, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ExportedDestination {
     Workspace { name: String },
 }
 
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, JsonSchema, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ArtifactMetadata {
     pub artifact_id: String,
@@ -410,7 +480,7 @@ pub struct ArtifactMetadata {
     pub sha256: String,
 }
 
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Serialize, JsonSchema, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExportForkData {
     pub revision_before: String,
@@ -420,7 +490,7 @@ pub struct ExportForkData {
     pub warnings: Vec<Warning>,
 }
 
-fn artifact_root(workspace_root: &Path) -> Result<PathBuf> {
+pub(crate) fn artifact_root(workspace_root: &Path) -> Result<PathBuf> {
     let workspace_root = workspace_root.canonicalize()?;
     let root = workspace_root.join("artifacts");
     match fs::symlink_metadata(&root) {
@@ -445,7 +515,7 @@ fn artifact_root(workspace_root: &Path) -> Result<PathBuf> {
     Ok(canonical)
 }
 
-fn persist_content_artifact(root: &Path, sha256: &str, contents: &[u8]) -> Result<PathBuf> {
+pub(crate) fn persist_content_artifact(root: &Path, sha256: &str, contents: &[u8]) -> Result<PathBuf> {
     let target = root.join(format!("{sha256}.xlsx"));
     match fs::symlink_metadata(&target) {
         Ok(metadata) => {
@@ -472,20 +542,21 @@ fn persist_content_artifact(root: &Path, sha256: &str, contents: &[u8]) -> Resul
     Ok(target)
 }
 
+pub(crate) fn export_destination_name(destination: &ExportDestination) -> Result<String> {
+    let ExportDestination::Workspace { name } = destination;
+    let safe = crate::security::sanitize_filename_component(name);
+    if safe != *name || !name.to_ascii_lowercase().ends_with(".xlsx") {
+        bail!("invalid request: destination name must be a safe .xlsx filename");
+    }
+    Ok(name.clone())
+}
+
 pub fn export_fork(state: Arc<AppState>, request: ExportForkRequest) -> Result<ExportForkData> {
     let fork_id = require_fork(&request.resource_id)?;
     let registry = state
         .fork_registry()
         .ok_or_else(|| anyhow!("fork registry not available"))?;
-    let name = match request.destination {
-        ExportDestination::Workspace { name } => {
-            let safe = crate::security::sanitize_filename_component(&name);
-            if safe != name || !name.to_ascii_lowercase().ends_with(".xlsx") {
-                bail!("invalid request: destination name must be a safe .xlsx filename");
-            }
-            name
-        }
-    };
+    let name = export_destination_name(&request.destination)?;
     let workspace_root = state.config().workspace_root.clone();
     let (revision_before, revision_after, artifact) = registry.with_fork_mut(&fork_id, |fork| {
         let current = sync_revision(fork)?;
@@ -535,14 +606,14 @@ pub fn export_fork(state: Arc<AppState>, request: ExportForkRequest) -> Result<E
     })
 }
 
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct DiscardForkRequest {
     pub resource_id: ResourceId,
     pub expected_revision: String,
 }
 
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Serialize, JsonSchema, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DiscardForkData {
     pub revision_before: String,
@@ -571,7 +642,7 @@ fn default_limit() -> u32 {
     200
 }
 
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ChangesView {
     Operations {
@@ -590,7 +661,7 @@ pub enum ChangesView {
     },
 }
 
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GetChangesRequest {
     pub resource_id: ResourceId,
@@ -618,6 +689,29 @@ pub enum GetChangesData {
     },
 }
 
+pub(crate) fn operation_history_page(revision_id: String, records: &[CanonicalOperationRecord], offset: u32, limit: u32) -> GetChangesData {
+    let total = records.len();
+    let limit = limit.clamp(1, 2000) as usize;
+    let start = (offset as usize).min(total);
+    let operations = records.iter().skip(start).take(limit).cloned().collect::<Vec<_>>();
+    let next = start + operations.len();
+    GetChangesData::Operations { revision_id, operations, total, next_offset: (next < total).then_some(next as u32), warnings: Vec::new() }
+}
+
+pub(crate) fn net_diff_page(
+    revision_id: String, baseline_revision_id: String, changes: Vec<Change>, offset: u32, limit: u32,
+) -> GetChangesData {
+    let total = changes.len();
+    let limit = limit.clamp(1, 2000) as usize;
+    let start = (offset as usize).min(total);
+    let page = changes.into_iter().skip(start).take(limit).collect::<Vec<_>>();
+    let next = start + page.len();
+    GetChangesData::NetDiff {
+        revision_id, baseline: "fork_base".into(), baseline_revision_id,
+        changes: page, total, next_offset: (next < total).then_some(next as u32), warnings: Vec::new(),
+    }
+}
+
 pub async fn get_changes(
     state: Arc<AppState>,
     request: GetChangesRequest,
@@ -629,24 +723,7 @@ pub async fn get_changes(
     match request.view {
         ChangesView::Operations { offset, limit } => registry.with_fork_mut(&fork_id, |fork| {
             let revision_id = sync_revision(fork)?;
-            let total = fork.canonical_operations.len();
-            let limit = limit.clamp(1, 2000) as usize;
-            let start = (offset as usize).min(total);
-            let operations = fork
-                .canonical_operations
-                .iter()
-                .skip(start)
-                .take(limit)
-                .cloned()
-                .collect::<Vec<_>>();
-            let next = start + operations.len();
-            Ok(GetChangesData::Operations {
-                revision_id,
-                operations,
-                total,
-                next_offset: (next < total).then_some(next as u32),
-                warnings: Vec::new(),
-            })
+            Ok(operation_history_page(revision_id, &fork.canonical_operations, offset, limit))
         }),
         ChangesView::NetDiff {
             sheet_name,
@@ -668,29 +745,12 @@ pub async fn get_changes(
                 )
             })
             .await??;
-            let total = changes.len();
-            let limit = limit.clamp(1, 2000) as usize;
-            let start = (offset as usize).min(total);
-            let page = changes
-                .into_iter()
-                .skip(start)
-                .take(limit)
-                .collect::<Vec<_>>();
-            let next = start + page.len();
-            Ok(GetChangesData::NetDiff {
-                revision_id,
-                baseline: "fork_base".to_string(),
-                baseline_revision_id,
-                changes: page,
-                total,
-                next_offset: (next < total).then_some(next as u32),
-                warnings: Vec::new(),
-            })
+            Ok(net_diff_page(revision_id, baseline_revision_id, changes, offset, limit))
         }
     }
 }
 
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
 pub enum CheckpointRequest {
     Create {
@@ -725,11 +785,11 @@ impl CheckpointRequest {
     }
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, JsonSchema, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CheckpointDescriptor {
     pub checkpoint_id: String,
-    pub created_at: String,
+    pub created_at: Option<String>,
     pub label: Option<String>,
     pub snapshot_revision: String,
     pub recalc_needed: bool,
@@ -738,14 +798,14 @@ pub struct CheckpointDescriptor {
 fn checkpoint_descriptor(checkpoint: &Checkpoint) -> CheckpointDescriptor {
     CheckpointDescriptor {
         checkpoint_id: checkpoint.checkpoint_id.clone(),
-        created_at: checkpoint.created_at.to_rfc3339(),
+        created_at: Some(checkpoint.created_at.to_rfc3339()),
         label: checkpoint.label.clone(),
         snapshot_revision: checkpoint.snapshot_state_revision.clone(),
         recalc_needed: checkpoint.recalc_needed,
     }
 }
 
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Serialize, JsonSchema, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
 pub enum CheckpointData {
     Create {
@@ -939,7 +999,7 @@ pub fn checkpoint(state: Arc<AppState>, request: CheckpointRequest) -> Result<Ch
     }
 }
 
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
 pub enum StagedChangeRequest {
     List {
@@ -967,17 +1027,17 @@ impl StagedChangeRequest {
     }
 }
 
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Serialize, JsonSchema, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StagedChangeDescriptor {
     pub change_id: String,
-    pub created_at: String,
+    pub created_at: Option<String>,
     pub label: Option<String>,
     pub base_revision: String,
     pub summary: ChangeSummary,
 }
 
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Serialize, JsonSchema, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
 pub enum StagedChangeData {
     List {
@@ -986,6 +1046,8 @@ pub enum StagedChangeData {
         warnings: Vec<Warning>,
     },
     Apply {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        head: Option<String>,
         revision_before: String,
         revision_after: String,
         change_id: String,
@@ -1030,7 +1092,7 @@ pub fn staged_change(
                         .ok()
                         .map(|bundle| StagedChangeDescriptor {
                             change_id: change.change_id.clone(),
-                            created_at: change.created_at.to_rfc3339(),
+                            created_at: Some(change.created_at.to_rfc3339()),
                             label: change.label.clone(),
                             base_revision: bundle.base_revision,
                             summary: change.summary.clone(),
@@ -1078,6 +1140,7 @@ pub fn staged_change(
             let consumed = fork.staged_changes.remove(index);
             remove_staged_snapshot(&consumed);
             Ok(StagedChangeData::Apply {
+                head: None,
                 revision_before: before,
                 revision_after: after,
                 change_id,

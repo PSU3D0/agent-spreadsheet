@@ -50,6 +50,7 @@ pub fn status_for(code: CanonicalErrorCode) -> StatusCode {
         CanonicalErrorCode::RevisionConflict => StatusCode::CONFLICT,
         CanonicalErrorCode::OperationFailed => StatusCode::INTERNAL_SERVER_ERROR,
         CanonicalErrorCode::CapabilityUnavailable => StatusCode::NOT_IMPLEMENTED,
+        CanonicalErrorCode::OutcomeUnknown | CanonicalErrorCode::RecoveryRequired => StatusCode::SERVICE_UNAVAILABLE,
     }
 }
 
@@ -94,9 +95,7 @@ fn error_response(envelope: &CanonicalErrorEnvelope) -> Response {
 }
 
 fn live_capabilities(state: &AppState) -> RuntimeCapabilities {
-    let mut capabilities = RuntimeCapabilities::from_state(state);
-    capabilities.vba = state.config().vba_enabled;
-    capabilities
+    canonical_router::runtime_capabilities(state)
 }
 
 async fn operations_route(State(server): State<Arc<SpreadsheetServer>>) -> Response {
@@ -113,6 +112,7 @@ async fn registry_route() -> Response {
 async fn execute_operation_route(
     State(server): State<Arc<SpreadsheetServer>>,
     Path(operation): Path<String>,
+    headers: axum::http::HeaderMap,
     body: Bytes,
 ) -> Response {
     let Some(descriptor) = operation_descriptor(&operation) else {
@@ -139,35 +139,55 @@ async fn execute_operation_route(
         Err(envelope) => return error_response(&envelope),
     };
 
+    let request_id = match headers.get("x-agent-spreadsheet-request-id") {
+        Some(value) => match value.to_str() {
+            Ok(value) => Some(value.to_owned()),
+            Err(_) => return error_response(&CanonicalErrorEnvelope::new(CanonicalErrorCode::InvalidRequest, "invalid request identity header", Some(operation), None)),
+        },
+        None => None,
+    };
+    let request_id = match canonical_router::ingress_identity(request_id, operation) {
+        Ok(identity) => identity,
+        Err(error) => return error_response(&error),
+    };
     let result = canonical_router::dispatch(
         server.canonical_state(),
         server.canonical_tool_timeout(),
         operation,
         arguments,
+        request_id.clone(),
     )
     .await;
 
-    match result {
+    let outgoing = match result {
         Ok(response) => {
             if let Some(limit) = server.canonical_response_limit() {
                 let size = serde_json::to_vec(&response).map(|bytes| bytes.len()).ok();
                 if let Some(size) = size
                     && size > limit
                 {
-                    return error_response(&CanonicalErrorEnvelope::new(
+                    return with_request_identity(error_response(&CanonicalErrorEnvelope::new(
                         CanonicalErrorCode::OperationFailed,
                         format!(
-                            "response for '{operation}' is {size} bytes, exceeding the {limit} byte limit"
+                            "operation '{operation}' completed but its response is {size} bytes, exceeding the {limit} byte limit; effects are not rolled back. Reconcile using the response request-identity header rather than blindly retrying"
                         ),
                         Some(operation),
                         None,
-                    ));
+                    )), request_id.as_deref());
                 }
             }
             json_response(StatusCode::OK, &response)
         }
         Err(envelope) => error_response(&envelope),
+    };
+    with_request_identity(outgoing, request_id.as_deref())
+}
+
+fn with_request_identity(mut response: Response, identity: Option<&str>) -> Response {
+    if let Some(identity) = identity.and_then(|id| HeaderValue::from_str(id).ok()) {
+        response.headers_mut().insert("x-agent-spreadsheet-request-id", identity);
     }
+    response
 }
 
 fn parse_request_body(operation: &str, body: &Bytes) -> Result<Value, CanonicalErrorEnvelope> {

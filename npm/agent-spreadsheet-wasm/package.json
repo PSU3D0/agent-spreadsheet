@@ -1,6 +1,6 @@
 {
   "name": "agent-spreadsheet-wasm",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "WebAssembly byte/session runtime for agent-spreadsheet — create a session from workbook bytes, dispatch canonical operations, export bytes",
   "license": "Apache-2.0",
   "type": "module",

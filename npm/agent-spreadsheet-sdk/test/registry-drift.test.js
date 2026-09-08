@@ -35,7 +35,7 @@ function cliInputSchema(descriptor) {
   return schema
 }
 
-test("checked-in host-independent registry has all 31 asp operations", (t) => {
+test("checked-in host-independent registry has all 32 asp operations", (t) => {
   const asp = aspBinary()
   if (!asp) {
     t.skip("set ASP_BINARY (or build target/debug/asp) to run registry drift verification")
@@ -45,7 +45,7 @@ test("checked-in host-independent registry has all 31 asp operations", (t) => {
   const actual = run(asp, ["registry", "--all"])
   const { generated_by: _generatedBy, ...checkedIn } = manifest
   assert.deepEqual(checkedIn, actual, "run npm run generate:registry after registry changes")
-  assert.equal(actual.operations.length, 31)
+  assert.equal(actual.operations.length, 32)
 
   for (const descriptor of actual.operations) {
     const schema = run(asp, ["schema", descriptor.name])
@@ -78,7 +78,8 @@ const EXPECTED_WASM_OPERATIONS = [
   "screenshot_sheet",
   "write",
   "recalculate",
-  "verify_workbook"
+  "verify_workbook",
+  "checkpoint", "staged_change", "session_history"
 ]
 
 function supported(adapter) {
@@ -89,7 +90,7 @@ function supported(adapter) {
 
 test("checked-in MCP adapter subset remains intentional", () => {
   assert.deepEqual(supported("mcp"), manifest.operations.map(({ name }) => name))
-  assert.equal(supported("mcp").length, 31)
+  assert.equal(supported("mcp").length, 32)
 })
 
 test("checked-in WASM and just-bash adapter subsets remain intentional", () => {
@@ -102,7 +103,8 @@ test("checked-in WASM and just-bash adapter subsets remain intentional", () => {
     if (EXPECTED_WASM_OPERATIONS.includes(descriptor.name)) {
       assert.equal(
         plan.persistence,
-        ["write", "recalculate"].includes(descriptor.name) ? "export_required" : "none",
+        ["write", "recalculate"].includes(descriptor.name) ? "export_required" :
+          ["checkpoint", "staged_change", "session_history"].includes(descriptor.name) ? "resident_required" : "none",
         descriptor.name
       )
     }

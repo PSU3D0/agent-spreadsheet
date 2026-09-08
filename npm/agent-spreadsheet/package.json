@@ -1,7 +1,7 @@
 {
   "name": "agent-spreadsheet",
-  "version": "0.15.0",
-  "description": "Stateless spreadsheet CLI for AI agents \u2014 read, profile, edit, and diff .xlsx workbooks from the command line",
+  "version": "0.16.0",
+  "description": "Stateless spreadsheet CLI for AI agents — read, profile, edit, and diff .xlsx workbooks from the command line",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

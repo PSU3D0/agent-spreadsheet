@@ -37,13 +37,14 @@ dependencies = [
 
 [[package]]
 name = "agent-spreadsheet"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "agent-spreadsheet-render",
  "ahash",
  "anyhow",
  "assert_cmd",
  "async-trait",
+ "axum",
  "base64 0.22.1",
  "chrono",
  "clap",
@@ -52,6 +53,7 @@ dependencies = [
  "fs2",
  "getrandom 0.3.4",
  "globset",
+ "hmac",
  "image",
  "indexmap 2.13.0",
  "jsonschema",
@@ -63,6 +65,7 @@ dependencies = [
  "quick-xml 0.31.0",
  "rand 0.8.5",
  "regex",
+ "reqwest",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -87,7 +90,7 @@ dependencies = [
 
 [[package]]
 name = "agent-spreadsheet-mcp"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "agent-spreadsheet",
  "ahash",
@@ -140,7 +143,7 @@ dependencies = [
 
 [[package]]
 name = "agent-spreadsheet-render"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "ab_glyph",
  "getrandom 0.3.4",
@@ -160,6 +163,9 @@ name = "agent-spreadsheet-wasm"
 version = "0.1.0"
 dependencies = [
  "agent-spreadsheet",
+ "anyhow",
+ "async-trait",
+ "futures",
  "js-sys",
  "serde",
  "serde-wasm-bindgen",
@@ -580,6 +586,8 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "serde_core",
+ "serde_json",
+ "serde_path_to_error",
  "sync_wrapper",
  "tokio",
  "tower",
@@ -3457,6 +3465,17 @@ dependencies = [
  "serde",
  "serde_core",
  "zmij",
+]
+
+[[package]]
+name = "serde_path_to_error"
+version = "0.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10a9ff822e371bb5403e391ecd83e182e0e77ba7f6fe0160b795797109d1b457"
+dependencies = [
+ "itoa",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]

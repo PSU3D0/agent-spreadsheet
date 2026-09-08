@@ -1,13 +1,11 @@
 use crate::model::*;
 use crate::operations::{CanonicalErrorCode, CanonicalErrorEnvelope, ResourceId};
-use crate::state::AppState;
 use crate::tools::{self, FilterOp, FormulaSortBy, MatchMode, SampleMode, StyleGranularity};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -109,7 +107,7 @@ pub struct DescribeWorkbookData {
 pub struct WorkbookExactMetadata {
     pub short_id: String,
     pub slug: String,
-    pub bytes: u64,
+    pub bytes: Option<u64>,
     pub last_modified: Option<String>,
     pub sheet_count: usize,
     pub defined_name_count: usize,
@@ -1291,9 +1289,38 @@ where
 }
 
 pub async fn execute_read_cells(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     request: &ReadCellsRequest,
     revision_id: &str,
+) -> Result<ReadCellsData, CanonicalErrorEnvelope> {
+    let workbook_id = request.resource_id.to_workbook_id();
+    let workbook = state.open_workbook(&workbook_id).await.map_err(|error| {
+        canonical_error(
+            CanonicalErrorCode::ResourceNotFound,
+            "read_cells",
+            error.to_string(),
+            Some("$.resource_id"),
+        )
+    })?;
+    let calculation =
+        state.calculation_metadata(&workbook_id, revision_id, workbook.calculation_metadata());
+    read_cells_from_view(
+        &workbook,
+        request,
+        revision_id,
+        calculation,
+        state.config().max_cells(),
+        state.config().max_payload_bytes(),
+    )
+}
+
+pub fn read_cells_from_view<S: crate::workbook::WorkbookReadSource>(
+    workbook: &crate::workbook::WorkbookContext<S>,
+    request: &ReadCellsRequest,
+    revision_id: &str,
+    calculation: crate::model::CalculationMetadata,
+    max_cells: Option<usize>,
+    max_payload_bytes: Option<usize>,
 ) -> Result<ReadCellsData, CanonicalErrorEnvelope> {
     let operation = "read_cells";
     let fingerprint = fingerprint_read_cells(request);
@@ -1341,28 +1368,11 @@ pub async fn execute_read_cells(
             )
         })
     });
-    let imported_calculation = state
-        .open_workbook(&workbook_id)
-        .await
-        .map_err(|error| {
-            canonical_error(
-                CanonicalErrorCode::ResourceNotFound,
-                operation,
-                error.to_string(),
-                Some("$.resource_id"),
-            )
-        })?
-        .calculation_metadata();
-    let calculation = state.calculation_metadata(&workbook_id, revision_id, imported_calculation);
     let mut blocks = Vec::new();
     let mut rows_returned = 0_usize;
     let mut cells_returned = 0_usize;
     let mut next_cursor = None;
     let mut header = None;
-
-    let config = state.config();
-    let max_cells = config.max_cells();
-    let max_payload_bytes = config.max_payload_bytes();
 
     match &request.selection {
         ReadCellsSelection::Range {
@@ -1401,9 +1411,8 @@ pub async fn execute_read_cells(
                 }
                 let remaining = requested_rows as usize - rows_returned;
                 let candidate_end = r2.min(r1.saturating_add(remaining as u32).saturating_sub(1));
-                let snapshots = tools::range_rows_unbudgeted(
-                    state.clone(),
-                    &workbook_id,
+                let snapshots = tools::range_rows_from_view(
+                    workbook,
                     &request.sheet_name,
                     c1,
                     r1,
@@ -1412,7 +1421,6 @@ pub async fn execute_read_cells(
                     include_formulas || !request.fields.is_empty(),
                     include_styles || !request.fields.is_empty(),
                 )
-                .await
                 .map_err(|error| {
                     canonical_error(
                         CanonicalErrorCode::OperationFailed,
@@ -1565,8 +1573,8 @@ pub async fn execute_read_cells(
                 _ => (None, None, 1),
             };
             let include_header = include_header.unwrap_or(true);
-            let (canonical_header, snapshots) = tools::sheet_rows_unbudgeted_with_header_row(
-                state.clone(),
+            let (canonical_header, snapshots) = tools::sheet_rows_from_view(
+                workbook,
                 tools::SheetPageParams {
                     workbook_or_fork_id: workbook_id,
                     sheet_name: request.sheet_name.clone(),
@@ -1581,7 +1589,6 @@ pub async fn execute_read_cells(
                 },
                 header_row,
             )
-            .await
             .map_err(|error| {
                 canonical_error(
                     CanonicalErrorCode::OperationFailed,
@@ -1684,8 +1691,8 @@ pub async fn execute_read_cells(
             next_cursor,
             limits: ReadCellsLimits {
                 requested_rows,
-                max_cells: config.max_cells(),
-                max_payload_bytes: config.max_payload_bytes(),
+                max_cells,
+                max_payload_bytes,
             },
         },
         warnings: Vec::new(),
@@ -1693,7 +1700,7 @@ pub async fn execute_read_cells(
 }
 
 pub async fn execute_inspect_cells(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     request: InspectCellsRequest,
     revision_id: &str,
 ) -> Result<InspectCellsResponse, CanonicalErrorEnvelope> {
@@ -1732,7 +1739,7 @@ pub async fn execute_inspect_cells(
 }
 
 pub async fn execute_list_workbooks(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     request: ListWorkbooksRequest,
 ) -> anyhow::Result<ListWorkbooksData> {
     let response = tools::list_workbooks(
@@ -1778,7 +1785,7 @@ pub async fn execute_list_workbooks(
 }
 
 pub async fn execute_describe(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     request: DescribeWorkbookRequest,
 ) -> anyhow::Result<DescribeWorkbookData> {
     let workbook_id = request.resource_id.to_workbook_id();
@@ -1837,8 +1844,8 @@ pub async fn execute_describe(
             .include_paths
             .unwrap_or(false)
             .then_some(WorkbookPaths {
-                internal: Some(description.path),
-                client: description.client_path,
+                internal: description.bytes.is_some().then_some(description.path),
+                client: if description.bytes.is_some() { description.client_path } else { None },
             }),
         capabilities: WorkbookCapabilities {
             backend: description.caps,
@@ -1849,7 +1856,7 @@ pub async fn execute_describe(
 }
 
 pub async fn execute_search_formulas(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     request: SearchFormulasRequest,
     revision_id: &str,
 ) -> Result<SearchFormulasData, CanonicalErrorEnvelope> {
@@ -2188,7 +2195,7 @@ fn is_volatile_function(name: &str) -> bool {
 }
 
 pub async fn execute_formula_trace(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     request: FormulaTraceRequest,
     revision_id: &str,
 ) -> Result<FormulaTraceData, CanonicalErrorEnvelope> {
@@ -2276,7 +2283,7 @@ pub async fn execute_formula_trace(
 }
 
 pub async fn execute_formula_map(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     request: FormulaMapRequest,
     revision_id: &str,
 ) -> Result<FormulaMapData, CanonicalErrorEnvelope> {
@@ -2410,7 +2417,7 @@ fn apply_style_limits(
 }
 
 pub async fn execute_analyze_styles(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     request: AnalyzeStylesRequest,
 ) -> anyhow::Result<AnalyzeStylesData> {
     let workbook_id = request.resource_id.to_workbook_id();
@@ -2607,7 +2614,7 @@ pub async fn execute_analyze_styles(
 }
 
 pub async fn execute_profile_table(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     mut request: ProfileTableRequest,
 ) -> Result<ProfileTableData, CanonicalErrorEnvelope> {
     let operation = "profile_table";
@@ -2722,7 +2729,7 @@ pub async fn execute_profile_table(
 }
 
 pub async fn execute_export_grid(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     request: ExportGridRequest,
     revision_id: &str,
 ) -> Result<ExportGridData, CanonicalErrorEnvelope> {

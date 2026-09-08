@@ -24,13 +24,8 @@ use crate::tools::{
 // Session resolution helper
 // ---------------------------------------------------------------------------
 
-/// Resolve the effective workbook path, optionally materializing from a session.
-///
-/// When `session` is `Some`, the session's current state is materialized to a
-/// temp file whose path is returned. The caller must keep the returned
-/// `NamedTempFile` alive for the duration of the read operation.
-///
-/// When `session` is `None`, the provided `file` path is returned as-is.
+/// Stateless file paths stay unchanged. Old session-read snapshot fallback is
+/// fenced until these legacy read flags are projected onto canonical native reads.
 pub fn resolve_file_or_session(
     file: PathBuf,
     session: Option<String>,
@@ -38,21 +33,8 @@ pub fn resolve_file_or_session(
 ) -> Result<(PathBuf, Option<tempfile::NamedTempFile>)> {
     match session {
         Some(session_id) => {
-            let workspace_root = workspace
-                .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-            let store = crate::core::session_store::SessionStore::open(&workspace_root)?;
-            let handle = store.open_session(&session_id)?;
-            let bytes = handle.materialize()?;
-
-            let mut tmp = tempfile::Builder::new()
-                .suffix(".xlsx")
-                .tempfile()
-                .context("failed to create temp file for session read")?;
-            std::io::Write::write_all(&mut tmp, &bytes)
-                .context("failed to write materialized session to temp file")?;
-
-            let path = tmp.path().to_path_buf();
-            Ok((path, Some(tmp)))
+            let _ = workspace;
+            bail!("legacy read --session materialization is disabled; use `asp session exec --session {session_id} read_cells --json ...` (or another canonical read operation) on the retained owner")
         }
         None => Ok((file, None)),
     }
@@ -593,7 +575,7 @@ pub async fn table_profile(file: PathBuf, sheet: Option<String>) -> Result<Value
     Ok(serde_json::to_value(response)?)
 }
 
-fn map_table_read_format(format: TableReadFormat) -> TableOutputFormat {
+pub(crate) fn map_table_read_format(format: TableReadFormat) -> TableOutputFormat {
     match format {
         TableReadFormat::Json => TableOutputFormat::Json,
         TableReadFormat::Values => TableOutputFormat::Values,
@@ -611,7 +593,7 @@ fn map_range_values_format(format: RangeValuesFormatArg) -> TableOutputFormat {
     }
 }
 
-fn map_sheet_page_format(format: SheetPageFormatArg) -> SheetPageFormat {
+pub(crate) fn map_sheet_page_format(format: SheetPageFormatArg) -> SheetPageFormat {
     match format {
         SheetPageFormatArg::Full => SheetPageFormat::Full,
         SheetPageFormatArg::Compact => SheetPageFormat::Compact,
@@ -619,7 +601,7 @@ fn map_sheet_page_format(format: SheetPageFormatArg) -> SheetPageFormat {
     }
 }
 
-fn map_table_sample_mode(mode: TableSampleModeArg) -> SampleMode {
+pub(crate) fn map_table_sample_mode(mode: TableSampleModeArg) -> SampleMode {
     match mode {
         TableSampleModeArg::First => SampleMode::First,
         TableSampleModeArg::Last => SampleMode::Last,
@@ -627,14 +609,14 @@ fn map_table_sample_mode(mode: TableSampleModeArg) -> SampleMode {
     }
 }
 
-fn map_find_value_mode(mode: FindValueMode) -> FindMode {
+pub(crate) fn map_find_value_mode(mode: FindValueMode) -> FindMode {
     match mode {
         FindValueMode::Value => FindMode::Value,
         FindValueMode::Label => FindMode::Label,
     }
 }
 
-fn map_label_direction(direction: LabelDirectionArg) -> LabelDirection {
+pub(crate) fn map_label_direction(direction: LabelDirectionArg) -> LabelDirection {
     match direction {
         LabelDirectionArg::Right => LabelDirection::Right,
         LabelDirectionArg::Below => LabelDirection::Below,
@@ -649,14 +631,14 @@ fn map_formula_sort(sort: FormulaSort) -> FormulaSortBy {
     }
 }
 
-fn map_trace_direction(direction: TraceDirectionArg) -> TraceDirection {
+pub(crate) fn map_trace_direction(direction: TraceDirectionArg) -> TraceDirection {
     match direction {
         TraceDirectionArg::Precedents => TraceDirection::Precedents,
         TraceDirectionArg::Dependents => TraceDirection::Dependents,
     }
 }
 
-fn validate_sheet_page_arguments(
+pub(crate) fn validate_sheet_page_arguments(
     page_size: Option<u32>,
     columns: Option<&Vec<String>>,
 ) -> Result<()> {
@@ -710,7 +692,7 @@ fn validate_positive_limit(limit: Option<u32>, flag_name: &'static str) -> Resul
     Ok(())
 }
 
-fn validate_read_table_arguments(
+pub(crate) fn validate_read_table_arguments(
     limit: Option<u32>,
     offset: Option<u32>,
     sample_mode: Option<TableSampleModeArg>,
@@ -728,7 +710,7 @@ fn validate_read_table_arguments(
     Ok(())
 }
 
-fn parse_table_filters(
+pub(crate) fn parse_table_filters(
     filters_json: Option<String>,
     filters_file: Option<PathBuf>,
 ) -> Result<Option<Vec<TableFilter>>> {

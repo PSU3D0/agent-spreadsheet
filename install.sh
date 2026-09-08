@@ -43,7 +43,7 @@ case "$os_name" in
         os=macos
         ;;
     MINGW*|MSYS*|CYGWIN*|Windows_NT)
-        echo "The shell installer does not support Windows. Use 'npm i -g agent-spreadsheet' or 'cargo install agent-spreadsheet' instead." >&2
+        echo "Native agent-spreadsheet 0.16 releases support Linux and macOS; Windows binaries are not provided." >&2
         exit 1
         ;;
     *)

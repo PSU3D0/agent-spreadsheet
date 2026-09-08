@@ -13,7 +13,9 @@ export const CANONICAL_ERROR_STATUS: Readonly<Record<CanonicalErrorCode, number>
   RESOURCE_NOT_FOUND: 404,
   REVISION_CONFLICT: 409,
   OPERATION_FAILED: 500,
-  CAPABILITY_UNAVAILABLE: 501
+  CAPABILITY_UNAVAILABLE: 501,
+  OUTCOME_UNKNOWN: 503,
+  RECOVERY_REQUIRED: 503
 })
 
 /** The HTTP status the canonical route uses for `code`, or `undefined` when unknown. */

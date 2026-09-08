@@ -688,6 +688,8 @@ impl WriteResponseData {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct CanonicalStagedBundle {
+    #[serde(default)]
+    pub label: Option<String>,
     pub base_revision: String,
     pub max_risk: OperationRisk,
     pub atomic: bool,
@@ -1325,6 +1327,13 @@ fn add_effect_manifest(diff: &mut WriteDiff, results: &[WriteOpResult]) {
     }
 }
 
+pub(crate) fn staged_summary(op_kinds: Vec<String>, ops: usize, changes: usize) -> ChangeSummary {
+    let mut summary = ChangeSummary { op_kinds, ..ChangeSummary::default() };
+    summary.counts.insert("ops_staged".to_string(), ops as u64);
+    summary.counts.insert("preview_change_items".to_string(), changes as u64);
+    summary
+}
+
 fn summary_detail(summary: &ChangeSummary) -> Result<Value> {
     Ok(serde_json::to_value(summary)?)
 }
@@ -1712,8 +1721,8 @@ pub(crate) fn apply_write_op_to_workbook(
                 scope_sheet_name.as_deref(),
             );
             *book = session.into_spreadsheet();
-            result?;
-            Ok(json!({"name":name,"defined":true}))
+            let result = result?;
+            Ok(json!({"name":name,"defined":true,"name_result":result}))
         }
         WriteOp::Name(NameWriteOp::UpdateName {
             name,
@@ -1740,6 +1749,7 @@ pub(crate) fn apply_write_op_to_workbook(
                 "previous_refers_to": result.previous_refers_to,
                 "scope": result.scope_kind,
                 "scope_sheet_name": result.scope_sheet_name,
+                "name_result": result,
             }))
         }
         WriteOp::Name(NameWriteOp::DeleteName {
@@ -1759,8 +1769,8 @@ pub(crate) fn apply_write_op_to_workbook(
                 scope_sheet_name.as_deref(),
             );
             *book = session.into_spreadsheet();
-            result?;
-            Ok(json!({"name":name,"deleted":true}))
+            let result = result?;
+            Ok(json!({"name":name,"deleted":true,"name_result":result}))
         }
         WriteOp::ImportAndHelper(ImportAndHelperOp::ImportGrid {
             sheet_name,
@@ -1954,6 +1964,9 @@ impl ResidentWriteSession {
         })
     }
 
+    pub(crate) fn immutable_base_sha256(&self) -> &str { &self.base_sha256 }
+    pub(crate) fn immutable_base(&self) -> std::sync::Arc<[u8]> { self.base_bytes.clone() }
+
     fn validate_base(&self, bytes: &[u8]) -> Result<()> {
         self.ensure_usable()?;
         if bytes != self.base_bytes.as_ref() {
@@ -1965,9 +1978,18 @@ impl ResidentWriteSession {
     pub fn revision(&self) -> String {
         self.workbook.state_revision_id()
     }
+    pub(crate) fn poison_after_committed_outcome(&mut self, error: &str) {
+        self.poisoned = Some(format!("committed canonical outcome requires recovery: {error}"));
+    }
+
     pub fn poison_reason(&self) -> Option<&str> {
         self.poisoned.as_deref()
     }
+    pub(crate) fn staged_bundles(&self) -> Result<&BTreeMap<String, CanonicalStagedBundle>> {
+        self.ensure_usable()?;
+        Ok(&self.staged)
+    }
+
     pub fn catalog_generation(&self) -> u64 {
         self.catalog_generation
     }
@@ -1976,6 +1998,32 @@ impl ResidentWriteSession {
             bail!("resident session requires recovery before use: {reason}");
         }
         Ok(())
+    }
+
+    /// Borrowed shared projections over the authoritative document, with proof
+    /// bound to the owner's revision. No XLSX export or reader reconstruction.
+    pub fn read_view(
+        &self,
+    ) -> Result<crate::workbook::WorkbookContext<&umya_spreadsheet::Spreadsheet>> {
+        self.ensure_usable()?;
+        let view = crate::workbook::WorkbookContext::borrowed(
+            self.workbook.spreadsheet(),
+            crate::model::WorkbookId(
+                self.resource_id
+                    .split_once(':')
+                    .expect("validated resource identity")
+                    .1
+                    .to_string(),
+            ),
+            self.revision(),
+        );
+        if let crate::recalc::CalculationStamp::Current { coverage, .. } =
+            self.workbook.calculation_stamp()
+        {
+            Ok(view.with_evaluation_coverage(coverage.clone()))
+        } else {
+            Ok(view)
+        }
     }
 
     /// Explicit diagnostics-only access. This never grants mutation authority.
@@ -2338,16 +2386,7 @@ impl WriteTransactionBackend for ForkFileBackend<'_> {
             );
         }
         let change_id = make_short_random_id("chg", 12);
-        let mut summary = ChangeSummary {
-            op_kinds: impact.op_kinds.clone(),
-            ..ChangeSummary::default()
-        };
-        summary
-            .counts
-            .insert("ops_staged".to_string(), bundle.ops.len() as u64);
-        summary
-            .counts
-            .insert("preview_change_items".to_string(), diff.change_count as u64);
+        let summary = staged_summary(impact.op_kinds.clone(), bundle.ops.len(), diff.change_count);
         self.fork.push_staged_change(StagedChange {
             change_id: change_id.clone(),
             created_at: Utc::now(),
@@ -2621,6 +2660,7 @@ fn execute_write_transaction<B: WriteTransactionBackend>(
                     max_risk: impact.risk,
                     atomic: true,
                     ops: request.ops.clone(),
+                    label: request.label.clone(),
                     formula_parse_policy: request.formula_parse_policy,
                 };
                 let (change_id, revision_after) = backend.stage(
@@ -3178,6 +3218,7 @@ fn prepare_common_transaction(
                 max_risk: impact.risk,
                 atomic: true,
                 ops: request.ops.clone(),
+                    label: request.label.clone(),
                 formula_parse_policy: request.formula_parse_policy,
             },
         ))
@@ -3340,6 +3381,7 @@ fn prepare_snapshot_transaction(
                     max_risk: impact.risk,
                     atomic: true,
                     ops: request.ops.clone(),
+                    label: request.label.clone(),
                     formula_parse_policy: request.formula_parse_policy,
                 },
             ))
@@ -3861,6 +3903,65 @@ async fn commit_portable_control_transition<
     Ok(predicted_revision)
 }
 
+/// Initial resource creation is an effect-free, same-record canonical receipt.
+/// Native publication retains this owner so its acknowledged CAS is immediately usable.
+pub(crate) async fn commit_creation_receipt<S: crate::core::resident_storage::ResidentCommitStorage>(
+    session: &mut ResidentWriteSession,
+    storage: &S,
+    request_id: &str,
+    request: &crate::canonical_lifecycle::CreateForkRequest,
+) -> Result<String> {
+    let session_id = session.resource_id.split_once(':').unwrap().1;
+    let records = storage.load(session_id).await?;
+    anyhow::ensure!(records.is_empty(), "creation requires an unpublished empty journal");
+    let history = portable_history_state(&records, session_id, &session.base_sha256)?;
+    commit_portable_control_transition(session, storage, request_id,
+        crate::core::resident_storage::ResidentTransition::Receipt,
+        vec![json!({"resource_creation":request})], history.head,
+        history.current_branch, history.branches, None).await
+}
+
+/// A terminal tombstone is a receipt, not a workbook edit or another outcome log.
+pub(crate) async fn commit_discard_receipt<S: crate::core::resident_storage::ResidentCommitStorage>(
+    session: &mut ResidentWriteSession, storage: &S, request_id: &str,
+    request: &crate::canonical_lifecycle::DiscardForkRequest,
+) -> Result<String> {
+    session.ensure_usable()?;
+    let session_id = session.resource_id.split_once(':').unwrap().1;
+    let records = storage.load(session_id).await?;
+    let history = portable_history_state(&records, session_id, &session.base_sha256)?;
+    anyhow::ensure!(!history.discarded, "resource has been discarded");
+    commit_portable_control_transition(session, storage, request_id,
+        crate::core::resident_storage::ResidentTransition::Receipt,
+        vec![json!({"resource_discard":request})],
+        history.head, history.current_branch, history.branches, None).await
+}
+
+pub(crate) async fn commit_export_receipt<S: crate::core::resident_storage::ResidentCommitStorage>(
+    session: &mut ResidentWriteSession, storage: &S, request_id: &str,
+    request: &crate::canonical_lifecycle::ExportForkRequest,
+    artifact: &crate::canonical_lifecycle::ArtifactMetadata,
+) -> Result<String> {
+    let session_id = session.resource_id.split_once(':').unwrap().1;
+    let records = storage.load(session_id).await?;
+    let history = portable_history_state(&records, session_id, &session.base_sha256)?;
+    commit_portable_control_transition(session, storage, request_id,
+        crate::core::resident_storage::ResidentTransition::Receipt,
+        vec![json!({"resource_export":{"request":request,"artifact":artifact}})],
+        history.head, history.current_branch, history.branches, None).await
+}
+
+pub(crate) async fn commit_file_export_receipt<S: crate::core::resident_storage::ResidentCommitStorage>(
+    session: &mut ResidentWriteSession, storage: &S, request_id: &str, effect: Value,
+) -> Result<String> {
+    let session_id = session.resource_id.split_once(':').unwrap().1;
+    let records = storage.load(session_id).await?;
+    let history = portable_history_state(&records, session_id, &session.base_sha256)?;
+    commit_portable_control_transition(session, storage, request_id,
+        crate::core::resident_storage::ResidentTransition::Receipt, vec![effect],
+        history.head, history.current_branch, history.branches, None).await
+}
+
 async fn commit_control_receipt<S: crate::core::resident_storage::ResidentCommitStorage>(
     session: &mut ResidentWriteSession,
     storage: &S,
@@ -3942,6 +4043,17 @@ pub async fn recalculate_durable_on_resident<
     request_id: &str,
     timeout_ms: Option<u64>,
 ) -> Result<crate::model::EvaluationCoverage> {
+    recalculate_durable_with_backend(session, storage, request_id, timeout_ms, None).await
+}
+
+pub async fn recalculate_durable_with_backend<S: crate::core::resident_storage::ResidentCommitStorage>(
+    session: &mut ResidentWriteSession,
+    storage: &S,
+    request_id: &str,
+    timeout_ms: Option<u64>,
+    backend: Option<std::sync::Arc<dyn crate::recalc::RecalcBackend>>,
+) -> Result<crate::model::EvaluationCoverage> {
+    let backend_name = backend.as_ref().map(|backend| backend.name()).unwrap_or("formualizer");
     session.ensure_usable()?;
     if request_id.is_empty() {
         return Err(invalid_request("request_id is required"));
@@ -3963,9 +4075,22 @@ pub async fn recalculate_durable_on_resident<
             .iter()
             .find_map(|effect| effect.get("calculation_proof"))
             .ok_or_else(|| anyhow!("calculation publication lacks snapshot"))?;
+        if snapshot.get("backend").and_then(Value::as_str).unwrap_or("formualizer") != backend_name {
+            bail!("request identity reuse with different calculation backend");
+        }
         return Ok(serde_json::from_value(snapshot["coverage"].clone())?);
     }
-    let (evaluation, date_system) = match session.workbook.prepare_calculation(timeout_ms) {
+    let prepared = if let Some(backend) = backend {
+        #[cfg(feature = "native-fs")]
+        { session.workbook.prepare_external_calculation(backend, timeout_ms).await
+            .map(|(evaluation, date_system, outcome)| (evaluation, date_system, outcome.duration_ms, Some(outcome))) }
+        #[cfg(not(feature = "native-fs"))]
+        { let _ = backend; bail!("external calculation requires a native filesystem host"); }
+    } else {
+        session.workbook.prepare_calculation(timeout_ms)
+            .map(|(evaluation, date_system, duration)| (evaluation, date_system, duration, None::<crate::core::types::RecalculateOutcome>))
+    };
+    let (evaluation, date_system, evaluation_duration_ms, external) = match prepared {
         Ok(prepared) => prepared,
         Err(error) => {
             session.poisoned = Some(format!(
@@ -3983,6 +4108,9 @@ pub async fn recalculate_durable_on_resident<
         freshness: crate::model::EvaluationFreshness::CurrentRevision,
         revision_id: String::new(),
     };
+    if let Some(outcome) = &external {
+        coverage = outcome.evaluation_coverage.clone();
+    }
     let predicted_revision = format!(
         "resident:{}:{}:{}",
         session.workbook.revisions().epoch,
@@ -4002,18 +4130,37 @@ pub async fn recalculate_durable_on_resident<
             Some("portable history state differs before calculation publication".into());
         bail!("resident session requires recovery before calculation");
     }
-    let effects = vec![
+    let mut effects = vec![
         json!({"timeout_ms":timeout_ms}),
         json!({"calculation_proof":{
+            "evaluation_duration_ms":evaluation_duration_ms,
+            "eval_errors": evaluation.eval_errors,
+            "cells_evaluated": evaluation.cells_evaluated,
             "coverage":coverage,
         }}),
     ];
-    let fingerprint = crate::utils::hash_bytes_sha256_hex(&serde_json::to_vec(&(
-        session.base_sha256.as_str(),
-        "calculate",
-        session.revision(),
-        timeout_ms,
-    ))?);
+    if let Some(outcome) = external {
+        effects[1]["calculation_proof"]["backend"] = json!(backend_name);
+        effects[1]["calculation_proof"]["external_result"] = serde_json::to_value(
+            crate::canonical_lifecycle::RecalculateData {
+                revision_before: session.revision(), revision_after: predicted_revision.clone(),
+                backend: outcome.backend, duration_ms: outcome.duration_ms,
+                state: coverage.state(), status: if coverage.state() == crate::model::EvaluationState::Clean {
+                    "completed".into()
+                } else { "completed_with_errors".into() },
+                error_count: outcome.eval_errors.as_ref().map(Vec::len),
+                cells_evaluated: outcome.cells_evaluated, eval_errors: outcome.eval_errors,
+                evaluation_coverage: coverage.clone(), warnings: vec![],
+            }
+        )?;
+    }
+    let mut fingerprint_input = serde_json::to_value((
+        session.base_sha256.as_str(), "calculate", session.revision(), timeout_ms,
+    ))?;
+    if backend_name != "formualizer" {
+        fingerprint_input.as_array_mut().unwrap().push(json!(backend_name));
+    }
+    let fingerprint = crate::utils::hash_bytes_sha256_hex(&serde_json::to_vec(&fingerprint_input)?);
     let proposed = crate::core::resident_storage::PreparedResidentCommit {
         schema_version: crate::core::resident_storage::RESIDENT_COMMIT_SCHEMA.into(),
         session_id: session_id.clone(),
@@ -4094,7 +4241,7 @@ pub async fn checkpoint_durable<S: crate::core::resident_storage::ResidentCommit
     let effects = vec![json!({"label":label})];
     if let Some(record) = reconciled_record_by_request_id(storage, session, request_id).await? {
         if record.transition != crate::core::resident_storage::ResidentTransition::Checkpoint
-            || record.effects != effects
+            || !record.effects.iter().filter(|effect| effect.get("canonical_outcome").is_none()).eq(effects.iter())
         {
             bail!("request identity reuse with different checkpoint input");
         }
@@ -4184,7 +4331,7 @@ pub async fn delete_checkpoint_durable<S: crate::core::resident_storage::Residen
     let effects = vec![json!({"checkpoint_id":checkpoint_id})];
     if let Some(record) = reconciled_record_by_request_id(storage, session, request_id).await? {
         if record.transition != crate::core::resident_storage::ResidentTransition::CheckpointDelete
-            || record.effects != effects
+            || !record.effects.iter().filter(|effect| effect.get("canonical_outcome").is_none()).eq(effects.iter())
         {
             bail!("request identity reuse with different checkpoint deletion input");
         }
@@ -4215,7 +4362,25 @@ pub async fn create_branch_durable<S: crate::core::resident_storage::ResidentCom
     request_id: &str,
     branch_name: &str,
 ) -> Result<String> {
+    create_branch_at_durable(session, storage, request_id, branch_name, None, None).await
+}
+
+/// Atomically create a branch at a validated mutation or immutable base. This
+/// never moves the selected head and does not materialize another evaluator.
+pub async fn create_branch_at_durable<S: crate::core::resident_storage::ResidentCommitStorage>(
+    session: &mut ResidentWriteSession,
+    storage: &S,
+    request_id: &str,
+    branch_name: &str,
+    target_commit_id: Option<&str>,
+    label: Option<&str>,
+) -> Result<String> {
     session.ensure_usable()?;
+    if label.is_some_and(|label| label.len() > 1024)
+        || target_commit_id.is_some_and(|target| target.is_empty() || target.len() > 256)
+    {
+        return Err(invalid_request("invalid branch target or label length"));
+    }
     if branch_name.is_empty()
         || !branch_name
             .bytes()
@@ -4228,6 +4393,8 @@ pub async fn create_branch_durable<S: crate::core::resident_storage::ResidentCom
         if record.transition != crate::core::resident_storage::ResidentTransition::BranchCreate
             || !record.effects.iter().any(|effect| {
                 effect.get("branch_name").and_then(Value::as_str) == Some(branch_name)
+                    && effect.get("requested_target").and_then(Value::as_str) == target_commit_id
+                    && effect.get("branch_label").and_then(Value::as_str) == label
             })
         {
             bail!("request identity reuse with different branch-create input");
@@ -4239,14 +4406,29 @@ pub async fn create_branch_durable<S: crate::core::resident_storage::ResidentCom
     if history.branches.contains_key(branch_name) {
         bail!("branch already exists");
     }
+    let target = match target_commit_id {
+        None => history.head.clone(),
+        Some("base") => None,
+        Some(target) if records.iter().any(|record| {
+            record.commit_id == target
+                && matches!(record.transition, crate::core::resident_storage::ResidentTransition::Mutation | crate::core::resident_storage::ResidentTransition::StageApply)
+        }) => Some(target.to_owned()),
+        Some(_) => return Err(invalid_request("unknown branch mutation target")),
+    };
     let mut branches = history.branches.clone();
-    branches.insert(branch_name.to_string(), history.head.clone());
+    branches.insert(branch_name.to_string(), target.clone());
+    let effects = if target_commit_id.is_none() && label.is_none() {
+        vec![json!({"branch_name":branch_name})]
+    } else {
+        vec![json!({"branch_name":branch_name,"branch_target":target,
+            "requested_target":target_commit_id,"branch_label":label})]
+    };
     commit_portable_control_transition(
         session,
         storage,
         request_id,
         crate::core::resident_storage::ResidentTransition::BranchCreate,
-        vec![json!({"branch_name":branch_name})],
+        effects,
         history.head,
         history.current_branch,
         branches,
@@ -4465,6 +4647,11 @@ pub async fn recover_durable_resident_session<
         &session_id,
         &crate::utils::hash_bytes_sha256_hex(base_bytes),
     )?;
+    // Terminal resource receipts retain their original outcomes but cannot gain
+    // a new restart/live-CAS transition. The runtime fences all workbook access.
+    if history.discarded {
+        return Ok(session);
+    }
     let fingerprint = crate::utils::hash_bytes_sha256_hex(
         format!(
             "restart:{}:{}",

@@ -1010,7 +1010,14 @@ fn safe_artifact_root(workspace_root: &std::path::Path) -> Result<std::path::Pat
             bail!("invalid request: artifact root must be a real directory")
         }
         Ok(_) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => fs::create_dir(&root)?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let mut builder = fs::DirBuilder::new();
+            #[cfg(unix)] {
+                use std::os::unix::fs::DirBuilderExt;
+                builder.mode(0o700);
+            }
+            builder.create(&root)?;
+        },
         Err(error) => return Err(error.into()),
     }
     let canonical = root.canonicalize()?;
@@ -1060,7 +1067,7 @@ fn validate_screenshot_directory(state: &AppState) -> Result<std::path::PathBuf>
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "native-fs", feature = "recalc"))]
-fn persist_png_artifact(workspace_root: &std::path::Path, bytes: &[u8]) -> Result<ArtifactHandle> {
+pub(crate) fn persist_png_artifact(workspace_root: &std::path::Path, bytes: &[u8]) -> Result<ArtifactHandle> {
     use std::fs;
     use std::io::Write;
 
@@ -1589,6 +1596,17 @@ pub async fn inspect_vba(
     request: InspectVbaRequest,
     revision: &str,
 ) -> Result<InspectVbaData> {
+    inspect_vba_bound(state, request, revision, None).await
+}
+
+/// Separate logical cursor identity from an explicitly cold snapshot lookup.
+/// Rebinding must never make a valid next-page cursor depend on a temp path.
+pub(crate) async fn inspect_vba_bound(
+    state: Arc<AppState>,
+    request: InspectVbaRequest,
+    revision: &str,
+    snapshot_id: Option<crate::model::WorkbookId>,
+) -> Result<InspectVbaData> {
     match request {
         InspectVbaRequest::ProjectSummary {
             resource_id,
@@ -1612,7 +1630,7 @@ pub async fn inspect_vba(
             let response = tools::vba::vba_project_summary(
                 state,
                 tools::vba::VbaProjectSummaryParams {
-                    workbook_or_fork_id: resource_id.to_workbook_id(),
+                    workbook_or_fork_id: snapshot_id.clone().unwrap_or_else(|| resource_id.to_workbook_id()),
                     max_modules: Some(offset.saturating_add(limit).saturating_add(1)),
                     include_references: Some(include_references),
                 },
@@ -1673,7 +1691,7 @@ pub async fn inspect_vba(
             let summary = tools::vba::vba_project_summary(
                 state.clone(),
                 tools::vba::VbaProjectSummaryParams {
-                    workbook_or_fork_id: resource_id.to_workbook_id(),
+                    workbook_or_fork_id: snapshot_id.clone().unwrap_or_else(|| resource_id.to_workbook_id()),
                     max_modules: Some(10_000),
                     include_references: Some(false),
                 },
@@ -1690,7 +1708,7 @@ pub async fn inspect_vba(
             let response = tools::vba::vba_module_source(
                 state,
                 tools::vba::VbaModuleSourceParams {
-                    workbook_or_fork_id: resource_id.to_workbook_id(),
+                    workbook_or_fork_id: snapshot_id.clone().unwrap_or_else(|| resource_id.to_workbook_id()),
                     module_name: module_name.clone(),
                     offset_lines: offset,
                     limit_lines: limit,

@@ -29,7 +29,9 @@ const WASM_FEATURES = [
   "--enable-nontrapping-float-to-int",
   "--enable-mutable-globals",
   "--enable-reference-types",
-  "--enable-multivalue"
+  "--enable-multivalue",
+  // Formualizer 0.9's dependency graph also emits SIMD instructions.
+  "--enable-simd"
 ]
 
 function parseArgs(argv) {

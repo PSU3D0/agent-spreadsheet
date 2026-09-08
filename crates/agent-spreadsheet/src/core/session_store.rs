@@ -640,6 +640,7 @@ impl SessionHandle {
     // -- Locking --
 
     fn ensure_legacy_writable(&self) -> Result<()> {
+        if !fs::symlink_metadata(&self.dir)?.file_type().is_dir() { bail!("legacy session path is fenced or invalid"); }
         if self.dir.join("resident-import-frozen.json").try_exists()? {
             bail!("legacy session is frozen for resident import; mutation refused");
         }

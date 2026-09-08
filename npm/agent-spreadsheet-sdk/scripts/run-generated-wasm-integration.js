@@ -42,6 +42,7 @@ const test = spawnSync(process.execPath, [
   "--test",
   path.join(packageRoot, "test", "local-runtime.integration.test.js"),
   path.join(packageRoot, "test", "just-bash-integration.test.js"),
+  path.join(packageRoot, "test", "resident-just-bash.integration.js"),
   path.join(packageRoot, "test", "wasm-goldens.integration.test.js")
 ], {
   cwd: packageRoot,

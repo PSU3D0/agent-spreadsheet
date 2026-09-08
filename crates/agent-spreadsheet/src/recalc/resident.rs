@@ -94,6 +94,7 @@ pub struct ResidentWorkbook {
     calculation: CalculationStamp,
     counters: EvaluatorCounters,
     serializations: std::cell::Cell<u64>,
+    snapshot: std::cell::RefCell<Option<(ResidentRevision, std::sync::Arc<[u8]>)>>,
     last_export: Option<ExportStamp>,
 }
 
@@ -122,6 +123,7 @@ impl ResidentWorkbook {
             },
             last_export: None,
             serializations: std::cell::Cell::new(0),
+            snapshot: std::cell::RefCell::new(None),
         })
     }
 
@@ -168,9 +170,25 @@ impl ResidentWorkbook {
         self.serializations.get()
     }
 
-    pub(crate) fn snapshot_bytes(&self) -> Result<Vec<u8>> {
+    pub fn snapshot_bytes(&self) -> Result<Vec<u8>> {
+        // XLSX is a lazy derived export, never the live workbook authority.
+        // Reuse an exact-revision capture: Umya's serialization tables contain
+        // interior counters, so repeated writes need not be byte-identical.
+        if let Some((revision, bytes)) = self.snapshot.borrow().as_ref()
+            && revision == &self.revisions
+        {
+            return Ok(bytes.to_vec());
+        }
         self.serializations.set(self.serializations.get() + 1);
-        self.document.to_bytes()
+        let bytes = self.document.to_bytes()?;
+        *self.snapshot.borrow_mut() = Some((self.revisions.clone(), bytes.clone().into()));
+        Ok(bytes)
+    }
+
+    /// Borrow the authoritative document for legacy read-only projections.
+    /// Mutations still go through prepared resident transactions.
+    pub fn legacy_read_session(&self) -> &WorkbookSession {
+        &self.document
     }
 
     pub(crate) fn spreadsheet(&self) -> &umya_spreadsheet::Spreadsheet {
@@ -292,12 +310,14 @@ impl ResidentWorkbook {
     ) -> Result<(
         super::formualizer_backend::EvaluatorEvaluation,
         formualizer::eval::engine::DateSystem,
+        u64,
     )> {
         self.ensure_evaluator()?;
         self.counters.evaluations += 1;
         let evaluator = self.evaluator.as_mut().expect("evaluator ensured");
+        let evaluation_started = web_time::Instant::now();
         match evaluator.evaluate(timeout_ms) {
-            Ok(evaluation) => Ok((evaluation, evaluator.date_system())),
+            Ok(evaluation) => Ok((evaluation, evaluator.date_system(), evaluation_started.elapsed().as_millis() as u64)),
             Err(error) => {
                 // Derived partial work is disposable; publication/proof belongs to
                 // the durable owner and must not precede its commit.
@@ -305,6 +325,57 @@ impl ResidentWorkbook {
                 Err(error)
             }
         }
+    }
+
+    /// External engines are explicitly cold. Only their formula caches are
+    /// imported; their rewritten OOXML never replaces the authoritative document.
+    #[cfg(feature = "native-fs")]
+    pub(crate) async fn prepare_external_calculation(
+        &mut self,
+        backend: std::sync::Arc<dyn super::RecalcBackend>,
+        timeout_ms: Option<u64>,
+    ) -> Result<(super::formualizer_backend::EvaluatorEvaluation,
+        formualizer::eval::engine::DateSystem, crate::core::types::RecalculateOutcome)> {
+        let directory = crate::hostfs::tempdir()?;
+        let path = directory.path().join("calculation.xlsx");
+        std::fs::write(&path, self.snapshot_bytes()?)?;
+        self.counters.evaluations += 1;
+        let mut outcome = crate::core::recalc::execute_with_backend(&path, timeout_ms, backend).await?;
+        if !outcome.evaluation_coverage.is_complete_and_fresh() {
+            anyhow::bail!("external calculation did not produce complete current coverage");
+        }
+        // Read external caches without constructing or evaluating a second engine.
+        let mut evaluated = UmyaAdapter::open_path(&path)
+            .map_err(|error| anyhow!("failed to read external calculation: {error}"))?;
+        let mut updates = Vec::new();
+        let mut errors = 0;
+        for sheet in self.document.spreadsheet().get_sheet_collection() {
+            let values = evaluated.read_sheet(sheet.get_name())
+                .map_err(|error| anyhow!("external calculation sheet missing: {error}"))?;
+            for cell in sheet.get_cell_collection().into_iter().filter(|cell| cell.is_formula()) {
+                let coordinate = cell.get_coordinate();
+                let row = *coordinate.get_row_num();
+                let col = *coordinate.get_col_num();
+                let value = values.cells.get(&(row, col)).and_then(|cell| cell.value.clone())
+                    .ok_or_else(|| anyhow!("external calculation omitted cache {}!R{row}C{col}", sheet.get_name()))?;
+                errors += u64::from(matches!(value, formualizer::workbook::LiteralValue::Error(_)));
+                updates.push(formualizer::workbook::FormulaCacheUpdate {
+                    sheet: sheet.get_name().to_owned(), row, col, value,
+                });
+            }
+        }
+        // Counts describe the original formulas, not formulas rewritten by the
+        // external engine. Switching back to Formualizer requires a rebuild.
+        self.evaluator = None;
+        let count = updates.len() as u64;
+        outcome.evaluation_coverage.formula_cells = count;
+        outcome.evaluation_coverage.evaluated_formula_cells = count;
+        outcome.evaluation_coverage.error_formula_cells = errors;
+        outcome.state = outcome.evaluation_coverage.state();
+        Ok((super::formualizer_backend::EvaluatorEvaluation {
+            cells_evaluated: count, cache_updates: updates, eval_errors: vec![],
+            error_formula_cells: errors, formula_cells: count,
+        }, formualizer::eval::engine::DateSystem::Excel1900, outcome))
     }
 
     pub(crate) fn publish_prepared_calculation(

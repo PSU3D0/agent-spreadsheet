@@ -59,7 +59,12 @@ async fn describe_and_overview_suite(state: Arc<AppState>, workbook_id: Workbook
     let description_json = serde_json::to_value(&description)?;
     assert!(description_json.get("workbook_short_id").is_none());
     assert_eq!(description.sheet_count, 2);
-    assert!(description.bytes > 0);
+    assert!(
+        description
+            .bytes
+            .expect("file-backed descriptor has an exact artifact size")
+            > 0
+    );
     assert!(description.caps.supports_formula_graph);
 
     let sheets = list_sheets(

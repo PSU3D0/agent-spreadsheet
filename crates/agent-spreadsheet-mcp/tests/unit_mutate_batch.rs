@@ -603,6 +603,7 @@ fn slim_surface_is_exactly_the_available_canonical_registry() {
     let state = support::app_state_with_config(config);
     let mut capabilities = RuntimeCapabilities::from_state(&state);
     capabilities.vba = false;
+    capabilities.resident_history = cfg!(feature = "recalc-formualizer");
     let mut expected = operation_registry()
         .iter()
         .filter(|descriptor| descriptor.is_available(&capabilities))

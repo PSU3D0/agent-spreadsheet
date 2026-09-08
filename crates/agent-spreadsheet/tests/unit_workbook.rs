@@ -58,7 +58,12 @@ fn workbook_context_caches_sheet_metrics() {
     assert_eq!(summary.slug, "metrics");
     assert!(summary.caps.supports_styles);
     assert!(summary.caps.supports_formula_graph);
-    assert!(summary.bytes > 0);
+    assert!(
+        summary
+            .bytes
+            .expect("file-backed descriptor has an exact artifact size")
+            > 0
+    );
 }
 
 #[test]

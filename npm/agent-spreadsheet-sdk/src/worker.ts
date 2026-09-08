@@ -20,6 +20,7 @@ export const WORKER_METHODS = [
   "createSession",
   "operations",
   "executeOperation",
+  "sessionMetadata",
   "exportWorkbook",
   "disposeSession",
   "readArtifact",
@@ -32,8 +33,8 @@ export type WorkerMethod = (typeof WORKER_METHODS)[number]
 /** The subset of `Worker`/`MessagePort` the shim uses, in either runtime. */
 export interface WorkerPortLike {
   postMessage(message: unknown): void
-  addEventListener?(type: "message" | "error", listener: (event: unknown) => void): void
-  on?(type: "message" | "error", listener: (value: unknown) => void): void
+  addEventListener?(type: "message" | "error" | "messageerror" | "exit" | "close", listener: (event: unknown) => void): void
+  on?(type: "message" | "error" | "messageerror" | "exit" | "close", listener: (value: unknown) => void): void
   terminate?(): unknown
   unref?(): unknown
 }
@@ -81,7 +82,7 @@ export interface WorkerBindingsHandle {
   terminate(): Promise<void>
 }
 
-function listen(port: WorkerPortLike, type: "message" | "error", handler: (value: unknown) => void): void {
+function listen(port: WorkerPortLike, type: "message" | "error" | "messageerror" | "exit" | "close", handler: (value: unknown) => void): void {
   if (typeof port.on === "function") {
     // worker_threads delivers the payload itself.
     port.on(type, handler)
@@ -162,7 +163,7 @@ export function connectBindings(port: WorkerPortLike): WasmBindings {
 function createChannel(port: WorkerPortLike): Channel {
   const pending = new Map<number, { resolve: (value: unknown) => void; reject: (reason: unknown) => void }>()
   let sequence = 0
-  let failure: unknown
+  let failure: TransportError | undefined
 
   listen(port, "message", (message) => {
     if (!isResponse(message)) return
@@ -173,13 +174,17 @@ function createChannel(port: WorkerPortLike): Channel {
     else settle.reject(message.error)
   })
   function abort(reason: unknown): void {
-    failure = reason
+    if (failure) return
+    failure = reason instanceof TransportError ? reason : new TransportError("the local runtime worker connection closed or failed; operation completion is unknown", { cause: reason })
     for (const [id, settle] of pending) {
       pending.delete(id)
-      settle.reject(reason)
+      settle.reject(failure)
     }
   }
   listen(port, "error", abort)
+  listen(port, "messageerror", abort)
+  listen(port, "close", abort)
+  if (typeof port.on === "function") listen(port, "exit", abort)
 
   function call(method: WorkerMethod, args: unknown[]): Promise<unknown> {
     if (failure !== undefined) {
@@ -202,8 +207,9 @@ function createChannel(port: WorkerPortLike): Channel {
   const bindings: WasmBindings = {
     createSession: (bytes: Uint8Array) => call("createSession", [bytes]) as Promise<string>,
     operations: () => call("operations", []),
-    executeOperation: (sessionId: string, operation: string, paramsJson: string) =>
-      call("executeOperation", [sessionId, operation, paramsJson]) as Promise<string>,
+    sessionMetadata: (sessionId: string) => call("sessionMetadata", [sessionId]) as Promise<string>,
+    executeOperation: (sessionId: string, operation: string, paramsJson: string, requestId?: string) =>
+      call("executeOperation", [sessionId, operation, paramsJson, requestId]) as Promise<string>,
     exportWorkbook: (sessionId: string) =>
       call("exportWorkbook", [sessionId]) as Promise<Uint8Array>,
     disposeSession: (sessionId: string) => call("disposeSession", [sessionId]),

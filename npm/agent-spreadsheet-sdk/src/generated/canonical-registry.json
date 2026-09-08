@@ -39,7 +39,9 @@
           "STALE_CURSOR",
           "CURSOR_MISMATCH",
           "ROW_EXCEEDS_BUDGET",
-          "REVISION_CONFLICT"
+          "REVISION_CONFLICT",
+          "OUTCOME_UNKNOWN",
+          "RECOVERY_REQUIRED"
         ],
         "type": "string"
       }
@@ -819,7 +821,10 @@
               "bytes": {
                 "format": "uint64",
                 "minimum": 0,
-                "type": "integer"
+                "type": [
+                  "integer",
+                  "null"
+                ]
               },
               "defined_name_count": {
                 "format": "uint",
@@ -855,7 +860,6 @@
             "required": [
               "short_id",
               "slug",
-              "bytes",
               "sheet_count",
               "defined_name_count",
               "table_count",
@@ -11105,7 +11109,7 @@
         ],
         "class": "expensive"
       },
-      "description": "Preview or apply an ordered batch of canonical mutations with revision CAS and atomic rollback by default; stage requires a durable adapter and is invalid for in-memory WASM sessions.",
+      "description": "Preview, stage, or apply canonical mutations with revision CAS and atomic rollback; stage retention follows the host journal's lifetime.",
       "input_schema": {
         "$defs": {
           "AlignmentPatch": {
@@ -14120,6 +14124,13 @@
           "expected_revision": {
             "type": "string"
           },
+          "label": {
+            "maxLength": 1024,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "resource_id": {
             "$ref": "#/$defs/ResourceId"
           }
@@ -14146,13 +14157,23 @@
               "fork_resource_id": {
                 "$ref": "#/$defs/ResourceId"
               },
+              "label": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "revision_id": {
                 "type": "string"
               },
               "ttl_seconds": {
+                "description": "Null means no automatic resource expiry (idle detach is separate).",
                 "format": "uint64",
                 "minimum": 0,
-                "type": "integer"
+                "type": [
+                  "integer",
+                  "null"
+                ]
               },
               "warnings": {
                 "items": {
@@ -14166,7 +14187,6 @@
               "base_revision_id",
               "fork_resource_id",
               "revision_id",
-              "ttl_seconds",
               "warnings"
             ],
             "type": "object"
@@ -14275,9 +14295,13 @@
             "additionalProperties": false,
             "properties": {
               "age_seconds": {
+                "description": "Unknown when the durable catalog has no authoritative creation clock.",
                 "format": "uint64",
                 "minimum": 0,
-                "type": "integer"
+                "type": [
+                  "integer",
+                  "null"
+                ]
               },
               "checkpoint_count": {
                 "format": "uint",
@@ -14296,7 +14320,11 @@
                 "$ref": "#/$defs/ResourceId"
               },
               "revision_id": {
-                "type": "string"
+                "description": "No live CAS exists for an inactive durable owner.",
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "staged_change_count": {
                 "format": "uint",
@@ -14306,8 +14334,6 @@
             },
             "required": [
               "resource_id",
-              "revision_id",
-              "age_seconds",
               "operation_count",
               "staged_change_count",
               "checkpoint_count",
@@ -15865,12 +15891,14 @@
                 "type": "integer"
               },
               "timestamp": {
-                "type": "string"
+                "type": [
+                  "string",
+                  "null"
+                ]
               }
             },
             "required": [
               "sequence",
-              "timestamp",
               "kind",
               "op_kinds",
               "revision_before",
@@ -16358,9 +16386,9 @@
           "support_status": "unsupported"
         },
         "just_bash": {
-          "binding_kind": "durable_orchestration",
-          "persistence": "durable_required",
-          "support_status": "unsupported"
+          "binding_kind": "single_mutable",
+          "persistence": "resident_required",
+          "support_status": "supported"
         },
         "mcp": {
           "binding_kind": "durable_orchestration",
@@ -16368,9 +16396,9 @@
           "support_status": "supported"
         },
         "wasm": {
-          "binding_kind": "durable_orchestration",
-          "persistence": "durable_required",
-          "support_status": "unsupported"
+          "binding_kind": "single_mutable",
+          "persistence": "resident_required",
+          "support_status": "supported"
         }
       },
       "capability": {
@@ -16384,7 +16412,7 @@
         ],
         "class": "expensive"
       },
-      "description": "Create, list, atomically restore, or delete fork checkpoints.",
+      "description": "Create, list, atomically restore, or delete resident checkpoints.",
       "input_schema": {
         "$defs": {
           "ResourceId": {
@@ -16675,7 +16703,10 @@
                 "type": "string"
               },
               "created_at": {
-                "type": "string"
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "label": {
                 "type": [
@@ -16692,7 +16723,6 @@
             },
             "required": [
               "checkpoint_id",
-              "created_at",
               "snapshot_revision",
               "recalc_needed"
             ],
@@ -16763,9 +16793,9 @@
           "support_status": "unsupported"
         },
         "just_bash": {
-          "binding_kind": "durable_orchestration",
-          "persistence": "durable_required",
-          "support_status": "unsupported"
+          "binding_kind": "single_mutable",
+          "persistence": "resident_required",
+          "support_status": "supported"
         },
         "mcp": {
           "binding_kind": "durable_orchestration",
@@ -16773,9 +16803,9 @@
           "support_status": "supported"
         },
         "wasm": {
-          "binding_kind": "durable_orchestration",
-          "persistence": "durable_required",
-          "support_status": "unsupported"
+          "binding_kind": "single_mutable",
+          "persistence": "resident_required",
+          "support_status": "supported"
         }
       },
       "capability": {
@@ -16975,6 +17005,12 @@
                   "change_id": {
                     "type": "string"
                   },
+                  "head": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "op_kinds": {
                     "items": {
                       "type": "string"
@@ -17062,7 +17098,10 @@
                 "type": "string"
               },
               "created_at": {
-                "type": "string"
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "label": {
                 "type": [
@@ -17076,7 +17115,6 @@
             },
             "required": [
               "change_id",
-              "created_at",
               "base_revision",
               "summary"
             ],
@@ -17107,6 +17145,590 @@
           },
           "operation": {
             "const": "staged_change",
+            "type": "string"
+          },
+          "resource_id": {
+            "$ref": "#/$defs/ResourceId"
+          },
+          "revision_id": {
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "1",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "operation",
+          "resource_id",
+          "revision_id",
+          "data"
+        ],
+        "title": "ResourceResponseSchema",
+        "type": "object"
+      },
+      "risk_ceiling": "destructive",
+      "schema_version": "1"
+    },
+    {
+      "adapters": {
+        "cli": {
+          "binding_kind": "durable_orchestration",
+          "persistence": "durable_required",
+          "support_status": "unsupported"
+        },
+        "just_bash": {
+          "binding_kind": "single_mutable",
+          "persistence": "resident_required",
+          "support_status": "supported"
+        },
+        "mcp": {
+          "binding_kind": "durable_orchestration",
+          "persistence": "durable_required",
+          "support_status": "supported"
+        },
+        "wasm": {
+          "binding_kind": "single_mutable",
+          "persistence": "resident_required",
+          "support_status": "supported"
+        }
+      },
+      "capability": {
+        "description": "Inspect and move durable resident history with exact request outcomes",
+        "name": "resident_history"
+      },
+      "cost": {
+        "bounded_by": [
+          "records",
+          "payload_bytes"
+        ],
+        "class": "expensive"
+      },
+      "description": "Inspect owner health, reconcile request outcomes, or navigate resident history; durability follows the host journal.",
+      "input_schema": {
+        "$defs": {
+          "ResourceId": {
+            "maxLength": 256,
+            "minLength": 4,
+            "pattern": "^(wb|fork|session):[A-Za-z0-9][A-Za-z0-9_-]{0,243}$",
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "status",
+                "type": "string"
+              },
+              "resource_id": {
+                "$ref": "#/$defs/ResourceId"
+              }
+            },
+            "required": [
+              "action",
+              "resource_id"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "outcome",
+                "type": "string"
+              },
+              "request_id": {
+                "type": "string"
+              },
+              "resource_id": {
+                "$ref": "#/$defs/ResourceId"
+              }
+            },
+            "required": [
+              "action",
+              "resource_id",
+              "request_id"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "list",
+                "type": "string"
+              },
+              "limit": {
+                "default": 100,
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "offset": {
+                "default": 0,
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "resource_id": {
+                "$ref": "#/$defs/ResourceId"
+              }
+            },
+            "required": [
+              "action",
+              "resource_id"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "undo",
+                "type": "string"
+              },
+              "expected_revision": {
+                "type": "string"
+              },
+              "resource_id": {
+                "$ref": "#/$defs/ResourceId"
+              }
+            },
+            "required": [
+              "action",
+              "resource_id",
+              "expected_revision"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "redo",
+                "type": "string"
+              },
+              "expected_revision": {
+                "type": "string"
+              },
+              "resource_id": {
+                "$ref": "#/$defs/ResourceId"
+              }
+            },
+            "required": [
+              "action",
+              "resource_id",
+              "expected_revision"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "checkout",
+                "type": "string"
+              },
+              "expected_revision": {
+                "type": "string"
+              },
+              "resource_id": {
+                "$ref": "#/$defs/ResourceId"
+              },
+              "target_commit_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action",
+              "resource_id",
+              "expected_revision",
+              "target_commit_id"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "create_branch",
+                "type": "string"
+              },
+              "expected_revision": {
+                "type": "string"
+              },
+              "label": {
+                "maxLength": 1024,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "resource_id": {
+                "$ref": "#/$defs/ResourceId"
+              },
+              "target_commit_id": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "action",
+              "resource_id",
+              "expected_revision",
+              "name"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "switch_branch",
+                "type": "string"
+              },
+              "expected_revision": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "resource_id": {
+                "$ref": "#/$defs/ResourceId"
+              }
+            },
+            "required": [
+              "action",
+              "resource_id",
+              "expected_revision",
+              "name"
+            ],
+            "type": "object"
+          }
+        ],
+        "title": "SessionHistoryRequest"
+      },
+      "name": "session_history",
+      "output_schema": {
+        "$defs": {
+          "CanonicalResponse": {
+            "additionalProperties": false,
+            "properties": {
+              "data": true,
+              "operation": {
+                "type": "string"
+              },
+              "resource_id": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/ResourceId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "revision_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "schema_version": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "schema_version",
+              "operation",
+              "data"
+            ],
+            "type": "object"
+          },
+          "RequestOutcomeState": {
+            "enum": [
+              "committed",
+              "not_found",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "ResidentTransition": {
+            "enum": [
+              "mutation",
+              "stage_apply",
+              "catalog_stage",
+              "catalog_discard",
+              "calculation_publish",
+              "calculation_invalidate",
+              "undo",
+              "redo",
+              "checkout",
+              "branch_create",
+              "branch_switch",
+              "checkpoint",
+              "checkpoint_delete",
+              "receipt",
+              "restart"
+            ],
+            "type": "string"
+          },
+          "ResourceId": {
+            "maxLength": 256,
+            "minLength": 4,
+            "pattern": "^(wb|fork|session):[A-Za-z0-9][A-Za-z0-9_-]{0,243}$",
+            "type": "string"
+          },
+          "SessionHealth": {
+            "enum": [
+              "usable",
+              "poisoned"
+            ],
+            "type": "string"
+          },
+          "SessionHistoryData": {
+            "oneOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "health": {
+                    "$ref": "#/$defs/SessionHealth"
+                  },
+                  "kind": {
+                    "const": "status",
+                    "type": "string"
+                  },
+                  "poisoned_request_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "reason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "revision_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "health"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "outcome",
+                    "type": "string"
+                  },
+                  "request_id": {
+                    "type": "string"
+                  },
+                  "response": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/$defs/CanonicalResponse"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "state": {
+                    "$ref": "#/$defs/RequestOutcomeState"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "request_id",
+                  "state"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "branch_labels": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "branches": {
+                    "additionalProperties": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "type": "object"
+                  },
+                  "head": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "kind": {
+                    "const": "list",
+                    "type": "string"
+                  },
+                  "next_offset": {
+                    "format": "uint32",
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "records": {
+                    "items": {
+                      "$ref": "#/$defs/SessionHistoryEntry"
+                    },
+                    "type": "array"
+                  },
+                  "revision_id": {
+                    "type": "string"
+                  },
+                  "total": {
+                    "format": "uint",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "revision_id",
+                  "branch",
+                  "branches",
+                  "branch_labels",
+                  "records",
+                  "total"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "head": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "kind": {
+                    "const": "mutation",
+                    "type": "string"
+                  },
+                  "revision_after": {
+                    "type": "string"
+                  },
+                  "revision_before": {
+                    "type": "string"
+                  },
+                  "transition": {
+                    "$ref": "#/$defs/ResidentTransition"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "transition",
+                  "revision_before",
+                  "revision_after",
+                  "branch"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "SessionHistoryEntry": {
+            "additionalProperties": false,
+            "properties": {
+              "branch": {
+                "type": "string"
+              },
+              "commit_id": {
+                "type": "string"
+              },
+              "history_parent_commit_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "op_kinds": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "request_id": {
+                "type": "string"
+              },
+              "resulting_head": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "revision_id": {
+                "type": "string"
+              },
+              "sequence": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "transition": {
+                "$ref": "#/$defs/ResidentTransition"
+              }
+            },
+            "required": [
+              "sequence",
+              "commit_id",
+              "request_id",
+              "transition",
+              "op_kinds",
+              "branch",
+              "revision_id"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/$defs/SessionHistoryData"
+          },
+          "operation": {
+            "const": "session_history",
             "type": "string"
           },
           "resource_id": {

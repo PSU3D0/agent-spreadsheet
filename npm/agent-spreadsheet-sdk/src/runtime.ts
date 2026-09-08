@@ -8,6 +8,11 @@ import { isOperationName } from "./registry.js"
  * Both runtimes speak the same protocol: an operation name plus a closed canonical
  * input object in, a canonical response envelope out. No runtime reshapes semantics.
  */
+export interface DispatchOptions {
+  /** Stable identity for reconciling an exact retry; not a spreadsheet input field. */
+  requestId?: string
+}
+
 export interface CanonicalRuntime {
   /** Runtime identity, `"local"` or `"server"`. */
   readonly kind: string
@@ -16,7 +21,8 @@ export interface CanonicalRuntime {
   /** Dispatch one canonical operation and return its response envelope. */
   dispatch<K extends OperationName>(
     operation: K,
-    input: Record<string, unknown>
+    input: Record<string, unknown>,
+    options?: DispatchOptions
   ): Promise<OutputOf<K>>
   /** Fetch the bytes of an artifact handle produced by `resourceId`. */
   artifactBytes(handle: string, resourceId: string): Promise<Uint8Array>
@@ -55,8 +61,14 @@ export function isCanonicalEnvelope(value: unknown): value is CanonicalEnvelope 
 export async function executeCanonical<K extends OperationName>(
   runtime: CanonicalRuntime,
   operation: K,
-  input: Record<string, unknown>
+  input: Record<string, unknown>,
+  options: DispatchOptions = {}
 ): Promise<OutputOf<K>> {
+  if (options.requestId !== undefined && (typeof options.requestId !== "string" ||
+    new TextEncoder().encode(options.requestId).length < 1 ||
+    new TextEncoder().encode(options.requestId).length > 256)) {
+    throw new TypeError("requestId must be a string of 1–256 UTF-8 bytes")
+  }
   if (!isOperationName(operation)) {
     throw new CapabilityError({
       capability: String(operation),
@@ -73,7 +85,7 @@ export async function executeCanonical<K extends OperationName>(
       message: `the ${runtime.kind} runtime does not support '${operation}'`
     })
   }
-  const response = await runtime.dispatch(operation, input)
+  const response = await runtime.dispatch(operation, input, options)
   if (!isCanonicalEnvelope(response)) {
     throw new TransportError(
       `the ${runtime.kind} runtime returned a non-canonical response for '${operation}'`,
@@ -100,7 +112,7 @@ export class CanonicalApi {
   }
 
   /** Execute any canonical operation with its exact input and response types. */
-  execute<K extends OperationName>(operation: K, input: InputOf<K>): Promise<OutputOf<K>> {
-    return executeCanonical(this.#runtime, operation, input as Record<string, unknown>)
+  execute<K extends OperationName>(operation: K, input: InputOf<K>, options: DispatchOptions = {}): Promise<OutputOf<K>> {
+    return executeCanonical(this.#runtime, operation, input as Record<string, unknown>, options)
   }
 }

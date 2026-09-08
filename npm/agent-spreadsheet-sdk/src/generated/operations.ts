@@ -105,7 +105,7 @@ export namespace OutDescribeWorkbook {
   supports_tables: boolean
   }
   export interface WorkbookExactMetadata {
-  bytes: number
+  bytes?: (number | null)
   defined_name_count: number
   last_modified?: (string | null)
   macros_present: boolean
@@ -2622,6 +2622,7 @@ export namespace InCreateFork {
 
   export interface Input {
   expected_revision: string
+  label?: (string | null)
   resource_id: ResourceId
   }
 }
@@ -2640,8 +2641,12 @@ export namespace OutCreateFork {
   base_resource_id: ResourceId
   base_revision_id: string
   fork_resource_id: ResourceId
+  label?: (string | null)
   revision_id: string
-  ttl_seconds: number
+  /**
+   * Null means no automatic resource expiry (idle detach is separate).
+   */
+  ttl_seconds?: (number | null)
   warnings: Warning[]
   }
   export interface Warning {
@@ -2669,12 +2674,18 @@ export namespace OutListForks {
   warnings: Warning[]
   }
   export interface CanonicalForkDescriptor {
-  age_seconds: number
+  /**
+   * Unknown when the durable catalog has no authoritative creation clock.
+   */
+  age_seconds?: (number | null)
   checkpoint_count: number
   operation_count: number
   recalc_needed: boolean
   resource_id: ResourceId
-  revision_id: string
+  /**
+   * No live CAS exists for an inactive durable owner.
+   */
+  revision_id?: (string | null)
   staged_change_count: number
   }
   export interface Warning {
@@ -3047,7 +3058,7 @@ export namespace OutGetChanges {
   revision_after: string
   revision_before: string
   sequence: number
-  timestamp: string
+  timestamp?: (string | null)
   }
   export interface Warning {
   code: string
@@ -3121,7 +3132,7 @@ export namespace OutCheckpoint {
   }
   export interface CheckpointDescriptor {
   checkpoint_id: string
-  created_at: string
+  created_at?: (string | null)
   label?: (string | null)
   recalc_needed: boolean
   snapshot_revision: string
@@ -3159,6 +3170,7 @@ export namespace OutStagedChange {
   } | {
   action: "apply"
   change_id: string
+  head?: (string | null)
   op_kinds: string[]
   ops_applied: number
   recalc_needed: boolean
@@ -3185,7 +3197,7 @@ export namespace OutStagedChange {
   export interface StagedChangeDescriptor {
   base_revision: string
   change_id: string
-  created_at: string
+  created_at?: (string | null)
   label?: (string | null)
   summary: ChangeSummary
   }
@@ -3207,8 +3219,116 @@ export namespace OutStagedChange {
   }
 }
 
+export namespace InSessionHistory {
+  export type Input = ({
+  action: "status"
+  resource_id: ResourceId
+  } | {
+  action: "outcome"
+  request_id: string
+  resource_id: ResourceId
+  } | {
+  action: "list"
+  limit?: number
+  offset?: number
+  resource_id: ResourceId
+  } | {
+  action: "undo"
+  expected_revision: string
+  resource_id: ResourceId
+  } | {
+  action: "redo"
+  expected_revision: string
+  resource_id: ResourceId
+  } | {
+  action: "checkout"
+  expected_revision: string
+  resource_id: ResourceId
+  target_commit_id: string
+  } | {
+  action: "create_branch"
+  expected_revision: string
+  label?: (string | null)
+  name: string
+  resource_id: ResourceId
+  target_commit_id?: (string | null)
+  } | {
+  action: "switch_branch"
+  expected_revision: string
+  name: string
+  resource_id: ResourceId
+  })
+  export type ResourceId = string
+}
+
+export namespace OutSessionHistory {
+  export type SessionHistoryData = ({
+  health: SessionHealth
+  kind: "status"
+  poisoned_request_id?: (string | null)
+  reason?: (string | null)
+  revision_id?: (string | null)
+  } | {
+  kind: "outcome"
+  request_id: string
+  response?: (CanonicalResponse | null)
+  state: RequestOutcomeState
+  } | {
+  branch: string
+  branch_labels: {
+  [k: string]: string
+  }
+  branches: {
+  [k: string]: (string | null)
+  }
+  head?: (string | null)
+  kind: "list"
+  next_offset?: (number | null)
+  records: SessionHistoryEntry[]
+  revision_id: string
+  total: number
+  } | {
+  branch: string
+  head?: (string | null)
+  kind: "mutation"
+  revision_after: string
+  revision_before: string
+  transition: ResidentTransition
+  })
+  export type SessionHealth = ("usable" | "poisoned")
+  export type ResourceId = string
+  export type RequestOutcomeState = ("committed" | "not_found" | "unknown")
+  export type ResidentTransition = ("mutation" | "stage_apply" | "catalog_stage" | "catalog_discard" | "calculation_publish" | "calculation_invalidate" | "undo" | "redo" | "checkout" | "branch_create" | "branch_switch" | "checkpoint" | "checkpoint_delete" | "receipt" | "restart")
+
+  export interface Output {
+  data: SessionHistoryData
+  operation: "session_history"
+  resource_id: ResourceId
+  revision_id: string
+  schema_version: "1"
+  }
+  export interface CanonicalResponse {
+  data: unknown
+  operation: string
+  resource_id?: (ResourceId | null)
+  revision_id?: (string | null)
+  schema_version: string
+  }
+  export interface SessionHistoryEntry {
+  branch: string
+  commit_id: string
+  history_parent_commit_id?: (string | null)
+  op_kinds: string[]
+  request_id: string
+  resulting_head?: (string | null)
+  revision_id: string
+  sequence: number
+  transition: ResidentTransition
+  }
+}
+
 export namespace CanonicalErrors {
-  export type CanonicalErrorCode = ("UNKNOWN_OPERATION" | "INVALID_REQUEST" | "CAPABILITY_UNAVAILABLE" | "RESOURCE_NOT_FOUND" | "OPERATION_FAILED" | "STALE_CURSOR" | "CURSOR_MISMATCH" | "ROW_EXCEEDS_BUDGET" | "REVISION_CONFLICT")
+  export type CanonicalErrorCode = ("UNKNOWN_OPERATION" | "INVALID_REQUEST" | "CAPABILITY_UNAVAILABLE" | "RESOURCE_NOT_FOUND" | "OPERATION_FAILED" | "STALE_CURSOR" | "CURSOR_MISMATCH" | "ROW_EXCEEDS_BUDGET" | "REVISION_CONFLICT" | "OUTCOME_UNKNOWN" | "RECOVERY_REQUIRED")
 
   export interface Envelope {
   error: CanonicalError
@@ -3261,6 +3381,7 @@ export interface OperationInputs {
   get_changes: InGetChanges.Input
   checkpoint: InCheckpoint.Input
   staged_change: InStagedChange.Input
+  session_history: InSessionHistory.Input
 }
 
 /** Canonical response envelope keyed by operation name. */
@@ -3296,6 +3417,7 @@ export interface OperationOutputs {
   get_changes: OutGetChanges.Output
   checkpoint: OutCheckpoint.Output
   staged_change: OutStagedChange.Output
+  session_history: OutSessionHistory.Output
 }
 
 /** Every operation registered by the canonical dispatcher. */

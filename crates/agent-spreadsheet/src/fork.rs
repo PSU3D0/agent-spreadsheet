@@ -77,7 +77,7 @@ pub struct Checkpoint {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct CanonicalOperationRecord {
     pub sequence: u64,
-    pub timestamp: String,
+    pub timestamp: Option<String>,
     pub kind: String,
     pub op_kinds: Vec<String>,
     pub revision_before: String,
@@ -172,7 +172,7 @@ impl ForkContext {
                 .canonical_operations
                 .last()
                 .map_or(1, |operation| operation.sequence + 1),
-            timestamp: Utc::now().to_rfc3339(),
+            timestamp: Some(Utc::now().to_rfc3339()),
             kind: kind.into(),
             op_kinds,
             revision_before,

@@ -36,11 +36,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 #[cfg(feature = "recalc")]
-fn fork_recalc_needed(state: &AppState, workbook_or_fork_id: &WorkbookId) -> bool {
-    state
-        .fork_registry()
-        .and_then(|registry| registry.get_fork(workbook_or_fork_id.as_str()).ok())
-        .is_some_and(|ctx| ctx.recalc_needed)
+fn fork_recalc_needed(state: &impl crate::read_context::ReadContext, workbook_or_fork_id: &WorkbookId) -> bool {
+    state.recalc_needed(workbook_or_fork_id)
 }
 
 #[cfg(feature = "recalc")]
@@ -89,7 +86,7 @@ const ENTRY_POINT_MAX_COLS: u32 = 200;
 type CellBounds = ((u32, u32), (u32, u32));
 
 pub async fn list_workbooks(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: ListWorkbooksParams,
 ) -> Result<WorkbookListResponse> {
     let config = state.config();
@@ -145,7 +142,7 @@ pub async fn list_workbooks(
 }
 
 pub async fn describe_workbook(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: DescribeWorkbookParams,
 ) -> Result<WorkbookDescription> {
     let workbook = state.open_workbook(&params.workbook_or_fork_id).await?;
@@ -222,7 +219,7 @@ pub async fn list_sheets(
 }
 
 pub(crate) async fn list_sheets_semantic(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: ListSheetsParams,
 ) -> Result<SheetListResponse> {
     let workbook = state.open_workbook(&params.workbook_or_fork_id).await?;
@@ -293,7 +290,7 @@ pub struct WorkbookSummaryParams {
 }
 
 pub async fn workbook_summary(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: WorkbookSummaryParams,
 ) -> Result<WorkbookSummaryResponse> {
     let workbook = state.open_workbook(&params.workbook_or_fork_id).await?;
@@ -305,14 +302,14 @@ pub async fn workbook_summary(
     let include_entry_points = params.include_entry_points.unwrap_or(!summary_only);
     let include_named_ranges = params.include_named_ranges.unwrap_or(!summary_only);
 
-    crate::runtime::maybe_blocking(move || {
+    state.with_workbook(workbook, move |workbook| {
         build_workbook_summary(workbook, include_entry_points, include_named_ranges)
     })
-    .await?
+    .await
 }
 
 fn build_workbook_summary(
-    workbook: Arc<WorkbookContext>,
+    workbook: Arc<WorkbookContext<impl crate::workbook::WorkbookReadSource>>,
     include_entry_points: bool,
     include_named_ranges: bool,
 ) -> Result<WorkbookSummaryResponse> {
@@ -463,13 +460,13 @@ pub async fn sheet_overview(
 }
 
 pub(crate) async fn sheet_overview_semantic(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: SheetOverviewParams,
 ) -> Result<SheetOverviewResponse> {
     let workbook = state.open_workbook(&params.workbook_or_fork_id).await?;
     let sheet_name = params.sheet_name.clone();
     let mut overview =
-        crate::runtime::maybe_blocking(move || workbook.sheet_overview(&sheet_name)).await??;
+        state.with_workbook(workbook, move |workbook| workbook.sheet_overview(&sheet_name)).await?;
 
     let max_regions = params
         .max_regions
@@ -809,14 +806,14 @@ pub struct InspectCellsParams {
 }
 
 pub async fn sheet_page(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: SheetPageParams,
 ) -> Result<SheetPageResponse> {
     sheet_page_with_header_row(state, params, 1).await
 }
 
 pub(crate) async fn sheet_page_with_header_row(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: SheetPageParams,
     header_row: u32,
 ) -> Result<SheetPageResponse> {
@@ -944,9 +941,8 @@ pub(crate) async fn sheet_page_with_header_row(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn range_rows_unbudgeted(
-    state: Arc<AppState>,
-    workbook_id: &WorkbookId,
+pub(crate) fn range_rows_from_view<S: crate::workbook::WorkbookReadSource>(
+    workbook: &crate::workbook::WorkbookContext<S>,
     sheet_name: &str,
     start_col: u32,
     start_row: u32,
@@ -955,7 +951,6 @@ pub(crate) async fn range_rows_unbudgeted(
     include_formulas: bool,
     include_styles: bool,
 ) -> Result<Vec<RowSnapshot>> {
-    let workbook = state.open_workbook(workbook_id).await?;
     let columns = (start_col..=end_col).collect::<Vec<_>>();
     workbook.with_sheet(sheet_name, |sheet| {
         (start_row..=end_row)
@@ -964,16 +959,14 @@ pub(crate) async fn range_rows_unbudgeted(
     })
 }
 
-pub(crate) async fn sheet_rows_unbudgeted_with_header_row(
-    state: Arc<AppState>,
+pub(crate) fn sheet_rows_from_view<S: crate::workbook::WorkbookReadSource>(
+    workbook: &crate::workbook::WorkbookContext<S>,
     params: SheetPageParams,
     header_row: u32,
 ) -> Result<(Option<RowSnapshot>, Vec<RowSnapshot>)> {
     if params.page_size == 0 {
         return Err(anyhow!("page_size must be greater than zero"));
     }
-
-    let workbook = state.open_workbook(&params.workbook_or_fork_id).await?;
     let start_row = params.start_row.max(1);
     let page_size = params.page_size.min(500);
     let page = workbook.with_sheet(&params.sheet_name, |sheet| {
@@ -1092,7 +1085,7 @@ pub enum StyleGranularity {
 }
 
 /// Filter operators for table queries
-#[derive(Debug, Clone, Copy, Deserialize, JsonSchema, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, serde::Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum FilterOp {
     /// Equal
@@ -1155,7 +1148,7 @@ pub async fn sheet_formula_map(
 }
 
 pub(crate) async fn sheet_formula_map_semantic(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: SheetFormulaMapParams,
 ) -> Result<SheetFormulaMapResponse> {
     let workbook = state.open_workbook(&params.workbook_or_fork_id).await?;
@@ -1302,14 +1295,14 @@ pub struct FormulaTraceParams {
 }
 
 pub async fn formula_trace(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: FormulaTraceParams,
 ) -> Result<FormulaTraceResponse> {
     formula_trace_semantic(state, params).await
 }
 
 pub(crate) async fn formula_trace_semantic(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: FormulaTraceParams,
 ) -> Result<FormulaTraceResponse> {
     let workbook = state.open_workbook(&params.workbook_or_fork_id).await?;
@@ -1386,7 +1379,7 @@ pub async fn named_ranges(
 }
 
 pub(crate) async fn named_ranges_semantic(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: NamedRangesParams,
 ) -> Result<NamedRangesResponse> {
     let workbook = state.open_workbook(&params.workbook_or_fork_id).await?;
@@ -2668,7 +2661,7 @@ pub(crate) fn build_values_only_payload(
 }
 
 fn build_sheet_page_response(
-    workbook: &WorkbookContext,
+    workbook: &WorkbookContext<impl crate::workbook::WorkbookReadSource>,
     sheet_name: &str,
     format: SheetPageFormat,
     include_header: bool,
@@ -2779,7 +2772,7 @@ pub async fn sheet_statistics(
 }
 
 pub(crate) async fn sheet_statistics_semantic(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: SheetStatisticsParams,
 ) -> Result<SheetStatisticsResponse> {
     let workbook = state.open_workbook(&params.workbook_or_fork_id).await?;
@@ -2933,7 +2926,7 @@ struct TableTarget {
 }
 
 fn resolve_table_target(
-    workbook: &WorkbookContext,
+    workbook: &WorkbookContext<impl crate::workbook::WorkbookReadSource>,
     params: &ReadTableParams,
 ) -> Result<TableTarget> {
     let explicit_range = params
@@ -3692,7 +3685,7 @@ pub struct FindFormulaParams {
 }
 
 pub async fn find_formula(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: FindFormulaParams,
 ) -> Result<FindFormulaResponse> {
     let workbook = state.open_workbook(&params.workbook_or_fork_id).await?;
@@ -3785,7 +3778,7 @@ pub struct ScanVolatilesParams {
 }
 
 pub async fn scan_volatiles(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: ScanVolatilesParams,
 ) -> Result<VolatileScanResponse> {
     let workbook = state.open_workbook(&params.workbook_or_fork_id).await?;
@@ -3980,7 +3973,7 @@ impl WorkbookStyleAccum {
 }
 
 pub async fn workbook_style_summary(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: WorkbookStyleSummaryParams,
 ) -> Result<WorkbookStyleSummaryResponse> {
     let workbook = state.open_workbook(&params.workbook_or_fork_id).await?;
@@ -4348,14 +4341,14 @@ pub(crate) struct BoundedSheetStyles {
 }
 
 pub async fn sheet_styles(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: SheetStylesParams,
 ) -> Result<SheetStylesResponse> {
     Ok(sheet_styles_bounded(state, params, None).await?.response)
 }
 
 pub(crate) async fn sheet_styles_bounded(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: SheetStylesParams,
     max_cells_scan: Option<u32>,
 ) -> Result<BoundedSheetStyles> {
@@ -4554,7 +4547,7 @@ pub(crate) async fn sheet_styles_bounded(
 }
 
 pub async fn range_values(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: RangeValuesParams,
 ) -> Result<RangeValuesResponse> {
     let workbook = state.open_workbook(&params.workbook_or_fork_id).await?;
@@ -4795,14 +4788,14 @@ pub async fn range_values(
 }
 
 pub async fn inspect_cells(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: InspectCellsParams,
 ) -> Result<InspectCellsResponse> {
     inspect_cells_semantic(state, params).await
 }
 
 pub(crate) async fn inspect_cells_semantic(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: InspectCellsParams,
 ) -> Result<InspectCellsResponse> {
     const DETAIL_LIMIT: usize = 25;
@@ -4988,7 +4981,7 @@ pub async fn find_value(
 }
 
 pub(crate) async fn find_value_semantic(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: FindValueParams,
 ) -> Result<FindValueResponse> {
     let workbook = state.open_workbook(&params.workbook_or_fork_id).await?;
@@ -5103,7 +5096,7 @@ pub async fn read_table(
 }
 
 pub(crate) async fn read_table_semantic(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: ReadTableParams,
 ) -> Result<ReadTableResponse> {
     let workbook = state.open_workbook(&params.workbook_or_fork_id).await?;
@@ -5258,7 +5251,7 @@ pub(crate) struct ResolvedTableProfile {
 }
 
 pub(crate) async fn table_profile_semantic(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: TableProfileParams,
 ) -> Result<ResolvedTableProfile> {
     let workbook = state.open_workbook(&params.workbook_or_fork_id).await?;
@@ -5443,7 +5436,7 @@ pub struct ManifestStubParams {
 
 #[cfg(all(feature = "recalc-formualizer", feature = "sheetport"))]
 pub async fn get_manifest_stub(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: ManifestStubParams,
 ) -> Result<ManifestStubResponse> {
     let workbook = state.open_workbook(&params.workbook_or_fork_id).await?;
@@ -5647,7 +5640,7 @@ pub async fn get_manifest_stub(
 
 #[cfg(not(all(feature = "recalc-formualizer", feature = "sheetport")))]
 pub async fn get_manifest_stub(
-    _state: Arc<AppState>,
+    _state: impl crate::read_context::ReadContext,
     _params: ManifestStubParams,
 ) -> Result<ManifestStubResponse> {
     Err(anyhow!(
@@ -5662,7 +5655,7 @@ pub struct CloseWorkbookParams {
 }
 
 pub async fn close_workbook(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: CloseWorkbookParams,
 ) -> Result<CloseWorkbookResponse> {
     state.close_workbook(&params.workbook_or_fork_id)?;
@@ -5812,7 +5805,7 @@ struct TraceConfig<'a> {
 }
 
 fn build_trace_layers(
-    workbook: &WorkbookContext,
+    workbook: &WorkbookContext<impl crate::workbook::WorkbookReadSource>,
     graph: &FormulaGraph,
     formula_lookup: &HashMap<String, TraceFormulaInfo>,
     config: &TraceConfig<'_>,
@@ -6523,7 +6516,7 @@ pub struct ExecuteManifestResponse {
 
 #[cfg(all(feature = "recalc-formualizer", feature = "sheetport"))]
 pub async fn execute_manifest(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: ExecuteManifestParams,
 ) -> Result<ExecuteManifestResponse> {
     use formualizer::workbook::SpreadsheetReader;
@@ -6582,7 +6575,7 @@ pub async fn execute_manifest(
 
 #[cfg(not(all(feature = "recalc-formualizer", feature = "sheetport")))]
 pub async fn execute_manifest(
-    _state: Arc<AppState>,
+    _state: impl crate::read_context::ReadContext,
     _params: ExecuteManifestParams,
 ) -> Result<ExecuteManifestResponse> {
     Err(anyhow!(
@@ -6603,7 +6596,7 @@ pub struct GridExportParams {
 }
 
 pub async fn grid_export(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: GridExportParams,
 ) -> Result<crate::model::GridPayload> {
     let workbook = state.open_workbook(&params.workbook_or_fork_id).await?;
@@ -6849,7 +6842,7 @@ const LAYOUT_DEFAULT_COL_WIDTH: f64 = 8.43;
 const LAYOUT_DEFAULT_MAX_COL_WIDTH: u32 = 20;
 
 pub async fn layout_page(
-    state: Arc<AppState>,
+    state: impl crate::read_context::ReadContext,
     params: LayoutPageParams,
 ) -> Result<LayoutPageResponse> {
     let workbook = state.open_workbook(&params.workbook_or_fork_id).await?;

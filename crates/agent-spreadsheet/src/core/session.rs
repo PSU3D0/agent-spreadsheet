@@ -1,4 +1,3 @@
-use crate::config::{OutputProfile, RecalcBackendKind, ServerConfig, TransportKind};
 use crate::model::{
     CellSnapshot, CellValue, CellValueKind, CellValuePrimitive, DefineNameResponse,
     DeleteNameResponse, FindValueMatch, FindValueResponse, GridCell, GridColumnHint, GridPayload,
@@ -14,8 +13,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::path::Path;
 use umya_spreadsheet::{Spreadsheet, Worksheet};
 
 /// Surface-agnostic in-memory workbook session.
@@ -1046,49 +1044,12 @@ impl WorkbookSession {
         self.to_bytes()
     }
 
-    fn as_workbook_context(&self) -> Result<WorkbookContext> {
-        let bytes = self.to_bytes()?;
-        let workbook_id = WorkbookId("session".to_string());
-        let short_id = crate::utils::make_short_workbook_id("session", workbook_id.as_str());
-        let config = Arc::new(ServerConfig {
-            workspace_root: PathBuf::from("."),
-            screenshot_dir: PathBuf::from("screenshots"),
-            path_mappings: Vec::new(),
-            cache_capacity: 2,
-            supported_extensions: vec![
-                "xlsx".to_string(),
-                "xlsm".to_string(),
-                "xls".to_string(),
-                "xlsb".to_string(),
-            ],
-            single_workbook: None,
-            enabled_tools: None,
-            transport: TransportKind::Stdio,
-            http_bind_address: "127.0.0.1:8079"
-                .parse()
-                .expect("hardcoded bind address is valid"),
-            recalc_enabled: false,
-            recalc_backend: RecalcBackendKind::Auto,
-            vba_enabled: false,
-            max_concurrent_recalcs: 1,
-            tool_timeout_ms: Some(30_000),
-            max_response_bytes: Some(1_000_000),
-            output_profile: OutputProfile::Verbose,
-            max_payload_bytes: Some(65_536),
-            max_cells: Some(10_000),
-            max_items: Some(500),
-            allow_overwrite: true,
-            slim_surface: true,
-        });
-
-        WorkbookContext::load_from_bytes(
-            &config,
-            "session.xlsx",
-            &bytes,
-            workbook_id,
-            short_id,
-            None,
-        )
+    fn as_workbook_context(&self) -> Result<WorkbookContext<&Spreadsheet>> {
+        Ok(WorkbookContext::borrowed(
+            &self.spreadsheet,
+            WorkbookId("session".into()),
+            "session".into(),
+        ))
     }
 
     /// Return whether a cell currently contains a formula.
