@@ -28,9 +28,9 @@ fn recalc_state(
 async fn sheet_layout_freeze_panes_persists_and_infers_top_left() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("layout_freeze.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value("hdr");
-        sheet.get_cell_mut("A2").set_value("x");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("hdr");
+        sheet.cell_mut("A2").set_value("x");
     });
 
     let state = recalc_state(&workspace);
@@ -78,15 +78,15 @@ async fn sheet_layout_freeze_panes_persists_and_infers_top_left() -> Result<()> 
         .work_path
         .clone();
     let book = umya_spreadsheet::reader::xlsx::read(&work_path)?;
-    let sheet = book.get_sheet_by_name("Sheet1").unwrap();
-    let views = sheet.get_sheets_views().get_sheet_view_list();
+    let sheet = book.sheet_by_name("Sheet1").ok().unwrap();
+    let views = sheet.sheets_views().sheet_view_list();
     assert!(!views.is_empty());
-    let pane = views[0].get_pane().expect("pane");
+    let pane = views[0].pane().expect("pane");
 
-    assert_eq!(*pane.get_horizontal_split(), 1.0);
-    assert_eq!(*pane.get_vertical_split(), 1.0);
-    assert_eq!(pane.get_state().get_value_string(), "frozen");
-    assert_eq!(pane.get_top_left_cell().to_string(), "B2");
+    assert_eq!(pane.horizontal_split(), 1.0);
+    assert_eq!(pane.vertical_split(), 1.0);
+    assert_eq!(pane.state().value_string(), "frozen");
+    assert_eq!(pane.top_left_cell().to_string(), "B2");
 
     Ok(())
 }
@@ -139,19 +139,19 @@ async fn sheet_layout_print_area_defined_name_written_and_scoped() -> Result<()>
         .work_path
         .clone();
     let book = umya_spreadsheet::reader::xlsx::read(&work_path)?;
-    let sheet = book.get_sheet_by_name("Sheet1").unwrap();
+    let sheet = book.sheet_by_name("Sheet1").ok().unwrap();
 
     let print_names: Vec<_> = sheet
-        .get_defined_names()
+        .defined_names()
         .iter()
-        .filter(|d| d.get_name() == "_xlnm.Print_Area")
+        .filter(|d| d.name() == "_xlnm.Print_Area")
         .collect();
     assert_eq!(print_names.len(), 1);
     let dn = print_names[0];
     assert!(dn.has_local_sheet_id());
-    assert_eq!(*dn.get_local_sheet_id(), 0);
+    assert_eq!(dn.local_sheet_id(), 0);
     // umya may normalize sheet names with quotes.
-    assert_eq!(dn.get_address(), "'Sheet1'!$A$1:$G$30");
+    assert_eq!(dn.address(), "Sheet1!$A$1:$G$30");
 
     Ok(())
 }
@@ -160,8 +160,8 @@ async fn sheet_layout_print_area_defined_name_written_and_scoped() -> Result<()>
 async fn sheet_layout_preview_then_apply_staged_change() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("layout_preview.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value("x");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("x");
     });
 
     let state = recalc_state(&workspace);
@@ -211,9 +211,9 @@ async fn sheet_layout_preview_then_apply_staged_change() -> Result<()> {
         .work_path
         .clone();
     let book_before = umya_spreadsheet::reader::xlsx::read(&work_path)?;
-    let sheet_before = book_before.get_sheet_by_name("Sheet1").unwrap();
-    let views_before = sheet_before.get_sheets_views().get_sheet_view_list();
-    let pane_before = views_before.first().and_then(|v| v.get_pane());
+    let sheet_before = book_before.sheet_by_name("Sheet1").ok().unwrap();
+    let views_before = sheet_before.sheets_views().sheet_view_list();
+    let pane_before = views_before.first().and_then(|v| v.pane());
     assert!(pane_before.is_none());
 
     apply_staged_change(
@@ -226,11 +226,11 @@ async fn sheet_layout_preview_then_apply_staged_change() -> Result<()> {
     .await?;
 
     let book_after = umya_spreadsheet::reader::xlsx::read(&work_path)?;
-    let sheet_after = book_after.get_sheet_by_name("Sheet1").unwrap();
-    let views_after = sheet_after.get_sheets_views().get_sheet_view_list();
-    let pane_after = views_after[0].get_pane().expect("pane after apply");
-    assert_eq!(pane_after.get_state().get_value_string(), "frozen");
-    assert_eq!(pane_after.get_top_left_cell().to_string(), "A2");
+    let sheet_after = book_after.sheet_by_name("Sheet1").ok().unwrap();
+    let views_after = sheet_after.sheets_views().sheet_view_list();
+    let pane_after = views_after[0].pane().expect("pane after apply");
+    assert_eq!(pane_after.state().value_string(), "frozen");
+    assert_eq!(pane_after.top_left_cell().to_string(), "A2");
 
     // Also confirm via AppState cache that the fork can be opened post-apply.
     let _ = state

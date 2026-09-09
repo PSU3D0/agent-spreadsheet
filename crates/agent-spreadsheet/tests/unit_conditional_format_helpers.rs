@@ -19,8 +19,8 @@ fn read_zip_entry(path: &std::path::Path, entry_name: &str) -> Result<String> {
 #[test]
 fn conditional_format_helpers_persist_dxf_and_sheet_blocks() -> Result<()> {
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-    sheet.get_cell_mut("A1").set_value_number(1);
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+    sheet.cell_mut("A1").set_value_number(1);
 
     let fill_argb = "FF12AB34";
     let font_argb = "FF123456";
@@ -47,14 +47,14 @@ fn conditional_format_helpers_persist_dxf_and_sheet_blocks() -> Result<()> {
 
     // Read-back via umya: conditionalFormatting blocks and style colors persist.
     let book2 = umya_spreadsheet::reader::xlsx::read(&path)?;
-    let sheet2 = book2.get_sheet_by_name("Sheet1").unwrap();
-    let cfs = sheet2.get_conditional_formatting_collection();
+    let sheet2 = book2.sheet_by_name("Sheet1").ok().unwrap();
+    let cfs = sheet2.conditional_formatting_collection();
     assert_eq!(cfs.len(), 1);
-    assert_eq!(cfs[0].get_sequence_of_references().get_sqref(), "A1:A3");
-    assert_eq!(cfs[0].get_conditional_collection().len(), 1);
+    assert_eq!(cfs[0].sequence_of_references().get_sqref(), "A1:A3");
+    assert_eq!(cfs[0].conditional_collection().len(), 1);
 
-    let rule = &cfs[0].get_conditional_collection()[0];
-    let st = rule.get_style().expect("expected dxf-backed style");
+    let rule = &cfs[0].conditional_collection()[0];
+    let st = rule.style().expect("expected dxf-backed style");
     let desc = agent_spreadsheet::styles::descriptor_from_style(st);
 
     assert_eq!(desc.font.as_ref().and_then(|f| f.bold), Some(true));

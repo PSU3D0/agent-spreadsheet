@@ -27,6 +27,49 @@ async fn bound_state() -> (
     (state, workbook_id, resource_id)
 }
 
+#[tokio::test]
+async fn borrowed_resident_read_cells_uses_the_file_canonical_projection() {
+    use agent_spreadsheet::canonical_reads::{
+        ReadCellsRequest, execute_read_cells, read_cells_from_view,
+    };
+    use agent_spreadsheet::canonical_write::ResidentWriteSession;
+    let (state, workbook_id, resource_id) = bound_state().await;
+    let workbook = state.open_workbook(&workbook_id).await.unwrap();
+    let resident =
+        ResidentWriteSession::from_bytes("session:borrowed", &std::fs::read(fixture()).unwrap())
+            .unwrap();
+    let view = resident.read_view().unwrap();
+    assert!(view.describe().bytes.is_none());
+    assert!(workbook.describe().bytes.is_some());
+    for selection in [
+        json!({"kind":"range","ranges":["A1:D10"]}),
+        json!({"kind":"rows","start_row":1,"row_count":10}),
+    ] {
+        let request: ReadCellsRequest = serde_json::from_value(json!({"resource_id":resource_id,"sheet_name":workbook.sheet_names()[0],"selection":selection,"page_size":3})).unwrap();
+        let expected = execute_read_cells(state.clone(), &request, &workbook.revision_id)
+            .await
+            .unwrap();
+        let actual = read_cells_from_view(
+            &view,
+            &request,
+            &workbook.revision_id,
+            workbook.calculation_metadata(),
+            state.config().max_cells(),
+            state.config().max_payload_bytes(),
+        )
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(actual).unwrap(),
+            serde_json::to_value(expected).unwrap()
+        );
+    }
+    assert_eq!(resident.diagnostic_workbook().serialization_count(), 0);
+    assert_eq!(
+        resident.diagnostic_workbook().evaluator_counters().ingests,
+        1
+    );
+}
+
 fn with_resource(resource_id: &ResourceId, mut payload: Value) -> Value {
     payload
         .as_object_mut()
@@ -186,6 +229,7 @@ fn registry_schemas_are_closed_typed_and_discriminated() {
         "get_changes",
         "checkpoint",
         "staged_change",
+        "session_history",
     ]);
     assert_eq!(names, expected);
 
@@ -197,13 +241,15 @@ fn registry_schemas_are_closed_typed_and_discriminated() {
                 descriptor.is_available(&capabilities),
                 capabilities.screenshot_rendering
             );
+        } else if descriptor.name == "session_history" {
+            assert!(!descriptor.is_available(&capabilities));
         } else {
             assert!(descriptor.is_available(&capabilities));
         }
         assert_eq!(
             descriptor.risk_ceiling,
             match descriptor.name {
-                "write" | "discard_fork" | "checkpoint" | "staged_change" => {
+                "write" | "discard_fork" | "checkpoint" | "staged_change" | "session_history" => {
                     OperationRisk::Destructive
                 }
                 "recalculate" | "export_fork" => OperationRisk::High,
@@ -658,7 +704,7 @@ fn complete_registry_and_cli_discovery_are_distinct_projections() {
     assert!(registry.status.success());
     let registry: Value = serde_json::from_slice(&registry.stdout).unwrap();
     let descriptors = registry["operations"].as_array().unwrap();
-    assert_eq!(descriptors.len(), 31);
+    assert_eq!(descriptors.len(), 32);
     assert!(descriptors.iter().all(|descriptor| {
         descriptor.get("input_schema").is_some()
             && descriptor.get("output_schema").is_some()
@@ -694,6 +740,7 @@ fn complete_registry_and_cli_discovery_are_distinct_projections() {
         "get_changes",
         "checkpoint",
         "staged_change",
+        "session_history",
     ] {
         assert!(!names.contains(durable), "CLI advertised {durable}");
     }
@@ -716,6 +763,8 @@ fn just_bash_registry_plan_is_the_portable_wasm_subset() {
         );
         let expected = if matches!(descriptor.name, "write" | "recalculate") {
             AdapterPersistence::ExportRequired
+        } else if matches!(descriptor.name, "checkpoint" | "staged_change" | "session_history") {
+            AdapterPersistence::ResidentRequired
         } else if just_bash.is_supported() {
             AdapterPersistence::None
         } else {
@@ -908,13 +957,13 @@ async fn row_header_projection_and_volatile_groups_preserve_canonical_capabiliti
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("canonical-rich.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-    sheet.get_cell_mut("A2").set_value("Name");
-    sheet.get_cell_mut("B2").set_value("Amount");
-    sheet.get_cell_mut("A3").set_value("Alpha");
-    sheet.get_cell_mut("B3").set_value_number(42_f64);
-    sheet.get_cell_mut("C3").set_formula("OFFSET(A3,0,0)");
-    sheet.get_cell_mut("D3").set_formula("NOW()");
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+    sheet.cell_mut("A2").set_value("Name");
+    sheet.cell_mut("B2").set_value("Amount");
+    sheet.cell_mut("A3").set_value("Alpha");
+    sheet.cell_mut("B3").set_value_number(42_f64);
+    sheet.cell_mut("C3").set_formula("OFFSET(A3,0,0)");
+    sheet.cell_mut("D3").set_formula("NOW()");
     umya_spreadsheet::writer::xlsx::write(&book, &path).unwrap();
 
     let (state, workbook_id) = StatelessRuntime
@@ -1068,10 +1117,10 @@ async fn canonical_reads_reject_nonprogress_and_project_every_declared_cell_fiel
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("read-fields.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-    sheet.get_cell_mut("A1").set_value_number(42_f64);
-    sheet.get_cell_mut("B1").set_formula("SUM(A1,1)");
-    sheet.get_cell_mut("C1").set_value("x".repeat(90_000));
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+    sheet.cell_mut("A1").set_value_number(42_f64);
+    sheet.cell_mut("B1").set_formula("SUM(A1,1)");
+    sheet.cell_mut("C1").set_value("x".repeat(90_000));
     umya_spreadsheet::writer::xlsx::write(&book, &path).unwrap();
     let (state, resource_id) = bound_path(&path).await;
 
@@ -1143,12 +1192,12 @@ async fn read_cells_budget_uses_one_row_prefix_for_rows_and_exact_ranges() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("read-budget-prefix.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
     let expected = (1..=200)
         .map(|row| format!("row{row:03}-{}", "x".repeat(213)))
         .collect::<Vec<_>>();
     for (row, value) in expected.iter().enumerate() {
-        sheet.get_cell_mut(format!("A{}", row + 1)).set_value(value);
+        sheet.cell_mut(format!("A{}", row + 1)).set_value(value);
     }
     umya_spreadsheet::writer::xlsx::write(&book, &path).unwrap();
     let (state, resource_id) = bound_path(&path).await;
@@ -1264,7 +1313,7 @@ async fn detailed_compact_rows_match_the_original_trace02_request_without_duplic
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("trace02-compact-rows.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
     sheet.set_name("Data");
     for (column, header) in [
         ("A", "ID"),
@@ -1278,7 +1327,7 @@ async fn detailed_compact_rows_match_the_original_trace02_request_without_duplic
         ("I", "Flag"),
         ("J", "Oversize"),
     ] {
-        sheet.get_cell_mut(format!("{column}1")).set_value(header);
+        sheet.cell_mut(format!("{column}1")).set_value(header);
     }
     for row in 2..=1201 {
         let item = row - 1;
@@ -1286,26 +1335,26 @@ async fn detailed_compact_rows_match_the_original_trace02_request_without_duplic
         let price = f64::from((item * 137) % 10_000 + 925) / 100.0;
         let revenue = (units * price * 100.0).round() / 100.0;
         sheet
-            .get_cell_mut(format!("A{row}"))
+            .cell_mut(format!("A{row}"))
             .set_value(format!("R{item:04}"));
         sheet
-            .get_cell_mut(format!("D{row}"))
+            .cell_mut(format!("D{row}"))
             .set_value_number(units);
         sheet
-            .get_cell_mut(format!("E{row}"))
+            .cell_mut(format!("E{row}"))
             .set_value_number(price);
         sheet
-            .get_cell_mut(format!("F{row}"))
+            .cell_mut(format!("F{row}"))
             .set_formula(format!("D{row}*E{row}"))
             .set_formula_result_default(revenue.to_string());
-        sheet.get_cell_mut(format!("H{row}")).set_value(format!(
+        sheet.cell_mut(format!("H{row}")).set_value(format!(
             "audit-row-{item:04}-{}-end-{item:04}",
             "x".repeat(150)
         ));
         for column in ["E", "F"] {
             sheet
-                .get_style_mut(format!("{column}{row}"))
-                .get_number_format_mut()
+                .style_mut(format!("{column}{row}"))
+                .number_format_mut()
                 .set_format_code("$#,##0.00");
         }
     }
@@ -1416,10 +1465,10 @@ async fn analyze_styles_scan_limit_bounds_all_returned_evidence() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("style-scan-bound.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
     for row in 1..=3 {
         sheet
-            .get_cell_mut(format!("A{row}"))
+            .cell_mut(format!("A{row}"))
             .set_value(format!("value-{row}"));
     }
     umya_spreadsheet::writer::xlsx::write(&book, &path).unwrap();
@@ -1465,22 +1514,22 @@ async fn profile_table_reports_resolved_region_bounds_and_header() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("profile-region-source.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-    sheet.get_cell_mut("A5").set_value("Name");
-    sheet.get_cell_mut("B5").set_value("Amount");
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+    sheet.cell_mut("A5").set_value("Name");
+    sheet.cell_mut("B5").set_value("Amount");
     for row in 6..=15 {
         sheet
-            .get_cell_mut(format!("A{row}"))
+            .cell_mut(format!("A{row}"))
             .set_value(format!("item-{row}"));
         sheet
-            .get_cell_mut(format!("B{row}"))
+            .cell_mut(format!("B{row}"))
             .set_value_number(row as f64);
     }
     let mut table = umya_spreadsheet::structs::Table::new("SourceTable", ("A5", "B15"));
     table.set_display_name("SourceTable");
     sheet.add_table(table);
-    sheet.get_cell_mut("F5").set_value("Total");
-    sheet.get_cell_mut("F6").set_value("needle-outside-table");
+    sheet.cell_mut("F5").set_value("Total");
+    sheet.cell_mut("F6").set_value("needle-outside-table");
     umya_spreadsheet::writer::xlsx::write(&book, &path).unwrap();
     let (state, resource_id) = bound_path(&path).await;
 
@@ -1599,11 +1648,11 @@ async fn profile_table_normalizes_explicit_a1_and_rejects_malformed_across_surfa
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("profile-explicit-range.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-    sheet.get_cell_mut("A5").set_value("Name");
-    sheet.get_cell_mut("B5").set_value("Amount");
-    sheet.get_cell_mut("A15").set_value("last");
-    sheet.get_cell_mut("B15").set_value_number(15_f64);
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+    sheet.cell_mut("A5").set_value("Name");
+    sheet.cell_mut("B5").set_value("Amount");
+    sheet.cell_mut("A15").set_value("last");
+    sheet.cell_mut("B15").set_value_number(15_f64);
     umya_spreadsheet::writer::xlsx::write(&book, &path).unwrap();
     let (state, resource_id) = bound_path(&path).await;
 
@@ -1651,14 +1700,14 @@ async fn formula_map_address_sort_is_natural_and_stable_across_cursor_pages() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("formula-map-address-order.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
     for (address, formula) in [
         ("A10", "SUM(10,1)"),
         ("A2", "MAX(2,1)"),
         ("Z1", "MIN(1,0)"),
         ("B1", "ABS(-1)"),
     ] {
-        sheet.get_cell_mut(address).set_formula(formula);
+        sheet.cell_mut(address).set_formula(formula);
     }
     umya_spreadsheet::writer::xlsx::write(&book, &path).unwrap();
     let (state, resource_id) = bound_path(&path).await;
@@ -1695,13 +1744,13 @@ async fn formula_search_scans_all_pages_honors_range_and_uses_bound_cursor() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("formula-search.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
     for row in 1..=520 {
         sheet
-            .get_cell_mut(format!("A{row}"))
+            .cell_mut(format!("A{row}"))
             .set_formula(format!("SUM({row},1)"));
     }
-    sheet.get_cell_mut("C1").set_formula("SUM(OFFSET(A1,0,0))");
+    sheet.cell_mut("C1").set_formula("SUM(OFFSET(A1,0,0))");
     umya_spreadsheet::writer::xlsx::write(&book, &path).unwrap();
     let (state, resource_id) = bound_path(&path).await;
 
@@ -1777,18 +1826,18 @@ async fn canonical_analysis_bounds_paths_paging_and_profile_provenance_are_expli
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("analysis-contracts.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-    sheet.get_cell_mut("A1").set_value("Header");
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+    sheet.cell_mut("A1").set_value("Header");
     for row in 2..=22 {
         sheet
-            .get_cell_mut(format!("A{row}"))
+            .cell_mut(format!("A{row}"))
             .set_value_number(row as f64);
     }
-    sheet.get_cell_mut("B1").set_formula("SUM(A2:A22)");
-    sheet.get_cell_mut("C1").set_formula("AVERAGE(A2:A22)");
+    sheet.cell_mut("B1").set_formula("SUM(A2:A22)");
+    sheet.cell_mut("C1").set_formula("AVERAGE(A2:A22)");
     for row in 2..=22 {
         sheet
-            .get_cell_mut(format!("B{row}"))
+            .cell_mut(format!("B{row}"))
             .set_formula(format!("A2+{row}"));
     }
     umya_spreadsheet::writer::xlsx::write(&book, &path).unwrap();

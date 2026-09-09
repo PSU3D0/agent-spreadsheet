@@ -64,7 +64,7 @@ pub enum RecalcBackendKind {
     Auto,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
     pub workspace_root: PathBuf,
     /// Directory to write screenshot PNGs into (screenshot_sheet).

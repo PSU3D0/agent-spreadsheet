@@ -7,20 +7,20 @@ pub struct StyleTagging {
 }
 
 pub fn tag_cell(cell: &Cell) -> Option<(String, StyleTagging)> {
-    let style = cell.get_style();
+    let style = cell.style();
     let mut tags = Vec::new();
 
-    if let Some(font) = style.get_font() {
-        if *font.get_bold() {
+    if let Some(font) = style.font() {
+        if font.bold() {
             tags.push("header".to_string());
         }
-        if *font.get_italic() {
+        if font.italic() {
             tags.push("emphasis".to_string());
         }
     }
 
-    if let Some(number_format) = style.get_number_format() {
-        let format_code = number_format.get_format_code().to_ascii_lowercase();
+    if let Some(number_format) = style.number_format() {
+        let format_code = number_format.format_code().to_ascii_lowercase();
         if format_code.contains("$") {
             tags.push("currency".to_string());
         } else if format_code.contains("%") {
@@ -34,7 +34,7 @@ pub fn tag_cell(cell: &Cell) -> Option<(String, StyleTagging)> {
         return None;
     }
 
-    let coordinate = cell.get_coordinate();
+    let coordinate = cell.coordinate();
     let address = coordinate.get_coordinate();
     let key = tags.join("|");
 

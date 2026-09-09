@@ -216,14 +216,14 @@ pub(crate) fn apply_sheet_layout_ops_to_file(
     path: &Path,
     ops: &[SheetLayoutOp],
 ) -> Result<SheetLayoutApplyResult> {
-    let mut book = umya_spreadsheet::reader::xlsx::read(path)?;
+    let mut book = crate::xlsx_import::read(path)?;
     let result = apply_sheet_layout_ops_to_workbook(&mut book, ops)?;
-    umya_spreadsheet::writer::xlsx::write(&book, path)?;
+    crate::xlsx_export::write(&book, path)?;
     Ok(result)
 }
 
 pub(crate) fn apply_sheet_layout_ops_to_workbook(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     ops: &[SheetLayoutOp],
 ) -> Result<SheetLayoutApplyResult> {
     let mut affected_sheets: BTreeSet<String> = BTreeSet::new();
@@ -250,7 +250,7 @@ pub(crate) fn apply_sheet_layout_ops_to_workbook(
                 freeze_ops += 1;
                 affected_sheets.insert(sheet_name.clone());
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
 
                 apply_freeze_panes(
@@ -271,7 +271,7 @@ pub(crate) fn apply_sheet_layout_ops_to_workbook(
                     bail!("zoom_percent must be between 10 and 400");
                 }
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
                 let view = primary_sheet_view_mut(sheet);
                 view.set_zoom_scale(*zoom_percent);
@@ -281,7 +281,7 @@ pub(crate) fn apply_sheet_layout_ops_to_workbook(
                 grid_ops += 1;
                 affected_sheets.insert(sheet_name.clone());
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
                 let view = primary_sheet_view_mut(sheet);
                 view.set_show_grid_lines(*show);
@@ -308,9 +308,9 @@ pub(crate) fn apply_sheet_layout_ops_to_workbook(
                     validate_margin_value("footer", *f)?;
                 }
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
-                let margins = sheet.get_page_margins_mut();
+                let margins = sheet.page_margins_mut();
                 margins.set_left(*left);
                 margins.set_right(*right);
                 margins.set_top(*top);
@@ -349,9 +349,9 @@ pub(crate) fn apply_sheet_layout_ops_to_workbook(
                 }
 
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
-                let setup = sheet.get_page_setup_mut();
+                let setup = sheet.page_setup_mut();
                 setup.set_orientation(orientation_value);
                 if let Some(v) = fit_to_width {
                     setup.set_fit_to_width(*v);
@@ -387,7 +387,7 @@ pub(crate) fn apply_sheet_layout_ops_to_workbook(
                     }
                 }
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
                 apply_page_breaks(sheet, row_breaks, col_breaks);
             }
@@ -433,7 +433,7 @@ pub(crate) fn apply_sheet_layout_ops_to_workbook(
 }
 
 fn primary_sheet_view_mut(sheet: &mut Worksheet) -> &mut SheetView {
-    let views = sheet.get_sheet_views_mut().get_sheet_view_list_mut();
+    let views = sheet.sheet_views_mut().sheet_view_list_mut();
     if views.is_empty() {
         let mut view = SheetView::default();
         view.set_workbook_view_id(0);
@@ -441,7 +441,7 @@ fn primary_sheet_view_mut(sheet: &mut Worksheet) -> &mut SheetView {
         sheet_views.add_sheet_view_list_mut(view);
         sheet.set_sheets_views(sheet_views);
     }
-    &mut sheet.get_sheet_views_mut().get_sheet_view_list_mut()[0]
+    &mut sheet.sheet_views_mut().sheet_view_list_mut()[0]
 }
 
 fn apply_freeze_panes(
@@ -466,7 +466,7 @@ fn apply_freeze_panes(
         );
         let col = freeze_cols.saturating_add(1).max(1);
         let row = freeze_rows.saturating_add(1).max(1);
-        umya_spreadsheet::helper::coordinate::coordinate_from_index(&col, &row)
+        umya_spreadsheet::helper::coordinate::coordinate_from_index(col, row)
     };
 
     // Pane.topLeftCell is stored as a Coordinate (no $ locks).
@@ -492,7 +492,7 @@ fn apply_freeze_panes(
     view.set_pane(pane);
 
     // Keep selection aligned with the frozen active pane.
-    view.get_selection_mut().clear();
+    view.selection_mut().clear();
     let mut selection = Selection::default();
     selection.set_pane(active_pane);
 
@@ -500,7 +500,7 @@ fn apply_freeze_panes(
     active_cell.set_coordinate(&inferred);
     selection.set_active_cell(active_cell);
     selection
-        .get_sequence_of_references_mut()
+        .sequence_of_references_mut()
         .set_sqref(inferred.as_str());
     view.set_selection(selection);
 
@@ -527,7 +527,7 @@ fn validate_margin_value(field: &str, value: f64) -> Result<()> {
 }
 
 fn set_print_area_defined_name(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     sheet_name: &str,
     range: &str,
 ) -> Result<()> {
@@ -535,38 +535,38 @@ fn set_print_area_defined_name(
     let (start, end) = parse_a1_range(range)?;
 
     let start_abs = umya_spreadsheet::helper::coordinate::coordinate_from_index_with_lock(
-        &start.0, &start.1, &true, &true,
+        start.0, start.1, true, true,
     );
     let end_abs = umya_spreadsheet::helper::coordinate::coordinate_from_index_with_lock(
-        &end.0, &end.1, &true, &true,
+        end.0, end.1, true, true,
     );
     let sheet_prefix = format_sheet_prefix(sheet_name);
     let refers_to = format!("{sheet_prefix}{start_abs}:{end_abs}");
 
     // Remove any workbook-scoped print area entries for this sheet to avoid duplicates.
     {
-        let defined = book.get_defined_names_mut();
+        let defined = book.defined_names_mut();
         defined.retain(|d| {
-            if d.get_name() != "_xlnm.Print_Area" {
+            if d.name() != "_xlnm.Print_Area" {
                 return true;
             }
             if d.has_local_sheet_id() {
-                return *d.get_local_sheet_id() != sheet_index;
+                return d.local_sheet_id() != sheet_index;
             }
             true
         });
     }
 
     let sheet = book
-        .get_sheet_by_name_mut(sheet_name)
+        .sheet_by_name_mut(sheet_name).ok()
         .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
 
     // If present on the sheet, update in place; otherwise create.
     let mut found = false;
     {
-        let names = sheet.get_defined_names_mut();
+        let names = sheet.defined_names_mut();
         for defined in names.iter_mut() {
-            if defined.get_name() == "_xlnm.Print_Area" {
+            if defined.name() == "_xlnm.Print_Area" {
                 defined.set_address(refers_to.clone());
                 defined.set_local_sheet_id(sheet_index);
                 found = true;
@@ -576,7 +576,7 @@ fn set_print_area_defined_name(
         if found {
             let mut kept = false;
             names.retain(|d| {
-                if d.get_name() != "_xlnm.Print_Area" {
+                if d.name() != "_xlnm.Print_Area" {
                     return true;
                 }
                 if !kept {
@@ -594,8 +594,8 @@ fn set_print_area_defined_name(
             .add_defined_name("_xlnm.Print_Area".to_string(), refers_to)
             .map_err(|e| anyhow!("failed to add defined name: {e}"))?;
         // Set local sheet id on the just-added entry.
-        if let Some(last) = sheet.get_defined_names_mut().last_mut()
-            && last.get_name() == "_xlnm.Print_Area"
+        if let Some(last) = sheet.defined_names_mut().last_mut()
+            && last.name() == "_xlnm.Print_Area"
         {
             last.set_local_sheet_id(sheet_index);
         }
@@ -604,9 +604,9 @@ fn set_print_area_defined_name(
     Ok(())
 }
 
-fn resolve_sheet_index(book: &umya_spreadsheet::Spreadsheet, sheet_name: &str) -> Result<u32> {
-    for (idx, sheet) in book.get_sheet_collection().iter().enumerate() {
-        if sheet.get_name() == sheet_name {
+fn resolve_sheet_index(book: &umya_spreadsheet::Workbook, sheet_name: &str) -> Result<u32> {
+    for (idx, sheet) in book.sheet_collection().iter().enumerate() {
+        if sheet.name() == sheet_name {
             return Ok(idx as u32);
         }
     }
@@ -670,7 +670,7 @@ fn sheet_name_needs_quoting(name: &str) -> bool {
 }
 
 fn apply_page_breaks(sheet: &mut Worksheet, row_breaks: &[u32], col_breaks: &[u32]) {
-    let rb = sheet.get_row_breaks_mut().get_break_list_mut();
+    let rb = sheet.row_breaks_mut().break_list_mut();
     rb.clear();
     for &id in row_breaks {
         let mut brk = Break::default();
@@ -678,7 +678,7 @@ fn apply_page_breaks(sheet: &mut Worksheet, row_breaks: &[u32], col_breaks: &[u3
         rb.push(brk);
     }
 
-    let cb = sheet.get_column_breaks_mut().get_break_list_mut();
+    let cb = sheet.column_breaks_mut().break_list_mut();
     cb.clear();
     for &id in col_breaks {
         let mut brk = Break::default();

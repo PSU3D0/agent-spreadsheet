@@ -18,19 +18,19 @@ use agent_spreadsheet_mcp::tools::{
 mod support;
 
 /// Build a workbook with enough data to trigger truncation under tight limits.
-fn build_wide_workbook(book: &mut umya_spreadsheet::Spreadsheet) {
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+fn build_wide_workbook(book: &mut umya_spreadsheet::Workbook) {
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
     // Header row
     for col in 1..=10u32 {
         sheet
-            .get_cell_mut((col, 1))
+            .cell_mut((col, 1))
             .set_value(format!("Col{}", col));
     }
     // 100 data rows × 10 columns = 1000 cells
     for row in 2..=101u32 {
         for col in 1..=10u32 {
             sheet
-                .get_cell_mut((col, row))
+                .cell_mut((col, row))
                 .set_value(format!("R{}C{}", row, col));
         }
     }
@@ -160,9 +160,9 @@ async fn sheet_page_truncates_under_payload_budget() -> Result<()> {
 async fn sheet_page_no_truncation_emits_budget_when_limits_configured() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("small.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut((1, 1)).set_value("A");
-        sheet.get_cell_mut((1, 2)).set_value("B");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut((1, 1)).set_value("A");
+        sheet.cell_mut((1, 2)).set_value("B");
     });
 
     let state = workspace.app_state(); // default limits are configured

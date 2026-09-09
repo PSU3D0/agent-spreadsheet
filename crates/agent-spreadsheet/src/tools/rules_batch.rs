@@ -317,14 +317,14 @@ pub(crate) fn apply_rules_ops_to_file(
     ops: &[RulesOp],
     policy: FormulaParsePolicy,
 ) -> Result<RulesApplyResult> {
-    let mut book = umya_spreadsheet::reader::xlsx::read(path)?;
+    let mut book = crate::xlsx_import::read(path)?;
     let result = apply_rules_ops_to_workbook(&mut book, ops, policy)?;
-    umya_spreadsheet::writer::xlsx::write(&book, path)?;
+    crate::xlsx_export::write(&book, path)?;
     Ok(result)
 }
 
 pub(crate) fn apply_rules_ops_to_workbook(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     ops: &[RulesOp],
     policy: FormulaParsePolicy,
 ) -> Result<RulesApplyResult> {
@@ -402,7 +402,7 @@ pub(crate) fn apply_rules_ops_to_workbook(
                 validation,
             } => {
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
 
                 affected_sheets.insert(sheet_name.clone());
@@ -428,7 +428,7 @@ pub(crate) fn apply_rules_ops_to_workbook(
                 style,
             } => {
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
 
                 affected_sheets.insert(sheet_name.clone());
@@ -451,7 +451,7 @@ pub(crate) fn apply_rules_ops_to_workbook(
                 style,
             } => {
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
 
                 affected_sheets.insert(sheet_name.clone());
@@ -473,7 +473,7 @@ pub(crate) fn apply_rules_ops_to_workbook(
                 target_range,
             } => {
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
 
                 affected_sheets.insert(sheet_name.clone());
@@ -599,24 +599,24 @@ fn add_conditional_format(
     let font_argb = normalize_argb_color("style.font_color", font, warnings)?;
 
     // Deduplicate exact matches (sqref + kind/operator + formula).
-    for existing in sheet.get_conditional_formatting_collection() {
-        let existing_sqref = existing.get_sequence_of_references().get_sqref();
+    for existing in sheet.conditional_formatting_collection() {
+        let existing_sqref = existing.sequence_of_references().get_sqref();
         let existing_norm = existing_sqref.replace(' ', "").to_ascii_uppercase();
         if existing_norm != sqref {
             continue;
         }
-        for existing_rule in existing.get_conditional_collection() {
+        for existing_rule in existing.conditional_collection() {
             if existing_rule.get_type() != &desired.0 {
                 continue;
             }
             if let Some(ref op) = desired.1
-                && existing_rule.get_operator() != op
+                && existing_rule.operator() != op
             {
                 continue;
             }
             let existing_formula = existing_rule
-                .get_formula()
-                .map(|f| f.get_address_str())
+                .formula()
+                .map(|f| f.address_str())
                 .unwrap_or_default();
             if existing_formula == desired.2 {
                 return Ok((0, 1));
@@ -653,14 +653,14 @@ fn clear_conditional_formats(
     target_range: &str,
 ) -> Result<u64> {
     let sqref = normalize_sqref(target_range)?;
-    let before = sheet.get_conditional_formatting_collection().len();
+    let before = sheet.conditional_formatting_collection().len();
     if before == 0 {
         return Ok(0);
     }
 
     let mut kept: Vec<umya_spreadsheet::ConditionalFormatting> = Vec::new();
-    for cf in sheet.get_conditional_formatting_collection() {
-        let existing = cf.get_sequence_of_references().get_sqref();
+    for cf in sheet.conditional_formatting_collection() {
+        let existing = cf.sequence_of_references().get_sqref();
         let existing_norm = existing.replace(' ', "").to_ascii_uppercase();
         if existing_norm != sqref {
             kept.push(cf.clone());
@@ -684,13 +684,13 @@ fn cf_rule_core_matches(
         return false;
     }
     if let Some(op) = desired_operator
-        && existing.get_operator() != op
+        && existing.operator() != op
     {
         return false;
     }
     let existing_formula = existing
-        .get_formula()
-        .map(|f| f.get_address_str())
+        .formula()
+        .map(|f| f.address_str())
         .unwrap_or_default();
     existing_formula == desired_formula
 }
@@ -701,7 +701,7 @@ fn cf_rule_style_matches(
     desired_font_argb: &str,
     desired_bold: bool,
 ) -> bool {
-    let Some(style) = existing.get_style() else {
+    let Some(style) = existing.style() else {
         return false;
     };
 
@@ -756,16 +756,16 @@ fn set_conditional_format(
 
     // If already exactly set (one cf block, one rule, matches core + style), skip.
     let matches: Vec<&umya_spreadsheet::ConditionalFormatting> = sheet
-        .get_conditional_formatting_collection()
+        .conditional_formatting_collection()
         .iter()
         .filter(|cf| {
-            let existing = cf.get_sequence_of_references().get_sqref();
+            let existing = cf.sequence_of_references().get_sqref();
             let existing_norm = existing.replace(' ', "").to_ascii_uppercase();
             existing_norm == sqref
         })
         .collect();
     if matches.len() == 1 {
-        let rules = matches[0].get_conditional_collection();
+        let rules = matches[0].conditional_collection();
         if rules.len() == 1 {
             let existing = &rules[0];
             if cf_rule_core_matches(
@@ -782,10 +782,10 @@ fn set_conditional_format(
 
     // Remove all existing CF blocks targeting the same sqref.
     let mut replaced: u64 = 0;
-    if !sheet.get_conditional_formatting_collection().is_empty() {
+    if !sheet.conditional_formatting_collection().is_empty() {
         let mut kept: Vec<umya_spreadsheet::ConditionalFormatting> = Vec::new();
-        for cf in sheet.get_conditional_formatting_collection() {
-            let existing = cf.get_sequence_of_references().get_sqref();
+        for cf in sheet.conditional_formatting_collection() {
+            let existing = cf.sequence_of_references().get_sqref();
             let existing_norm = existing.replace(' ', "").to_ascii_uppercase();
             if existing_norm == sqref {
                 replaced += 1;
@@ -845,18 +845,18 @@ fn set_data_validation(
 ) -> Result<(u64, u64)> {
     let sqref = normalize_sqref(target_range)?;
 
-    if sheet.get_data_validations_mut().is_none() {
+    if sheet.data_validations_mut().is_none() {
         sheet.set_data_validations(DataValidations::default());
     }
     let dvs = sheet
-        .get_data_validations_mut()
+        .data_validations_mut()
         .ok_or_else(|| anyhow!("failed to initialize data validations"))?;
 
     // Remove any existing validations targeting the same sqref.
-    let list = dvs.get_data_validation_list_mut();
+    let list = dvs.data_validation_list_mut();
     let before = list.len();
     list.retain(|dv| {
-        let existing = dv.get_sequence_of_references().get_sqref();
+        let existing = dv.sequence_of_references().get_sqref();
         let existing_norm = existing.replace(' ', "").to_ascii_uppercase();
         existing_norm != sqref
     });
@@ -864,7 +864,7 @@ fn set_data_validation(
 
     let mut dv = DataValidation::default();
     dv.set_type(spec.kind.to_umya());
-    dv.get_sequence_of_references_mut().set_sqref(sqref.clone());
+    dv.sequence_of_references_mut().set_sqref(sqref.clone());
 
     if let Some(allow_blank) = spec.allow_blank {
         dv.set_allow_blank(allow_blank);

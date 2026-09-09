@@ -41,12 +41,12 @@ fn config(path: &Path) -> Arc<ServerConfig> {
 fn workbook_bytes() -> Vec<u8> {
     let mut book = umya_spreadsheet::new_file();
     book.new_sheet("Data").unwrap();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-    sheet.get_cell_mut("A1").set_value("Name");
-    sheet.get_cell_mut("B1").set_value("Amount");
-    sheet.get_cell_mut("A2").set_value("Ada");
-    sheet.get_cell_mut("B2").set_value_number(10.0);
-    sheet.get_cell_mut("C2").set_formula("SUM(B2:B2)");
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+    sheet.cell_mut("A1").set_value("Name");
+    sheet.cell_mut("B1").set_value("Amount");
+    sheet.cell_mut("A2").set_value("Ada");
+    sheet.cell_mut("B2").set_value_number(10.0);
+    sheet.cell_mut("C2").set_formula("SUM(B2:B2)");
     sheet.add_defined_name("Rate", "Sheet1!$B$2").unwrap();
     let mut bytes = Vec::new();
     umya_spreadsheet::writer::xlsx::write_writer(&book, &mut bytes).unwrap();

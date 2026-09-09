@@ -12,7 +12,7 @@ use agent_spreadsheet_mcp::tools::{
     list_sheets, list_workbooks, named_ranges, scan_volatiles, sheet_formula_map, sheet_overview,
     sheet_page, sheet_statistics, sheet_styles,
 };
-use umya_spreadsheet::{NumberingFormat, Spreadsheet};
+use umya_spreadsheet::{NumberingFormat, Workbook as Spreadsheet};
 
 mod support;
 
@@ -59,7 +59,12 @@ async fn describe_and_overview_suite(state: Arc<AppState>, workbook_id: Workbook
     let description_json = serde_json::to_value(&description)?;
     assert!(description_json.get("workbook_short_id").is_none());
     assert_eq!(description.sheet_count, 2);
-    assert!(description.bytes > 0);
+    assert!(
+        description
+            .bytes
+            .expect("file-backed descriptor has an exact artifact size")
+            > 0
+    );
     assert!(description.caps.supports_formula_graph);
 
     let sheets = list_sheets(
@@ -326,7 +331,7 @@ async fn manifest_suite(state: Arc<AppState>, workbook_id: WorkbookId) -> Result
 }
 
 fn build_featured_workbook(book: &mut Spreadsheet) {
-    let data = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let data = book.sheet_by_name_mut("Sheet1").ok().unwrap();
     data.set_name("Data");
     let headers = [
         "Item",
@@ -339,12 +344,12 @@ fn build_featured_workbook(book: &mut Spreadsheet) {
     ];
     for (idx, header) in headers.iter().enumerate() {
         let col = (idx as u32) + 1;
-        data.get_cell_mut((col, 1)).set_value(header.to_string());
-        let style = data.get_style_mut((col, 1));
-        style.get_font_mut().set_bold(true);
+        data.cell_mut((col, 1)).set_value(header.to_string());
+        let style = data.style_mut((col, 1));
+        style.font_mut().set_bold(true);
         if matches!(*header, "Price" | "Total" | "RunningTotal") {
             style
-                .get_number_format_mut()
+                .number_format_mut()
                 .set_format_code(NumberingFormat::FORMAT_NUMBER_COMMA_SEPARATED1);
         }
     }
@@ -361,53 +366,53 @@ fn build_featured_workbook(book: &mut Spreadsheet) {
         last_total = total;
 
         if row % 5 == 0 {
-            data.get_cell_mut((1, row))
+            data.cell_mut((1, row))
                 .set_value("ItemRepeat".to_string());
         } else {
-            data.get_cell_mut((1, row)).set_value(format!("Item{row}"));
+            data.cell_mut((1, row)).set_value(format!("Item{row}"));
         }
-        data.get_cell_mut((2, row)).set_value_number(qty);
-        data.get_cell_mut((3, row)).set_value_number(price);
-        data.get_cell_mut((4, row))
+        data.cell_mut((2, row)).set_value_number(qty);
+        data.cell_mut((3, row)).set_value_number(price);
+        data.cell_mut((4, row))
             .set_formula(format!("B{row}*C{row}"))
             .set_formula_result_default(format!("{total:.2}"));
-        data.get_cell_mut((5, row))
+        data.cell_mut((5, row))
             .set_formula(format!("SUM($D$2:D{row})"))
             .set_formula_result_default(format!("{cumulative:.2}"));
         if row % 3 == 0 {
-            data.get_cell_mut((6, row))
+            data.cell_mut((6, row))
                 .set_value(format!("Cycle {row}"));
         }
-        data.get_style_mut((4, row))
-            .get_number_format_mut()
+        data.style_mut((4, row))
+            .number_format_mut()
             .set_format_code(NumberingFormat::FORMAT_NUMBER_COMMA_SEPARATED1);
-        data.get_style_mut((5, row))
-            .get_number_format_mut()
+        data.style_mut((5, row))
+            .number_format_mut()
             .set_format_code(NumberingFormat::FORMAT_NUMBER_COMMA_SEPARATED1);
     }
 
-    data.get_cell_mut((7, 2)).set_formula("NOW()");
-    data.get_cell_mut((7, 3)).set_formula("RAND()");
+    data.cell_mut((7, 2)).set_formula("NOW()");
+    data.cell_mut((7, 3)).set_formula("RAND()");
 
     {
         let calc = book.new_sheet("Calc").expect("calc sheet");
-        calc.get_cell_mut("A1")
+        calc.cell_mut("A1")
             .set_formula("SUM(Data!D2:D21)")
             .set_formula_result_default(format!("{cumulative:.2}"));
-        calc.get_cell_mut("A2")
+        calc.cell_mut("A2")
             .set_formula("A1*2")
             .set_formula_result_default(format!("{:.2}", cumulative * 2.0));
-        calc.get_cell_mut("B2")
+        calc.cell_mut("B2")
             .set_formula("A2-Data!D21")
             .set_formula_result_default(format!("{:.2}", cumulative * 2.0 - last_total));
-        calc.get_cell_mut("C3")
+        calc.cell_mut("C3")
             .set_formula("SUM(Data!B2:B21)")
             .set_formula_result_default(format!("{qty_sum:.2}"));
-        calc.get_cell_mut((4, 4)).set_formula("B2+A2");
-        calc.get_cell_mut((2, 5)).set_value_number(42.0);
+        calc.cell_mut((4, 4)).set_formula("B2+A2");
+        calc.cell_mut((2, 5)).set_value_number(42.0);
     }
 
-    let data_sheet = book.get_sheet_by_name_mut("Data").unwrap();
+    let data_sheet = book.sheet_by_name_mut("Data").ok().unwrap();
     data_sheet
         .add_defined_name("SalesTotal", "Data!$D$2:$D$21")
         .expect("global defined name");
@@ -420,11 +425,11 @@ fn build_featured_workbook(book: &mut Spreadsheet) {
 async fn find_formula_defaults_and_paging() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("find_formula_paging.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.set_name("Sheet1");
         for row in 1..=5 {
             sheet
-                .get_cell_mut((2, row))
+                .cell_mut((2, row))
                 .set_formula(format!("SUM(A{row}:A{row})"));
         }
     });
@@ -513,13 +518,13 @@ async fn find_formula_defaults_and_paging() -> Result<()> {
 async fn scan_volatiles_limit_offset_pagination_is_deterministic() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("scan_volatiles_paging.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.set_name("Sheet1");
-        sheet.get_cell_mut("A1").set_value("Volatile");
-        sheet.get_cell_mut("A2").set_formula("NOW()");
-        sheet.get_cell_mut("A3").set_formula("RAND()");
-        sheet.get_cell_mut("A4").set_formula("TODAY()");
-        sheet.get_cell_mut("B2").set_formula("SUM(1,2)");
+        sheet.cell_mut("A1").set_value("Volatile");
+        sheet.cell_mut("A2").set_formula("NOW()");
+        sheet.cell_mut("A3").set_formula("RAND()");
+        sheet.cell_mut("A4").set_formula("TODAY()");
+        sheet.cell_mut("B2").set_formula("SUM(1,2)");
     });
 
     let state = workspace.app_state();
@@ -603,15 +608,15 @@ async fn scan_volatiles_limit_offset_pagination_is_deterministic() -> Result<()>
 async fn scan_volatiles_skips_unparsable_formulas_instead_of_failing() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("scan_volatiles_parser_failure.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").expect("default sheet");
-        sheet.get_cell_mut("A1").set_value("Input");
-        sheet.get_cell_mut("B1").set_value("Result");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().expect("default sheet");
+        sheet.cell_mut("A1").set_value("Input");
+        sheet.cell_mut("B1").set_value("Result");
         // Intentionally malformed: one extra closing parenthesis.
-        sheet.get_cell_mut("B2").set_formula(
+        sheet.cell_mut("B2").set_formula(
             r#"IF(C70="","",IF(C70="N/A","",IF(C70="Unknown",0,IF(LEFT(C70,1)="0",0,IF(LEFT(C70,1)="1",25,IF(LEFT(C70,1)="2",50,IF(LEFT(C70,1)="3",75,IF(LEFT(C70,1)="4",100,"")))))))))"#,
         );
         // Valid volatile formula should still be detected.
-        sheet.get_cell_mut("B3").set_formula("NOW()");
+        sheet.cell_mut("B3").set_formula("NOW()");
     });
 
     let state = workspace.app_state();

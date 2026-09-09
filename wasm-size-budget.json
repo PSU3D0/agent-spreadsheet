@@ -1,22 +1,20 @@
 {
   "$comment": [
     "Ceilings for the published WASM web bundle, enforced by scripts/check-wasm-size.js.",
-    "Measured on the tranche-50 dependency diet (agent-spreadsheet 0.14.0) and set at",
-    "the measured size plus 10 percent. These are meant to ratchet down: raising one",
-    "requires a reason in the commit message.",
-    "Measured (5002, no renderer): raw 8576619, brotli 2059359.",
-    "Measured (5006, renderer compiled in): raw 9212266, brotli 2250996. The raster",
-    "renderer plus its subset fonts cost 635647 B raw (+7.4 percent) and 191637 B",
-    "brotli (+9.3 percent), inside the 1.5 MiB raw allowance the ticket set, so the",
-    "ceilings are unchanged. Brotli headroom is now 0.6 percent: the next feature",
-    "that grows the bundle has to shrink something or justify a raise.",
-    "wasm-opt trades transfer size for compile size: at -Oz raw drops 16 percent but",
-    "brotli grows about 6 percent (unoptimized: raw 10941088, brotli 2128546)."
+    "0.16 intentionally retains Rust schema validation and all renderer capabilities",
+    "while adding the shared resident document/evaluator and journal/history runtime.",
+    "The maintainer explicitly accepted a larger binary rather than moving validation",
+    "to JavaScript or pursuing a broader Formualizer dependency reduction in this release.",
+    "Initial resident web artifact: raw 10355187, Brotli 2510016 bytes; wasm-release,",
+    "Rust 1.93.0, Binaryen 123 -Oz. Ceilings are that measurement plus 10 percent,",
+    "rounded up. Umya 3 cold-I/O retains these ceilings; the gate measures each build.",
+    "Prior ceilings were 9434281 raw / 2265295 Brotli.",
+    "The guard remains enforced. Future increases require an explicit justification."
   ],
   "target": "web",
   "profile": "wasm-release",
   "wasm_opt_level": "-Oz",
   "out_dir": "target/sdk-wasm-web",
-  "max_raw_bytes": 9434281,
-  "max_brotli_bytes": 2265295
+  "max_raw_bytes": 11390706,
+  "max_brotli_bytes": 2761018
 }

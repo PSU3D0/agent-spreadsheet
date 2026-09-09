@@ -19,6 +19,14 @@ use std::{borrow::Cow, sync::Arc};
 
 pub(crate) const CANONICAL_TOOL_META_KEY: &str = "agent-spreadsheet/canonical";
 pub(crate) const CANONICAL_SCHEMA_VERSION: &str = "1";
+pub(crate) const REQUEST_ID_META_KEY: &str = "agent-spreadsheet/request-id";
+
+pub(crate) fn runtime_capabilities(state: &AppState) -> RuntimeCapabilities {
+    let mut capabilities = RuntimeCapabilities::from_state(state);
+    capabilities.vba = state.config().vba_enabled;
+    capabilities.resident_history = cfg!(feature = "recalc-formualizer") && capabilities.workbook_write;
+    capabilities
+}
 
 pub(crate) fn canonical_tool_router(
     capabilities: &RuntimeCapabilities,
@@ -33,11 +41,16 @@ pub(crate) fn canonical_tool_router(
     router
 }
 
+/// Titles are annotations only. Keep dialect selection and every validation
+/// keyword (including unevaluatedProperties) unchanged in the MCP projection.
+fn strip_schema_titles(schema: &mut Value) {
+    if let Some(object) = schema.as_object_mut() { object.remove("title"); }
+}
+
 fn canonical_route(descriptor: &'static OperationDescriptor) -> ToolRoute<SpreadsheetServer> {
-    let input_schema = (descriptor.input_schema)()
-        .as_object()
-        .cloned()
-        .expect("canonical operation input schemas are objects");
+    let mut schema = (descriptor.input_schema)();
+    strip_schema_titles(&mut schema);
+    let input_schema = schema.as_object().cloned().expect("canonical operation input schemas are objects");
     let mut tool = Tool::new(
         descriptor.name,
         canonical_description(descriptor),
@@ -64,15 +77,15 @@ fn canonical_meta(operation: &str) -> Meta {
 
 fn canonical_description(descriptor: &OperationDescriptor) -> Cow<'static, str> {
     let risk = match descriptor.risk_ceiling {
-        OperationRisk::Low => "Risk: low; read-only and does not modify workbook state.",
+        OperationRisk::Low => "Risk: low.",
         OperationRisk::Moderate => {
-            "Risk ceiling: moderate; may create isolated server-managed state."
+            "Risk <=moderate."
         }
         OperationRisk::High => {
-            "Risk ceiling: high; may mutate or export revision-bound workbook state."
+            "Risk <=high."
         }
         OperationRisk::Destructive => {
-            "Risk ceiling: destructive; some actions may overwrite or delete isolated workbook state."
+            "Risk <=destructive."
         }
     };
     Cow::Owned(format!("{} {risk}", descriptor.description))
@@ -102,10 +115,13 @@ async fn call_canonical_operation(
     context: ToolCallContext<'_, SpreadsheetServer>,
     operation: &'static str,
 ) -> Result<CallToolResult, McpError> {
+    let request_id = context.request_context.meta.0.get(REQUEST_ID_META_KEY)
+        .map(|value| value.as_str().map(str::to_owned).ok_or_else(|| McpError::invalid_params("request identity metadata must be a string", None)))
+        .transpose()?;
     let arguments = Value::Object(context.arguments.unwrap_or_default());
     context
         .service
-        .execute_canonical_operation(operation, arguments)
+        .execute_canonical_operation(operation, arguments, request_id)
         .await
 }
 
@@ -129,17 +145,95 @@ pub(crate) fn canonical_result<T: Serialize>(
 /// boundaries as image content (MCP) or bytes (HTTP artifact route).
 pub(crate) const SCREENSHOT_OPERATION: &str = "screenshot_sheet";
 
-/// Shared canonical dispatch: decode, apply the adapter timeout, execute.
-///
-/// Carries no adapter policy (tool-enable, response size) and no spreadsheet
-/// semantics; both adapters layer their own policy around this.
+/// Adapter correlation only: absent IDs denote distinct calls, not safe retries.
+pub(crate) fn ingress_identity(
+    supplied: Option<String>,
+    operation: &str,
+) -> Result<Option<String>, CanonicalErrorEnvelope> {
+    if supplied.as_ref().is_some_and(|id| id.is_empty() || id.len() > 256) {
+        return Err(CanonicalErrorEnvelope::new(
+            CanonicalErrorCode::InvalidRequest,
+            "request identity must contain 1..256 bytes",
+            Some(operation),
+            None,
+        ));
+    }
+    #[cfg(feature = "recalc-formualizer")]
+    { Ok(supplied.or_else(|| Some(uuid::Uuid::new_v4().to_string()))) }
+    #[cfg(not(feature = "recalc-formualizer"))]
+    { Ok(supplied) }
+}
+
+/// Decode, check capabilities, route the binding and bound response waiting.
+/// Tool-enable/response-size policy remains with the requesting adapter;
+/// spreadsheet semantics remain with the shared canonical dispatcher.
 pub(crate) async fn dispatch(
     state: Arc<AppState>,
     timeout: Option<std::time::Duration>,
     operation: &str,
     arguments: Value,
+    request_id: Option<String>,
 ) -> Result<CanonicalResponse, CanonicalErrorEnvelope> {
-    let decoded = decode_operation(operation, arguments)?;
+    let decoded = decode_operation(operation, arguments.clone())?;
+    if !agent_spreadsheet::operations::operation_descriptor(operation).expect("decoded operation")
+        .is_available_for(OperationAdapter::Mcp, &runtime_capabilities(&state)) {
+        return Err(CanonicalErrorEnvelope::new(CanonicalErrorCode::CapabilityUnavailable,
+            format!("operation '{operation}' is unavailable in this adapter"), Some(operation), None));
+    }
+    #[cfg(feature = "recalc-formualizer")]
+    {
+        use agent_spreadsheet::{native_host::{NativeHostClient, HostRequest}, operations::SpreadsheetOperation};
+        let resident = matches!(&decoded, SpreadsheetOperation::CreateFork(_) | SpreadsheetOperation::ListForks(_))
+            || decoded.resource_id().is_some_and(|id| id.as_str().starts_with("fork:") || id.as_str().starts_with("session:"))
+            || matches!(&decoded, SpreadsheetOperation::VerifyWorkbook(request)
+                if request.baseline_resource_id.as_str().starts_with("fork:")
+                    || request.baseline_resource_id.as_str().starts_with("session:"));
+        if resident {
+            let error = |code, message: String| CanonicalErrorEnvelope::new(code, message, Some(operation), None);
+            let identity = match request_id {
+                Some(id) if !id.is_empty() && id.len() <= 256 => id,
+                Some(_) => return Err(error(CanonicalErrorCode::InvalidRequest, "request identity must contain 1..256 bytes".into())),
+                None => uuid::Uuid::new_v4().to_string(),
+            };
+            let root = agent_spreadsheet::native_host::workspace_root(&state.config().workspace_root)
+                .map_err(|e| error(CanonicalErrorCode::OperationFailed, e.to_string()))?;
+            let resource = decoded.resource_id().map(|id| id.as_str()).unwrap_or("").to_owned();
+            let operation = operation.to_owned();
+            let config = (*state.config()).clone();
+            // Deadline applies only to waiting, never to the independently
+            // owned operation. Dropping JoinHandle detaches (does not abort).
+            let reconciliation = format!("resource {resource:?}, request identity {identity:?}");
+            let transport_reconciliation = reconciliation.clone();
+            let response_operation = operation.clone();
+            let task_operation = operation.clone();
+            let pending = tokio::spawn(async move {
+                let client = NativeHostClient::connect(&root).await.map_err(|e| CanonicalErrorEnvelope::new(
+                    CanonicalErrorCode::OperationFailed, format!("native request not submitted: {e}"), Some(&operation), None))?;
+                client.request(&HostRequest::Configure { config }).await.map_err(|e| CanonicalErrorEnvelope::new(
+                    CanonicalErrorCode::OperationFailed, format!("native operation not submitted; configuration rejected: {e}"), Some(&operation), None))?;
+                match client.execute(resource, identity, task_operation, arguments).await {
+                    Ok(Err(mut error)) if error.error.code == CanonicalErrorCode::OutcomeUnknown => {
+                        error.error.message.push_str(&format!("; reconcile {transport_reconciliation}"));
+                        Err(error)
+                    }
+                    Ok(result) => result,
+                    Err(error) => Err(CanonicalErrorEnvelope::new(CanonicalErrorCode::OutcomeUnknown,
+                        format!("native transport failed; reconcile {transport_reconciliation}: {error}"), Some(&operation), None)),
+                }
+            });
+            let completed = match timeout {
+                Some(limit) => tokio::time::timeout(limit, pending).await.map_err(|_| CanonicalErrorEnvelope::new(
+                    CanonicalErrorCode::OutcomeUnknown,
+                    format!("response deadline elapsed; accepted work is not cancelled; reconcile {reconciliation}"),
+                    Some(&response_operation), None))?,
+                None => pending.await,
+            };
+            return completed.map_err(|e| CanonicalErrorEnvelope::new(CanonicalErrorCode::OutcomeUnknown,
+                format!("response unavailable ({e}); reconcile {reconciliation}"), Some(&response_operation), None))?;
+        }
+    }
+    #[cfg(not(feature = "recalc-formualizer"))]
+    let _ = request_id;
     match timeout {
         Some(limit) => tokio::time::timeout(limit, execute_operation(state, decoded))
             .await
@@ -208,18 +302,34 @@ pub(crate) async fn execute(
     server: &SpreadsheetServer,
     operation: &'static str,
     arguments: Value,
+    request_id: Option<String>,
 ) -> Result<CallToolResult, McpError> {
     server.ensure_canonical_tool_enabled(operation)?;
+    let request_id = ingress_identity(request_id, operation)
+        .map_err(|error| McpError::invalid_params(error.error.message, None))?;
+    let requested_resource = arguments.get("resource_id").and_then(Value::as_str).map(str::to_owned);
 
     let result = dispatch(
         server.canonical_state(),
         server.canonical_tool_timeout(),
         operation,
         arguments,
+        request_id.clone(),
     )
     .await;
+    project_execution_result(server, operation, requested_resource.as_deref(), request_id, result)
+}
 
-    match result {
+fn project_execution_result(
+    server: &SpreadsheetServer,
+    operation: &str,
+    requested_resource: Option<&str>,
+    request_id: Option<String>,
+    result: Result<CanonicalResponse, CanonicalErrorEnvelope>,
+) -> Result<CallToolResult, McpError> {
+    // Projection happens after execution. Its failure cannot retroactively turn
+    // a completed operation into an invalid request or erase its retry identity.
+    let projected = (|| match &result {
         Ok(response) => {
             server.ensure_canonical_response_size(operation, &response)?;
             #[cfg_attr(not(feature = "recalc"), allow(unused_mut))]
@@ -238,7 +348,28 @@ pub(crate) async fn execute(
             server.ensure_canonical_response_size(operation, &error)?;
             canonical_result(&error, true)
         }
+    })();
+    let mut result = projected.map_err(|projection_error| {
+        let response = result.as_ref().ok();
+        McpError::internal_error(
+            format!(
+                "operation '{operation}' response could not be delivered; execution is not rolled back. Reconcile request identity {:?} rather than blindly retrying: {projection_error}",
+                request_id
+            ),
+            Some(serde_json::json!({
+                REQUEST_ID_META_KEY: request_id,
+                "resource_id": response.and_then(|r| r.resource_id.as_ref().map(|id| id.as_str()))
+                    .or(requested_resource),
+                "revision_id": response.and_then(|r| r.revision_id.as_deref()),
+                "operation_completed": result.is_ok(),
+                "canonical_error_code": result.as_ref().err().map(|e| e.error.code),
+            })),
+        )
+    })?;
+    if let Some(identity) = request_id {
+        result.meta = Some(Meta(serde_json::Map::from_iter([(REQUEST_ID_META_KEY.into(), Value::String(identity))])));
     }
+    Ok(result)
 }
 
 #[cfg(all(test, feature = "recalc"))]
@@ -247,6 +378,60 @@ mod tests {
     use rmcp::model::RawContent;
     use serde_json::json;
     use sha2::{Digest, Sha256};
+
+    #[test]
+    fn supplied_id_validation_is_independent_of_binding() {
+        for id in [String::new(), "x".repeat(257), "é".repeat(129)] {
+            assert_eq!(ingress_identity(Some(id), "describe_workbook").unwrap_err().error.code,
+                CanonicalErrorCode::InvalidRequest);
+        }
+        assert_eq!(ingress_identity(Some("x".repeat(256)), "describe_workbook").unwrap(), Some("x".repeat(256)));
+    }
+
+    fn size_limited_server() -> SpreadsheetServer {
+        use agent_spreadsheet::config::{ServerConfig, TransportKind, RecalcBackendKind, OutputProfile};
+        let config = ServerConfig {
+            workspace_root: ".".into(), screenshot_dir: "screenshots".into(),
+            path_mappings: vec![], cache_capacity: 8, supported_extensions: vec!["xlsx".into()],
+            single_workbook: None, enabled_tools: None, transport: TransportKind::Stdio,
+            http_bind_address: "127.0.0.1:0".parse().unwrap(), recalc_enabled: false,
+            recalc_backend: RecalcBackendKind::Auto, vba_enabled: false, max_concurrent_recalcs: 1,
+            tool_timeout_ms: None, max_response_bytes: Some(1), output_profile: OutputProfile::TokenDense,
+            max_payload_bytes: None, max_cells: None, max_items: None, allow_overwrite: false, slim_surface: true,
+        };
+        SpreadsheetServer::from_state(Arc::new(AppState::new(Arc::new(config))))
+    }
+
+    #[test]
+    fn oversized_completed_response_retains_identity_and_actual_resource() {
+        let server = size_limited_server();
+        let response = CanonicalResponse {
+            schema_version: "1".into(), operation: "write".into(),
+            resource_id: Some(serde_json::from_value(json!("fork:created_result")).unwrap()),
+            revision_id: Some("committed-revision".into()), data: json!({"ops_applied": 1}),
+        };
+        let error = project_execution_result(&server, "write", Some("wb:source"),
+            Some("stable-id".into()), Ok(response)).unwrap_err();
+        let data = error.data.unwrap();
+        assert_eq!(data[REQUEST_ID_META_KEY], "stable-id");
+        assert_eq!(data["resource_id"], "fork:created_result");
+        assert_eq!(data["revision_id"], "committed-revision");
+        assert_eq!(data["operation_completed"], true);
+        assert!(error.message.contains("not rolled back"));
+    }
+
+    #[test]
+    fn oversized_error_retains_unknown_outcome_classification() {
+        let server = size_limited_server();
+        let outcome = CanonicalErrorEnvelope::new(CanonicalErrorCode::OutcomeUnknown,
+            "response lost", Some("write"), None);
+        let error = project_execution_result(&server, "write", Some("fork:target"),
+            Some("retry-id".into()), Err(outcome)).unwrap_err();
+        let data = error.data.unwrap();
+        assert_eq!(data[REQUEST_ID_META_KEY], "retry-id");
+        assert_eq!(data["canonical_error_code"], "OUTCOME_UNKNOWN");
+        assert_eq!(data["operation_completed"], false);
+    }
 
     fn stub_artifact(workspace: &std::path::Path, bytes: &[u8]) -> Value {
         let root = workspace.join("artifacts");

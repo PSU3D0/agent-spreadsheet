@@ -88,7 +88,7 @@ pub fn compute_structure_impact(
     ops: &[StructureOp],
     include_formula_delta: bool,
 ) -> Result<(StructureImpactReport, Option<Vec<FormulaDeltaItem>>)> {
-    let book = umya_spreadsheet::reader::xlsx::read(path)?;
+    let book = crate::xlsx_import::read(path)?;
 
     // 1. Build shifted spans from ops.
     let shifted_spans = build_shifted_spans(ops)?;
@@ -100,17 +100,17 @@ pub fn compute_structure_impact(
     let mut notes: Vec<String> = Vec::new();
     let mut formula_deltas: Vec<FormulaDeltaItem> = Vec::new();
 
-    for sheet in book.get_sheet_collection() {
-        let sheet_name = sheet.get_name().to_string();
-        for cell in sheet.get_cell_collection() {
+    for sheet in book.sheet_collection() {
+        let sheet_name = sheet.name().to_string();
+        for cell in sheet.cells() {
             if !cell.is_formula() {
                 continue;
             }
-            let formula_text = cell.get_formula();
+            let formula_text = cell.formula();
             if formula_text.is_empty() {
                 continue;
             }
-            let cell_address = cell.get_coordinate().get_coordinate().to_string();
+            let cell_address = cell.coordinate().get_coordinate().to_string();
             let full_cell = format!("{}!{}", sheet_name, cell_address);
 
             let formula_with_equals = if formula_text.starts_with('=') {
@@ -334,10 +334,10 @@ fn build_shifted_spans(ops: &[StructureOp]) -> Result<Vec<ShiftedSpan>> {
                     umya_spreadsheet::helper::coordinate::column_index_from_string(&col_letters);
                 let end_col_index = col_index + count - 1;
                 let end_col_letters =
-                    umya_spreadsheet::helper::coordinate::string_from_column_index(&end_col_index);
+                    umya_spreadsheet::helper::coordinate::string_from_column_index(end_col_index);
                 let next_col_index = col_index + count;
                 let next_col_letters =
-                    umya_spreadsheet::helper::coordinate::string_from_column_index(&next_col_index);
+                    umya_spreadsheet::helper::coordinate::string_from_column_index(next_col_index);
                 spans.push(ShiftedSpan {
                     op_index: idx,
                     sheet_name: sheet_name.clone(),
@@ -564,13 +564,13 @@ fn simulate_adjust_segment(segment: &str, span: &ShiftedSpan) -> String {
 
     match (col, row) {
         (Some(c), Some(r)) => coordinate_from_index_with_lock(
-            &c,
-            &r,
-            &col_lock.unwrap_or(false),
-            &row_lock.unwrap_or(false),
+            c,
+            r,
+            col_lock.unwrap_or(false),
+            row_lock.unwrap_or(false),
         ),
         (Some(c), None) => {
-            let col_str = string_from_column_index(&c);
+            let col_str = string_from_column_index(c);
             format!(
                 "{}{}",
                 if col_lock.unwrap_or(false) { "$" } else { "" },
@@ -593,13 +593,13 @@ mod tests {
     use super::*;
 
     fn create_test_workbook(
-        setup: impl FnOnce(&mut umya_spreadsheet::Spreadsheet),
+        setup: impl FnOnce(&mut umya_spreadsheet::Workbook),
     ) -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("test.xlsx");
         let mut book = umya_spreadsheet::new_file();
         setup(&mut book);
-        umya_spreadsheet::writer::xlsx::write(&book, &path).unwrap();
+        crate::xlsx_export::write(&book, &path).unwrap();
         dir
     }
 
@@ -641,11 +641,11 @@ mod tests {
     #[test]
     fn impact_report_detects_affected_formulas() {
         let tmp = create_test_workbook(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-            sheet.get_cell_mut("A1").set_value_number(10);
-            sheet.get_cell_mut("A2").set_value_number(20);
-            sheet.get_cell_mut("B1").set_formula("A1+A2".to_string());
-            sheet.get_cell_mut("C1").set_formula("$A$5".to_string());
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("A1").set_value_number(10);
+            sheet.cell_mut("A2").set_value_number(20);
+            sheet.cell_mut("B1").set_formula("A1+A2".to_string());
+            sheet.cell_mut("C1").set_formula("$A$5".to_string());
         });
 
         let ops = vec![StructureOp::InsertRows {
@@ -664,9 +664,9 @@ mod tests {
     #[test]
     fn impact_report_flags_absolute_ref_crossing_insert() {
         let tmp = create_test_workbook(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
             sheet
-                .get_cell_mut("A1")
+                .cell_mut("A1")
                 .set_formula("$A$5+$A$10".to_string());
         });
 
@@ -693,10 +693,10 @@ mod tests {
     #[test]
     fn formula_delta_preview_shows_before_after() {
         let tmp = create_test_workbook(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-            sheet.get_cell_mut("A1").set_value_number(10);
-            sheet.get_cell_mut("A5").set_value_number(50);
-            sheet.get_cell_mut("B1").set_formula("A5*2".to_string());
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("A1").set_value_number(10);
+            sheet.cell_mut("A5").set_value_number(50);
+            sheet.cell_mut("B1").set_formula("A5*2".to_string());
         });
 
         let ops = vec![StructureOp::InsertRows {
@@ -721,8 +721,8 @@ mod tests {
     #[test]
     fn token_counts_do_not_double_count_across_multiple_spans() {
         let tmp = create_test_workbook(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-            sheet.get_cell_mut("B1").set_formula("A5*2".to_string());
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("B1").set_formula("A5*2".to_string());
         });
 
         let ops = vec![
@@ -759,9 +759,9 @@ mod tests {
     #[test]
     fn no_mutation_occurs_during_preview() {
         let tmp = create_test_workbook(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-            sheet.get_cell_mut("A1").set_value_number(42);
-            sheet.get_cell_mut("B1").set_formula("A1*2".to_string());
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("A1").set_value_number(42);
+            sheet.cell_mut("B1").set_formula("A1*2".to_string());
         });
 
         let before_bytes = std::fs::read(wb_path(&tmp)).unwrap();
@@ -785,9 +785,9 @@ mod tests {
     #[test]
     fn single_cell_range_noted() {
         let tmp = create_test_workbook(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
             sheet
-                .get_cell_mut("B1")
+                .cell_mut("B1")
                 .set_formula("SUM(K54:K54)".to_string());
         });
 

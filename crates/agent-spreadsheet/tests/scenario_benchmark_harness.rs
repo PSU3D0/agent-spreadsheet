@@ -111,31 +111,31 @@ fn write_roll_forward_fixture(path: &Path) {
     let mut workbook = umya_spreadsheet::new_file();
     {
         let inputs = workbook
-            .get_sheet_by_name_mut("Sheet1")
+            .sheet_by_name_mut("Sheet1").ok()
             .expect("default sheet exists");
         inputs.set_name("Inputs");
-        inputs.get_cell_mut("A1").set_value("Period");
-        inputs.get_cell_mut("B1").set_value("2024-Q2");
-        inputs.get_cell_mut("A2").set_value("Monthly Revenue");
-        inputs.get_cell_mut("B2").set_value_number(100.0);
+        inputs.cell_mut("A1").set_value("Period");
+        inputs.cell_mut("B1").set_value("2024-Q2");
+        inputs.cell_mut("A2").set_value("Monthly Revenue");
+        inputs.cell_mut("B2").set_value_number(100.0);
     }
 
     workbook.new_sheet("Summary").expect("summary sheet");
     {
         let summary = workbook
-            .get_sheet_by_name_mut("Summary")
+            .sheet_by_name_mut("Summary").ok()
             .expect("summary exists");
-        summary.get_cell_mut("A1").set_value("Annualized Revenue");
-        let annualized = summary.get_cell_mut("B1");
+        summary.cell_mut("A1").set_value("Annualized Revenue");
+        let annualized = summary.cell_mut("B1");
         annualized.set_formula("Inputs!B2*4");
         annualized
-            .get_cell_value_mut()
+            .cell_value_mut()
             .set_formula_result_default("400");
 
-        summary.get_cell_mut("A2").set_value("Bonus Pool");
-        let bonus = summary.get_cell_mut("B2");
+        summary.cell_mut("A2").set_value("Bonus Pool");
+        let bonus = summary.cell_mut("B2");
         bonus.set_formula("Inputs!B2*4*0.1");
-        bonus.get_cell_value_mut().set_formula_result_default("40");
+        bonus.cell_value_mut().set_formula_result_default("40");
     }
 
     umya_spreadsheet::writer::xlsx::write(&workbook, path).expect("write fixture workbook");

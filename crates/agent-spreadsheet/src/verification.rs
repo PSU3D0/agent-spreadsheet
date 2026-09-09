@@ -556,8 +556,8 @@ fn read_target_cell(
     cell_ref: &str,
 ) -> Result<TargetCellSnapshot> {
     workbook.with_sheet(sheet_name, |sheet| {
-        if let Some(cell) = sheet.get_cell(cell_ref) {
-            let formula = non_empty_formula(cell.get_formula());
+        if let Some(cell) = sheet.cell(cell_ref) {
+            let formula = non_empty_formula(cell.formula());
             TargetCellSnapshot {
                 value: cell_to_value(cell),
                 formula,
@@ -585,19 +585,19 @@ fn collect_error_cells(
     for sheet_name in sheet_names {
         let sheet_errors = workbook.with_sheet(&sheet_name, |sheet| {
             let mut items = Vec::new();
-            for cell in sheet.get_cell_collection() {
-                let raw = cell.get_value();
+            for cell in sheet.cells() {
+                let raw = cell.value();
                 let is_typed_error =
-                    cell.get_data_type() == "e" || (cell.is_formula() && is_error_text(&raw));
+                    cell.data_type() == "e" || (cell.is_formula() && is_error_text(&raw));
                 if !is_typed_error {
                     continue;
                 }
-                let address = format!("{}!{}", sheet_name, cell.get_coordinate().get_coordinate());
+                let address = format!("{}!{}", sheet_name, cell.coordinate().get_coordinate());
                 items.push((
                     address,
                     ErrorCellSnapshot {
                         error: raw.to_string(),
-                        formula: non_empty_formula(cell.get_formula()),
+                        formula: non_empty_formula(cell.formula()),
                     },
                 ));
             }

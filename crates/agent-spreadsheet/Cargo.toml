@@ -1,6 +1,6 @@
 [package]
 name = "agent-spreadsheet"
-version = "0.15.0"
+version = "0.16.0"
 edition = "2024"
 description = "Core spreadsheet automation primitives — shared types, edit normalization, and session traits for agent-facing surfaces"
 authors = ["Frankie Colson"]
@@ -28,10 +28,6 @@ pkg-url = "{ repo }/releases/download/v{ version }/agent-spreadsheet-macos-x86_6
 [package.metadata.binstall.overrides.aarch64-apple-darwin]
 pkg-url = "{ repo }/releases/download/v{ version }/agent-spreadsheet-macos-aarch64.tar.gz"
 
-[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
-pkg-fmt = "zip"
-pkg-url = "{ repo }/releases/download/v{ version }/agent-spreadsheet-windows-x86_64.zip"
-
 
 [[bin]]
 name = "agent-spreadsheet"
@@ -56,10 +52,12 @@ parking_lot = "0.12"
 lru = "0.12"
 ahash = "0.8"
 smallvec = "1.13"
-umya-spreadsheet = "2.3.2"
+umya-spreadsheet = "=3.1.0"
 ovba = "0.7.1"
-formualizer-parse = { version = "3.0.0" }
-formualizer = { version = "0.8.4", default-features = false, features = ["eval", "workbook", "umya", "common"], optional = true }
+formualizer-parse = { version = "3.1.1" }
+# Cold document I/O compatibility is required even when calculation is disabled.
+formualizer-workbook = { version = "0.9.1", default-features = false, features = ["umya3"] }
+formualizer = { version = "0.9.1", default-features = false, features = ["eval", "workbook", "umya3", "common"], optional = true }
 web-time = "1.1"
 walkdir = { version = "2.5", optional = true }
 globset = { version = "0.4", optional = true }
@@ -73,25 +71,30 @@ indexmap = "2.2"
 regex = "1.10"
 strum = { version = "0.26", features = ["derive"] }
 schemars = { version = "1.0", features = ["derive"] }
+jsonschema = { version = "0.33", default-features = false }
 tokio-util = { version = "0.7", features = ["rt"] }
 image = { version = "0.25", default-features = false, features = ["png"], optional = true }
 base64 = { version = "0.22", optional = true }
 async-trait = { version = "0.1", optional = true }
 uuid = { version = "1.10", features = ["v4", "js"], optional = true }
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
-agent-spreadsheet-render = { version = "0.15.0", path = "../agent-spreadsheet-render", optional = true }
+agent-spreadsheet-render = { version = "0.16.0", path = "../agent-spreadsheet-render", optional = true }
 quick-xml = { version = "0.31", optional = true }
 xxhash-rust = { version = "0.8", features = ["xxh64"], optional = true }
 tempfile = { version = "3.10", optional = true }
+fs2 = { version = "0.4", optional = true }
+libc = { version = "0.2", optional = true }
+hmac = { version = "0.12", optional = true }
+axum = { version = "0.8", default-features = false, features = ["tokio", "http1", "json"], optional = true }
+reqwest = { version = "0.12", default-features = false, features = ["json"], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1.37", features = ["rt-multi-thread", "fs", "signal", "net", "process"] }
-jsonschema = { version = "0.33", default-features = false }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-umya-spreadsheet = { version = "2.3.2", features = ["js"] }
+getrandom04 = { package = "getrandom", version = "0.4", features = ["wasm_js"] }
 getrandom = { version = "0.3", features = ["wasm_js"] }
-formualizer = { version = "0.8.4", default-features = false, features = ["js-runtime"], optional = true }
+formualizer = { version = "0.9.1", default-features = false, features = ["js-runtime"], optional = true }
 
 [features]
 # Native consumers get the historical surface: recalc + CLI arg parsing + a
@@ -104,7 +107,7 @@ default = ["recalc-formualizer", "sheetport", "cli", "native-fs", "render"]
 cli = ["native-fs", "dep:clap", "dep:serde_yaml", "dep:tracing-subscriber"]
 
 # Host filesystem surface: path-backed workspace discovery, temp-file staging.
-native-fs = ["dep:tempfile", "dep:walkdir", "dep:globset"]
+native-fs = ["dep:tempfile", "dep:walkdir", "dep:globset", "dep:fs2", "dep:libc", "dep:axum", "dep:reqwest", "dep:hmac"]
 
 recalc = ["async-trait", "uuid", "quick-xml", "xxhash-rust"]
 recalc-formualizer = ["recalc", "dep:formualizer"]

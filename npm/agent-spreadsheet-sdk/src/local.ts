@@ -23,8 +23,11 @@ export interface WasmBindings {
   executeOperation(
     sessionId: string,
     operation: string,
-    paramsJson: string
+    paramsJson: string,
+    requestId?: string
   ): string | PromiseLike<string>
+  /** Authoritative revision, durability and instrumentation from the Rust owner. */
+  sessionMetadata?(sessionId: string): string | PromiseLike<string>
   /** Export the latest applied bytes for a session. */
   exportWorkbook?(sessionId: string): Uint8Array | PromiseLike<Uint8Array>
   /** Release a session. */
@@ -100,12 +103,13 @@ class LocalRuntime implements CanonicalRuntime {
 
   async dispatch<K extends OperationName>(
     operation: K,
-    input: Record<string, unknown>
+    input: Record<string, unknown>,
+    options: { requestId?: string } = {}
   ): Promise<OutputOf<K>> {
     const sessionId = typeof input["resource_id"] === "string" ? (input["resource_id"] as string) : ""
     let raw: string
     try {
-      raw = await this.bindings.executeOperation(sessionId, operation, JSON.stringify(input))
+      raw = await this.bindings.executeOperation(sessionId, operation, JSON.stringify(input), options.requestId)
     } catch (rejection) {
       throw decodeRejection(rejection, { operation, runtime: this.kind })
     }
@@ -153,6 +157,7 @@ function parseEnvelope<K extends OperationName>(raw: unknown, operation: K): Out
 export class LocalWorkbook extends MutableWorkbookHandle {
   readonly #local: LocalRuntime
   #disposed = false
+  #disposing: Promise<void> | undefined
 
   /** @internal */
   constructor(runtime: LocalRuntime, resourceId: string) {
@@ -193,6 +198,19 @@ export class LocalWorkbook extends MutableWorkbookHandle {
     return bytes
   }
 
+  /** Authoritative owner metadata; no adapter-maintained revision or counters. */
+  async metadata(): Promise<unknown> {
+    this.#assertLive()
+    if (!this.#local.bindings.sessionMetadata) {
+      throw new CapabilityError({ capability: "sessionMetadata", message: "runtime does not expose resident metadata" })
+    }
+    try {
+      return JSON.parse(await this.#local.bindings.sessionMetadata(this.resourceId))
+    } catch (rejection) {
+      throw decodeRejection(rejection, { operation: "session_metadata", runtime: "local" })
+    }
+  }
+
   /** The latest applied or recalculated workbook bytes. */
   async exportBytes(): Promise<Uint8Array> {
     this.#assertLive()
@@ -210,15 +228,20 @@ export class LocalWorkbook extends MutableWorkbookHandle {
   }
 
   /** Release the underlying WASM session. Safe to call twice. */
-  async dispose(): Promise<void> {
-    if (this.#disposed) return
-    this.#disposed = true
-    if (typeof this.#local.bindings.disposeSession !== "function") return
-    try {
-      await this.#local.bindings.disposeSession(this.resourceId)
-    } catch (rejection) {
-      throw decodeRejection(rejection, { operation: "dispose_session", runtime: "local" })
-    }
+  dispose(): Promise<void> {
+    if (this.#disposed) return Promise.resolve()
+    if (this.#disposing) return this.#disposing
+    const pending = (async () => {
+      try {
+        await this.#local.bindings.disposeSession?.(this.resourceId)
+        this.#disposed = true
+      } catch (rejection) {
+        throw decodeRejection(rejection, { operation: "dispose_session", runtime: "local" })
+      }
+    })()
+    this.#disposing = pending
+    void pending.then(() => { this.#disposing = undefined }, () => { this.#disposing = undefined })
+    return pending
   }
 
   /** `await using workbook = await local.open(bytes)`. */
@@ -227,7 +250,7 @@ export class LocalWorkbook extends MutableWorkbookHandle {
   }
 
   #assertLive(): void {
-    if (this.#disposed) {
+    if (this.#disposed || this.#disposing) {
       throw new CapabilityError({
         capability: "session",
         message: `local workbook ${this.resourceId} has been disposed`
@@ -382,8 +405,8 @@ function lazyRuntime(resolve: () => Promise<CanonicalRuntime>): CanonicalRuntime
     async operations() {
       return (await resolve()).operations()
     },
-    async dispatch(operation, input) {
-      return (await resolve()).dispatch(operation, input)
+    async dispatch(operation, input, options) {
+      return (await resolve()).dispatch(operation, input, options)
     },
     async artifactBytes(handle, resourceId) {
       return (await resolve()).artifactBytes(handle, resourceId)

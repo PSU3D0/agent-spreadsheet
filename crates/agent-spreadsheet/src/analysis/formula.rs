@@ -121,7 +121,7 @@ impl FormulaGraph {
         policy: FormulaParsePolicy,
         mut diagnostics: Option<&mut FormulaParseDiagnosticsBuilder>,
     ) -> Result<Self> {
-        let sheet_name = sheet.get_name().to_string();
+        let sheet_name = sheet.name().to_string();
         let mut precedents_build: HashMap<String, HashSet<String>> = HashMap::new();
         let mut dependents_build: HashMap<String, HashSet<String>> = HashMap::new();
         let mut groups: HashMap<String, FormulaGroupAccumulator> = HashMap::new();
@@ -134,13 +134,13 @@ impl FormulaGraph {
             include_names: true,
         };
 
-        for cell in sheet.get_cell_collection() {
+        for cell in sheet.cells() {
             if !cell.is_formula() {
                 continue;
             }
-            let coordinate = cell.get_coordinate();
+            let coordinate = cell.coordinate();
             let address = coordinate.get_coordinate();
-            let formula_text = cell.get_formula();
+            let formula_text = cell.formula();
             if formula_text.is_empty() {
                 continue;
             }
@@ -219,8 +219,8 @@ impl FormulaGraph {
             let is_volatile = ast.contains_volatile();
 
             let (is_array, is_shared_type) = cell
-                .get_formula_obj()
-                .map(|obj| match obj.get_formula_type() {
+                .formula_obj()
+                .map(|obj| match obj.formula_type() {
                     CellFormulaValues::Array => (true, false),
                     CellFormulaValues::Shared => (false, true),
                     _ => (false, false),
@@ -237,7 +237,7 @@ impl FormulaGraph {
                         is_array,
                         is_shared: is_shared_type,
                     });
-            if cell.get_formula_shared_index().is_some() {
+            if cell.formula_shared_index().is_some() {
                 group.is_shared = true;
             }
             group.addresses.push(address.clone());

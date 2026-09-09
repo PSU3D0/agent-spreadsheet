@@ -1,6 +1,6 @@
 [package]
 name = "agent-spreadsheet-mcp"
-version = "0.15.0"
+version = "0.16.0"
 edition = "2024"
 description = "Stateful MCP server for spreadsheet analysis and editing — token-efficient tools for LLM agents to read, profile, edit, and recalculate .xlsx workbooks"
 authors = ["Frankie Colson"]
@@ -27,9 +27,6 @@ pkg-url = "{ repo }/releases/download/v{ version }/agent-spreadsheet-mcp-macos-x
 [package.metadata.binstall.overrides.aarch64-apple-darwin]
 pkg-url = "{ repo }/releases/download/v{ version }/agent-spreadsheet-mcp-macos-aarch64"
 
-[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
-pkg-url = "{ repo }/releases/download/v{ version }/agent-spreadsheet-mcp-windows-x86_64.exe"
-
 [[bin]]
 name = "agent-spreadsheet-mcp"
 path = "src/main.rs"
@@ -40,7 +37,7 @@ thiserror = "1.0"
 # The MCP server is a native host: it needs argv/YAML config parsing and the
 # path-backed workspace repository from the core crate, so it asks for them
 # explicitly instead of relying on the core crate default feature set.
-agent-spreadsheet = { version = "0.15.0", path = "../agent-spreadsheet", features = ["cli", "native-fs"] }
+agent-spreadsheet = { version = "0.16.0", path = "../agent-spreadsheet", features = ["cli", "native-fs"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_with = "3.8"
@@ -52,10 +49,10 @@ parking_lot = "0.12"
 lru = "0.12"
 ahash = "0.8"
 smallvec = "1.13"
-umya-spreadsheet = "2.3.2"
+umya-spreadsheet = "=3.1.0"
 ovba = "0.7.1"
-formualizer-parse = { version = "3.0.0" }
-formualizer = { version = "0.8.4", default-features = false, features = ["workbook", "umya"], optional = true }
+formualizer-parse = { version = "3.1.1" }
+formualizer = { version = "0.9.1", default-features = false, features = ["workbook", "umya3"], optional = true }
 walkdir = "2.5"
 globset = "0.4"
 rand = "0.8"

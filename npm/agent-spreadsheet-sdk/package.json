@@ -1,6 +1,6 @@
 {
   "name": "agent-spreadsheet-sdk",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "TypeScript SDK for agent-spreadsheet: a local WASM runtime and a canonical HTTP server runtime behind one object model",
   "license": "Apache-2.0",
   "repository": {

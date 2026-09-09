@@ -172,6 +172,12 @@ export function validateAdapterFlags(
   return { exports, artifact }
 }
 
+/** File generations belong to the byte/VFS boundary, not to a temporary owner. */
+async function fileRevision(bytes: Uint8Array): Promise<string> {
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", Uint8Array.from(bytes))
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("")
+}
+
 /** Bind bytes, dispatch one canonical operation, export when required, dispose. */
 export async function executeEphemeralOperation(params: {
   local: LocalSpreadsheet
@@ -200,6 +206,14 @@ export async function executeEphemeralOperation(params: {
     if (opened[0]) bindResource(request, "resource_id", opened[0].resourceId)
     if (opened[1]) bindResource(request, "baseline_resource_id", opened[1].resourceId)
 
+    const fileBefore = workbooks[0] ? await fileRevision(workbooks[0]) : undefined
+    if (opened[0] && request["expected_revision"] !== undefined) {
+      if (request["expected_revision"] !== fileBefore) {
+        throw adapterError("REVISION_CONFLICT", "expected_revision does not match the bound file generation", "$.expected_revision")
+      }
+      const metadata = await opened[0].metadata() as { revision_id: string }
+      request["expected_revision"] = metadata.revision_id
+    }
     const response = await params.local.canonical.execute(
       params.operation as OperationName,
       request as never
@@ -209,6 +223,20 @@ export async function executeEphemeralOperation(params: {
     let workbookBytes: Uint8Array | undefined
     if (params.plan.persistence === "export_required" && request["mode"] !== "preview" && !failed) {
       workbookBytes = await opened[0]!.exportBytes()
+    }
+    // Only project protocol metadata, never recursively rewrite workbook values.
+    // This owner is discarded below; its private resident token must not become
+    // the next file command's CAS token. Native file commands also use SHA-256.
+    if (fileBefore !== undefined) {
+      const fileAfter = workbookBytes ? await fileRevision(workbookBytes) : fileBefore
+      const envelope = response as any
+      envelope.revision_id = fileAfter
+      const data = envelope.data
+      if (data && typeof data === "object") {
+        if ("revision_before" in data) data.revision_before = fileBefore
+        if ("revision_after" in data) data.revision_after = fileAfter
+        if (data.calculation && "revision_id" in data.calculation) data.calculation.revision_id = fileAfter
+      }
     }
     let artifactBytes: Uint8Array | undefined
     const handle = artifactHandleOf(response)

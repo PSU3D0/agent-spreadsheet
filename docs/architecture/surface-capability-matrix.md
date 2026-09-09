@@ -5,6 +5,12 @@ Owner: Tranche 35 (tickets/35-js-surface-migration)
 
 This matrix is the planning baseline for cross-surface migration.
 
+## Resident session amendment (native integration; portable adoption pending)
+
+`resident-session-runtime.md` extends explicit session bindings across native CLI/MCP and portable WASM/SDK/just-bash. File-bound CLI/just-bash remains ephemeral. Session mutation/evaluation/history semantics belong to the shared Rust runtime; host adapters own storage and process/VFS lifecycle. Native session commands may auto-start a private host. Portable memory-only versus host-backed persistence is explicit; stage/checkpoint catalogs have separate generations from workbook CAS revisions. Atomic implementations may use bounded reversible changes instead of full-state copies when the shared recovery guarantees hold.
+
+Native canonical CLI explicit bindings and MCP stdio/HTTP defaults now use the resident host for lifecycle and `fork:`/`session:` resources. MCP live discovery includes implemented `session_history`; verification/render/SheetPort/VBA preserve shared semantics through explicit cold snapshot boundaries. Stateless `wb:` requests remain local. Actual Linux process coverage is recorded in `resident-session-runtime.md`. Portable adoption and platform/final acceptance gates remain pending; these native results are not blanket cross-surface capability claims. Existing legacy catalog rows below describe compatibility entrypoints, not a second authority for native IDs. The old `MCP_ONLY` orchestration classification does not prohibit implementing the same session semantics through other backed hosts; adapter-specific discovery must still reflect actual support.
+
 ## Legend
 
 - **Classification**
@@ -101,6 +107,7 @@ Boundary contract: `docs/architecture/surface-boundary-rules.md`
 | `get_changes` | `verify diff` (partial overlap) | SHARED_PARTIAL | `operations.get_changes` | later | Canonical operation audit or net diff | `crates/agent-spreadsheet-mcp/src/canonical_router.rs` | `crates/agent-spreadsheet-mcp/tests/canonical_projection.rs` |
 | `checkpoint` | _(none)_ | MCP_ONLY | `operations.checkpoint` | n/a | Canonical checkpoint action union | `crates/agent-spreadsheet-mcp/src/canonical_router.rs` | `crates/agent-spreadsheet-mcp/tests/canonical_projection.rs` |
 | `staged_change` | _(none)_ | MCP_ONLY | `operations.staged_change` | n/a | Canonical staged-bundle action union | `crates/agent-spreadsheet-mcp/src/canonical_router.rs` | `crates/agent-spreadsheet-mcp/tests/canonical_projection.rs` |
+| `session_history` | _(native adoption pending)_ | SHARED_PARTIAL | `operations.session_history` | later | Shared durable history/status/outcome schema; gated by resident_history capability. Native/MCP and portable adapter activation remain pending. | `crates/agent-spreadsheet/src/session.rs` | `crates/agent-spreadsheet/tests/resident_canonical.rs` |
 | `list_workbooks` | _(none)_ | MCP_ONLY | `adapter-mcp.workspace.list_workbooks` | n/a | Workspace/repository concern | `crates/agent-spreadsheet/src/tools/mod.rs::list_workbooks` | `crates/agent-spreadsheet-mcp/tests/server_smoke.rs` |
 | `describe_workbook` | `read workbook` | ALL | `core.read.describe_workbook` | mvp | Shared read primitive | `crates/agent-spreadsheet/src/tools/mod.rs::describe_workbook` | `crates/agent-spreadsheet-mcp/tests/server_smoke.rs` |
 | `workbook_summary` | _(none direct)_ | SHARED_PARTIAL | `core.analysis.workbook_summary` | later | Candidate future CLI command | `crates/agent-spreadsheet/src/tools/mod.rs::workbook_summary` | `crates/agent-spreadsheet-mcp/tests/server_smoke.rs` |

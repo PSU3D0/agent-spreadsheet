@@ -115,7 +115,7 @@ jobs:
         run: command -v wasm-pack >/dev/null || cargo install wasm-pack --locked
 
       - name: Build the MCP server for the SDK server-runtime integration
-        run: cargo build --locked -p agent-spreadsheet-mcp
+        run: cargo build --locked -p agent-spreadsheet-mcp -p agent-spreadsheet
 
       - name: Run SDK tests and generated WASM integration
         run: |
@@ -128,6 +128,8 @@ jobs:
         working-directory: npm/agent-spreadsheet-sdk
         env:
           SPREADSHEET_MCP_BINARY: ${{ github.workspace }}/target/debug/agent-spreadsheet-mcp
+          ASP_BINARY: ${{ github.workspace }}/target/debug/asp
+          AGENT_SPREADSHEET_WASM_PACKAGE: ${{ github.workspace }}/target/sdk-wasm-node
 
       - name: Run parity harness
         run: node scripts/parity-harness.js
@@ -255,6 +257,12 @@ jobs:
           npm test
           npm pack --dry-run
         working-directory: npm/agent-spreadsheet-wasm
+
+      - name: Exercise published web bindings and SDK in Chromium and a Web Worker
+        run: |
+          npm ci --ignore-scripts --prefix npm/agent-spreadsheet-sdk
+          npm run build --prefix npm/agent-spreadsheet-sdk
+          node scripts/browser-smoke.mjs
 
   docker-integration:
     name: Docker Integration Tests

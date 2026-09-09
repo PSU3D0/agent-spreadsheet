@@ -58,11 +58,11 @@ fn ops(values: Vec<serde_json::Value>) -> Vec<MutateOpInput> {
 async fn mutate_batch_apply_routes_one_op_from_each_family() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("mutate_all_families.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value_number(1);
-        sheet.get_cell_mut("A2").set_value_number(2);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(1);
+        sheet.cell_mut("A2").set_value_number(2);
         sheet
-            .get_cell_mut("E1")
+            .cell_mut("E1")
             .set_formula("SUM(A1:A2)".to_string());
     });
 
@@ -177,16 +177,16 @@ async fn mutate_batch_apply_routes_one_op_from_each_family() -> Result<()> {
     let (c1, d2_formula, e1_formula) = fork_wb.with_sheet("Sheet1", |sheet| {
         (
             sheet
-                .get_cell("C1")
-                .map(|c| c.get_value().to_string())
+                .cell("C1")
+                .map(|c| c.value().to_string())
                 .unwrap_or_default(),
             sheet
-                .get_cell("D2")
-                .map(|c| c.get_formula().to_string())
+                .cell("D2")
+                .map(|c| c.formula().to_string())
                 .unwrap_or_default(),
             sheet
-                .get_cell("E1")
-                .map(|c| c.get_formula().to_string())
+                .cell("E1")
+                .map(|c| c.formula().to_string())
                 .unwrap_or_default(),
         )
     })?;
@@ -208,8 +208,8 @@ async fn mutate_batch_apply_routes_one_op_from_each_family() -> Result<()> {
 async fn mutate_batch_groups_consecutive_same_family_ops() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("mutate_grouping.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value("x");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("x");
     });
 
     let state = recalc_state(&workspace);
@@ -249,12 +249,12 @@ async fn mutate_batch_groups_consecutive_same_family_ops() -> Result<()> {
     let (a1, b1) = fork_wb.with_sheet("Sheet1", |sheet| {
         (
             sheet
-                .get_cell("A1")
-                .map(|c| c.get_value().to_string())
+                .cell("A1")
+                .map(|c| c.value().to_string())
                 .unwrap_or_default(),
             sheet
-                .get_cell("B1")
-                .map(|c| c.get_value().to_string())
+                .cell("B1")
+                .map(|c| c.value().to_string())
                 .unwrap_or_default(),
         )
     })?;
@@ -268,8 +268,8 @@ async fn mutate_batch_groups_consecutive_same_family_ops() -> Result<()> {
 async fn mutate_batch_preview_stages_and_does_not_mutate() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("mutate_preview.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value("keep");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("keep");
     });
 
     let state = recalc_state(&workspace);
@@ -310,8 +310,8 @@ async fn mutate_batch_preview_stages_and_does_not_mutate() -> Result<()> {
     let fork_wb = state.open_workbook(&WorkbookId(fork_id.clone())).await?;
     let a1 = fork_wb.with_sheet("Sheet1", |sheet| {
         sheet
-            .get_cell("A1")
-            .map(|c| c.get_value().to_string())
+            .cell("A1")
+            .map(|c| c.value().to_string())
             .unwrap_or_default()
     })?;
     assert_eq!(a1, "keep");
@@ -339,8 +339,8 @@ async fn mutate_batch_preview_stages_and_does_not_mutate() -> Result<()> {
     let fork_wb = state.open_workbook(&WorkbookId(fork_id)).await?;
     let a1 = fork_wb.with_sheet("Sheet1", |sheet| {
         sheet
-            .get_cell("A1")
-            .map(|c| c.get_value().to_string())
+            .cell("A1")
+            .map(|c| c.value().to_string())
             .unwrap_or_default()
     })?;
     assert_eq!(a1, "overwritten");
@@ -352,8 +352,8 @@ async fn mutate_batch_preview_stages_and_does_not_mutate() -> Result<()> {
 async fn mutate_batch_rejects_unknown_kind_before_applying_anything() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("mutate_bad_kind.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value("keep");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("keep");
     });
 
     let state = recalc_state(&workspace);
@@ -394,8 +394,8 @@ async fn mutate_batch_rejects_unknown_kind_before_applying_anything() -> Result<
     let fork_wb = state.open_workbook(&WorkbookId(fork_id)).await?;
     let a1 = fork_wb.with_sheet("Sheet1", |sheet| {
         sheet
-            .get_cell("A1")
-            .map(|c| c.get_value().to_string())
+            .cell("A1")
+            .map(|c| c.value().to_string())
             .unwrap_or_default()
     })?;
     assert_eq!(a1, "keep");
@@ -407,8 +407,8 @@ async fn mutate_batch_rejects_unknown_kind_before_applying_anything() -> Result<
 async fn mutate_batch_runtime_failure_reports_index_and_prior_applied_state() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("mutate_runtime_fail.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value("x");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("x");
     });
 
     let state = recalc_state(&workspace);
@@ -460,8 +460,8 @@ async fn mutate_batch_runtime_failure_reports_index_and_prior_applied_state() ->
     let fork_wb = state.open_workbook(&WorkbookId(fork_id)).await?;
     let b1 = fork_wb.with_sheet("Sheet1", |sheet| {
         sheet
-            .get_cell("B1")
-            .map(|c| c.get_value().to_string())
+            .cell("B1")
+            .map(|c| c.value().to_string())
             .unwrap_or_default()
     })?;
     assert_eq!(b1, "42");
@@ -473,8 +473,8 @@ async fn mutate_batch_runtime_failure_reports_index_and_prior_applied_state() ->
 async fn edit_batch_preview_stages_and_does_not_mutate() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("edit_preview.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value("keep");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("keep");
     });
 
     let state = recalc_state(&workspace);
@@ -505,8 +505,8 @@ async fn edit_batch_preview_stages_and_does_not_mutate() -> Result<()> {
     let fork_wb = state.open_workbook(&WorkbookId(fork_id.clone())).await?;
     let a1 = fork_wb.with_sheet("Sheet1", |sheet| {
         sheet
-            .get_cell("A1")
-            .map(|c| c.get_value().to_string())
+            .cell("A1")
+            .map(|c| c.value().to_string())
             .unwrap_or_default()
     })?;
     assert_eq!(a1, "keep");
@@ -523,8 +523,8 @@ async fn edit_batch_preview_stages_and_does_not_mutate() -> Result<()> {
     let fork_wb = state.open_workbook(&WorkbookId(fork_id)).await?;
     let a1 = fork_wb.with_sheet("Sheet1", |sheet| {
         sheet
-            .get_cell("A1")
-            .map(|c| c.get_value().to_string())
+            .cell("A1")
+            .map(|c| c.value().to_string())
             .unwrap_or_default()
     })?;
     assert_eq!(a1, "100");
@@ -603,6 +603,7 @@ fn slim_surface_is_exactly_the_available_canonical_registry() {
     let state = support::app_state_with_config(config);
     let mut capabilities = RuntimeCapabilities::from_state(&state);
     capabilities.vba = false;
+    capabilities.resident_history = cfg!(feature = "recalc-formualizer");
     let mut expected = operation_registry()
         .iter()
         .filter(|descriptor| descriptor.is_available(&capabilities))

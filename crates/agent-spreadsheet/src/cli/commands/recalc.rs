@@ -49,7 +49,7 @@ fn snapshot_cell_values(
     path: &Path,
     ignore: &[String],
 ) -> Result<BTreeMap<(String, String), String>> {
-    let book = umya_spreadsheet::reader::xlsx::read(path).map_err(|e| {
+    let book = crate::xlsx_import::read(path).map_err(|e| {
         anyhow!(
             "failed to read workbook '{}' for snapshot: {}",
             path.display(),
@@ -58,14 +58,14 @@ fn snapshot_cell_values(
     })?;
     let mut cells = BTreeMap::new();
 
-    for sheet in book.get_sheet_collection() {
-        let sheet_name = sheet.get_name().to_string();
+    for sheet in book.sheet_collection() {
+        let sheet_name = sheet.name().to_string();
         if ignore.iter().any(|s| s == &sheet_name) {
             continue;
         }
-        for cell in sheet.get_cell_collection() {
-            let address = cell.get_coordinate().get_coordinate().to_string();
-            let value = cell.get_value().to_string();
+        for cell in sheet.cells() {
+            let address = cell.coordinate().get_coordinate().to_string();
+            let value = cell.value().to_string();
             cells.insert((sheet_name.clone(), address), value);
         }
     }

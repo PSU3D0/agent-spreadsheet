@@ -15,21 +15,63 @@ mod support;
 
 use support::mcp::{call_tool, extract_json};
 
+struct OwnedNativeHost(std::path::PathBuf);
+impl Drop for OwnedNativeHost {
+    fn drop(&mut self) {
+        let root = self.0.clone();
+        let _ = std::thread::spawn(move || {
+            let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+            runtime.block_on(async {
+                if let Ok(client) = agent_spreadsheet::native_host::NativeHostClient::discover(&root) {
+                    let _ = tokio::time::timeout(std::time::Duration::from_secs(10), client.request(&agent_spreadsheet::native_host::HostRequest::Shutdown)).await;
+                }
+            });
+            for _ in 0..400 {
+                if !root.join("discovery.json").exists() { break; }
+                std::thread::sleep(std::time::Duration::from_millis(25));
+            }
+        }).join();
+    }
+}
+
+trait IdentifiedToolCall {
+    async fn call_identified(&self, params: rmcp::model::CallToolRequestParam) -> Result<rmcp::model::CallToolResult>;
+}
+impl IdentifiedToolCall for rmcp::Peer<rmcp::RoleClient> {
+    async fn call_identified(&self, params: rmcp::model::CallToolRequestParam) -> Result<rmcp::model::CallToolResult> {
+        use rmcp::model::*;
+        let meta = Meta(serde_json::Map::from_iter([("agent-spreadsheet/request-id".into(), json!(uuid::Uuid::new_v4().to_string()))]));
+        let response = self.send_request_with_option(ClientRequest::CallToolRequest(CallToolRequest {
+            method: Default::default(), params, extensions: Default::default(),
+        }), rmcp::service::PeerRequestOptions { timeout: None, meta: Some(meta) }).await?.await_response().await?;
+        match response { ServerResult::CallToolResult(value) => Ok(value), _ => anyhow::bail!("unexpected MCP response") }
+    }
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn live_json_rpc_projects_every_available_canonical_descriptor() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("canonical.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut((1, 1)).set_value("Name".to_string());
-        sheet.get_cell_mut((2, 1)).set_value("Amount".to_string());
-        sheet.get_cell_mut((1, 2)).set_value("Alpha".to_string());
-        sheet.get_cell_mut((2, 2)).set_value_number(42_f64);
-        sheet.get_cell_mut((3, 2)).set_formula("B2*2");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut((1, 1)).set_value("Name".to_string());
+        sheet.cell_mut((2, 1)).set_value("Amount".to_string());
+        sheet.cell_mut((1, 2)).set_value("Alpha".to_string());
+        sheet.cell_mut((2, 2)).set_value_number(42_f64);
+        sheet.cell_mut((3, 2)).set_formula("B2*2");
     });
 
+    let native_parent = tempfile::tempdir()?;
+    #[cfg(unix)] {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(native_parent.path(), std::fs::Permissions::from_mode(0o700))?;
+    }
+    let native_root = agent_spreadsheet::native_host::provision_root(&native_parent.path().canonicalize()?, "host")?;
+    let _host_cleanup = OwnedNativeHost(native_root.clone());
+    let child_root = native_root.clone();
     let root = workspace.root().to_path_buf();
     let (transport, _stderr) = TokioChildProcess::builder(
         Command::new(env!("CARGO_BIN_EXE_agent-spreadsheet-mcp")).configure(move |command| {
+            command.env("ASP_RESIDENT_ROOT", child_root);
             command.args([
                 "--transport",
                 "stdio",
@@ -54,6 +96,7 @@ async fn live_json_rpc_projects_every_available_canonical_descriptor() -> Result
     let mut capabilities = RuntimeCapabilities::native();
     capabilities.screenshot_rendering = actual.contains("screenshot_sheet");
     capabilities.vba = true;
+    capabilities.resident_history = cfg!(feature = "recalc-formualizer");
     let expected = operation_registry()
         .iter()
         .filter(|descriptor| descriptor.is_available(&capabilities))
@@ -62,7 +105,7 @@ async fn live_json_rpc_projects_every_available_canonical_descriptor() -> Result
     assert_eq!(actual, expected);
     assert_eq!(
         actual.len(),
-        30 + usize::from(capabilities.screenshot_rendering)
+        30 + usize::from(capabilities.screenshot_rendering) + usize::from(capabilities.resident_history)
     );
     assert!(!actual.contains("close_workbook"));
 
@@ -75,7 +118,9 @@ async fn live_json_rpc_projects_every_available_canonical_descriptor() -> Result
             .expect("canonical marker must survive tools/list");
         assert_eq!(marker["schema_version"], "1");
         assert_eq!(marker["operation"], tool.name.as_ref());
-        assert_eq!(tool.schema_as_json_value(), (descriptor.input_schema)());
+        let mut canonical_schema = (descriptor.input_schema)();
+        canonical_schema.as_object_mut().unwrap().remove("title");
+        assert_eq!(tool.schema_as_json_value(), canonical_schema);
         assert!(
             tool.output_schema.is_none(),
             "output schema must stay stripped"
@@ -100,7 +145,7 @@ async fn live_json_rpc_projects_every_available_canonical_descriptor() -> Result
         assert_eq!(annotations.destructive_hint, Some(expected_destructive));
         assert_eq!(annotations.open_world_hint, Some(false));
 
-        let result = client.call_tool(call_tool(&tool.name, json!({}))).await?;
+        let result = client.call_identified(call_tool(&tool.name, json!({}))).await?;
         let envelope = extract_json(&result)?;
         assert_eq!(envelope["schema_version"], "1", "{} envelope", tool.name);
         if result.is_error == Some(true) {
@@ -111,7 +156,7 @@ async fn live_json_rpc_projects_every_available_canonical_descriptor() -> Result
     }
 
     let list = client
-        .call_tool(call_tool("list_workbooks", json!({})))
+        .call_identified(call_tool("list_workbooks", json!({})))
         .await?;
     assert_ne!(list.is_error, Some(true));
     let list = extract_json(&list)?;
@@ -121,7 +166,7 @@ async fn live_json_rpc_projects_every_available_canonical_descriptor() -> Result
     assert!(resource_id.starts_with("wb:"));
 
     let sheets = client
-        .call_tool(call_tool(
+        .call_identified(call_tool(
             "list_sheets",
             json!({"resource_id":resource_id,"include_bounds":true}),
         ))
@@ -135,7 +180,7 @@ async fn live_json_rpc_projects_every_available_canonical_descriptor() -> Result
 
     let source_revision = sheets["revision_id"].as_str().unwrap();
     let fork = client
-        .call_tool(call_tool(
+        .call_identified(call_tool(
             "create_fork",
             json!({"resource_id":resource_id,"expected_revision":source_revision}),
         ))
@@ -143,7 +188,7 @@ async fn live_json_rpc_projects_every_available_canonical_descriptor() -> Result
     let fork = extract_json(&fork)?;
     let fork_id = fork["resource_id"].as_str().unwrap();
     let recalculated = client
-        .call_tool(call_tool(
+        .call_identified(call_tool(
             "recalculate",
             json!({
                 "resource_id":fork_id,
@@ -156,7 +201,7 @@ async fn live_json_rpc_projects_every_available_canonical_descriptor() -> Result
     assert_eq!(recalculated["data"]["state"], "clean");
     let recalculated_revision = recalculated["revision_id"].as_str().unwrap();
     let read = client
-        .call_tool(call_tool(
+        .call_identified(call_tool(
             "read_cells",
             json!({
                 "resource_id":fork_id,
@@ -179,7 +224,7 @@ async fn live_json_rpc_projects_every_available_canonical_descriptor() -> Result
     );
 
     let malformed = client
-        .call_tool(call_tool("list_sheets", json!({"resource_id":42})))
+        .call_identified(call_tool("list_sheets", json!({"resource_id":42})))
         .await?;
     assert_eq!(malformed.is_error, Some(true));
     let malformed = extract_json(&malformed)?;
@@ -193,7 +238,7 @@ async fn live_json_rpc_projects_every_available_canonical_descriptor() -> Result
         .filter(|tool| {
             !matches!(
                 tool.name.as_ref(),
-                "sheetport_manifest" | "execute_sheetport" | "inspect_vba" | "screenshot_sheet"
+                "sheetport_manifest" | "execute_sheetport" | "inspect_vba" | "screenshot_sheet" | "session_history"
             )
         })
         .collect::<Vec<_>>();
@@ -214,6 +259,8 @@ async fn live_json_rpc_projects_every_available_canonical_descriptor() -> Result
         "canonical tools/list projection is {list_bytes} bytes"
     );
 
+    agent_spreadsheet::native_host::NativeHostClient::discover(&native_root)?.request(&agent_spreadsheet::native_host::HostRequest::Shutdown).await?;
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     client.cancel().await?;
     Ok(())
 }
@@ -294,14 +341,14 @@ async fn live_compat_router_preserves_legacy_shared_routes() -> Result<()> {
     );
 
     let list = client
-        .call_tool(call_tool("list_workbooks", json!({"include_paths":false})))
+        .call_identified(call_tool("list_workbooks", json!({"include_paths":false})))
         .await?;
     assert_ne!(list.is_error, Some(true));
     let list = extract_json(&list)?;
     assert!(list["workbooks"].is_array());
     assert!(list.get("schema_version").is_none());
 
-    let canonical_only = client.call_tool(call_tool("read_cells", json!({}))).await?;
+    let canonical_only = client.call_identified(call_tool("read_cells", json!({}))).await?;
     assert_eq!(canonical_only.is_error, Some(true));
     assert_eq!(extract_json(&canonical_only)?["schema_version"], "1");
 

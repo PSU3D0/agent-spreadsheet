@@ -148,8 +148,9 @@ async fn export_workbook_returns_the_stored_session_bytes_verbatim() {
     // Re-binding the exported bytes must produce the same bytes again, which is
     // the property `session_bytes` being the single source of truth gives us.
     let rebound = api.create_session(&exported_after_reads).expect("rebind");
+    let rebound_bytes = api.export_workbook(&rebound).expect("export");
     assert_eq!(
-        api.export_workbook(&rebound).expect("export"),
+        rebound_bytes,
         exported_after_reads,
         "round-tripping the exported bytes was not byte-identical"
     );

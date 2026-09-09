@@ -24,9 +24,9 @@ fn recalc_state(
 async fn apply_formula_pattern_preview_stages_and_apply() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("pattern.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value_number(1);
-        sheet.get_cell_mut("B1").set_value_number(2);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(1);
+        sheet.cell_mut("B1").set_value_number(2);
     });
 
     let state = recalc_state(&workspace);
@@ -73,7 +73,7 @@ async fn apply_formula_pattern_preview_stages_and_apply() -> Result<()> {
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     let formula_c2 = fork_wb.with_sheet("Sheet1", |sheet| {
-        sheet.get_cell("C2").map(|c| c.get_formula().to_string())
+        sheet.cell("C2").map(|c| c.formula().to_string())
     })?;
     assert!(formula_c2.is_none());
 
@@ -91,9 +91,9 @@ async fn apply_formula_pattern_preview_stages_and_apply() -> Result<()> {
         .await?;
     let formulas = fork_wb.with_sheet("Sheet1", |sheet| {
         vec![
-            sheet.get_cell("C1").unwrap().get_formula().to_string(),
-            sheet.get_cell("C2").unwrap().get_formula().to_string(),
-            sheet.get_cell("C3").unwrap().get_formula().to_string(),
+            sheet.cell("C1").unwrap().formula().to_string(),
+            sheet.cell("C2").unwrap().formula().to_string(),
+            sheet.cell("C3").unwrap().formula().to_string(),
         ]
     })?;
 

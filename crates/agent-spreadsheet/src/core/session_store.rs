@@ -34,6 +34,17 @@ const SNAPSHOT_INTERVAL: usize = 10;
 /// Maximum number of concurrent sessions.
 const MAX_SESSIONS: usize = 50;
 
+fn validate_session_id(session_id: &str) -> Result<()> {
+    if session_id.is_empty()
+        || !session_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+    {
+        bail!("invalid session id");
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // SessionStore
 // ---------------------------------------------------------------------------
@@ -121,7 +132,25 @@ impl SessionStore {
 
     /// Open an existing session by ID.
     pub fn open_session(&self, session_id: &str) -> Result<SessionHandle> {
-        SessionHandle::open(&self.root, session_id)
+        validate_session_id(session_id)?;
+        let handle = SessionHandle::open(&self.root, session_id)?;
+        handle.ensure_legacy_writable()?;
+        Ok(handle)
+    }
+
+    /// Import-only access to an explicitly frozen copy. Ordinary legacy tools
+    /// cannot open this handle through their public store entrypoint.
+    pub(crate) fn open_frozen_import(&self, session_id: &str) -> Result<SessionHandle> {
+        validate_session_id(session_id)?;
+        let handle = SessionHandle::open(&self.root, session_id)?;
+        if !handle
+            .dir
+            .join("resident-import-frozen.json")
+            .try_exists()?
+        {
+            bail!("legacy import requires an explicitly frozen copy");
+        }
+        Ok(handle)
     }
 
     /// List all session IDs.
@@ -144,9 +173,16 @@ impl SessionStore {
 
     /// Delete a session and all its artifacts.
     pub fn delete_session(&self, session_id: &str) -> Result<()> {
+        validate_session_id(session_id)?;
         let session_dir = self.root.join(session_id);
         if !session_dir.exists() {
             bail!("session not found: {}", session_id);
+        }
+        if session_dir
+            .join("resident-import-frozen.json")
+            .try_exists()?
+        {
+            bail!("legacy session is frozen for resident import; deletion refused");
         }
         fs::remove_dir_all(&session_dir)
             .with_context(|| format!("failed to delete session: {}", session_id))
@@ -244,11 +280,13 @@ impl SessionHandle {
 
     /// Set the HEAD op_id.
     pub fn write_head(&self, op_id: &str) -> Result<()> {
+        self.ensure_legacy_writable()?;
         fs::write(self.head_path(), op_id).context("failed to write HEAD")
     }
 
     /// Clear HEAD back to base state.
     pub fn clear_head(&self) -> Result<()> {
+        self.ensure_legacy_writable()?;
         fs::write(self.head_path(), "").context("failed to clear HEAD")
     }
 
@@ -263,6 +301,7 @@ impl SessionHandle {
 
     /// Switch to a different branch.
     pub fn switch_branch(&self, branch_name: &str) -> Result<()> {
+        self.ensure_legacy_writable()?;
         let branches = BranchesFile::load(&self.branches_path())?;
         if branches.get_branch(branch_name).is_none() {
             bail!("branch not found: {}", branch_name);
@@ -288,6 +327,7 @@ impl SessionHandle {
         fork_point: Option<&str>,
         label: Option<&str>,
     ) -> Result<()> {
+        self.ensure_legacy_writable()?;
         let mut branches = BranchesFile::load(&self.branches_path())?;
         if branches.get_branch(name).is_some() {
             bail!("branch already exists: {}", name);
@@ -315,6 +355,10 @@ impl SessionHandle {
     /// Append an event to the binlog and advance HEAD + branch tip.
     /// This is the atomic apply operation.
     pub fn append_event(&self, mut event: OpEvent) -> Result<()> {
+        validate_session_id(&event.op_id)?;
+        if event.session_id != self.session_id {
+            bail!("event belongs to a different session");
+        }
         // Acquire exclusive lock
         let _lock = self.acquire_lock()?;
 
@@ -397,7 +441,58 @@ impl SessionHandle {
     /// Read all events in the binlog.
     pub fn read_events(&self) -> Result<Vec<OpEvent>> {
         let reader = BinlogReader::open(self.binlog_path())?;
-        reader.read_all()
+        let events = reader.read_all()?;
+        let mut by_id = std::collections::BTreeMap::new();
+        let mut previous_hash = None;
+        for event in &events {
+            validate_session_id(&event.op_id)?;
+            if event.session_id != self.session_id || !event.verify_integrity() {
+                bail!(
+                    "legacy event '{}' failed session/payload/hash validation",
+                    event.op_id
+                );
+            }
+            if event.prev_event_hash != previous_hash {
+                bail!(
+                    "legacy event append hash chain is corrupt at '{}'",
+                    event.op_id
+                );
+            }
+            previous_hash = event.event_hash.clone();
+            if by_id.insert(event.op_id.clone(), event).is_some() {
+                bail!("duplicate legacy event id '{}'", event.op_id);
+            }
+        }
+        for event in &events {
+            if let Some(parent) = &event.parent_id
+                && !by_id.contains_key(parent)
+            {
+                bail!("legacy event '{}' references missing parent", event.op_id);
+            }
+        }
+        let mut tips = BranchesFile::load(&self.branches_path())?
+            .branches
+            .into_iter()
+            .filter_map(|branch| branch.tip_op_id)
+            .collect::<Vec<_>>();
+        tips.extend(self.read_head()?);
+        let mut committed = std::collections::BTreeSet::new();
+        for tip in tips {
+            let mut cursor = Some(tip);
+            while let Some(id) = cursor {
+                if !committed.insert(id.clone()) {
+                    break;
+                }
+                let event = by_id
+                    .get(&id)
+                    .ok_or_else(|| anyhow!("legacy projection references missing event '{id}'"))?;
+                cursor = event.parent_id.clone();
+            }
+        }
+        Ok(events
+            .into_iter()
+            .filter(|event| committed.contains(&event.op_id))
+            .collect())
     }
 
     /// Read events after a given op_id.
@@ -514,97 +609,61 @@ impl SessionHandle {
     /// Materialize the workbook at a specific op_id.
     pub fn materialize_at(&self, target_op_id: &str) -> Result<Vec<u8>> {
         let events = self.read_events()?;
-        let event_ids: Vec<String> = events.iter().map(|e| e.op_id.clone()).collect();
-
-        // Check for nearest snapshot
-        let manifest = SnapshotManifest::load(&self.snapshot_manifest_path())
-            .unwrap_or_else(|_| SnapshotManifest::new(self.session_id.clone()));
-
-        let (start_bytes, replay_events) =
-            if let Some(snap) = manifest.nearest_snapshot(target_op_id, &event_ids) {
-                let snap_path = self.dir.join("snapshots").join(&snap.file_name);
-                let bytes = fs::read(&snap_path)
-                    .with_context(|| format!("failed to read snapshot: {}", snap_path.display()))?;
-                let after = events
-                    .iter()
-                    .skip_while(|e| e.op_id != snap.op_id)
-                    .skip(1) // skip the snapshot event itself
-                    .take_while(|e| {
-                        let dominated = event_ids
-                            .iter()
-                            .position(|id| id == &e.op_id)
-                            .unwrap_or(usize::MAX);
-                        let target_pos = event_ids
-                            .iter()
-                            .position(|id| id == target_op_id)
-                            .unwrap_or(0);
-                        dominated <= target_pos
-                    })
-                    .cloned()
-                    .collect::<Vec<_>>();
-                (bytes, after)
-            } else {
-                let bytes = fs::read(self.base_path()).context("failed to read base workbook")?;
-                let up_to = events
-                    .iter()
-                    .take_while(|e| {
-                        let pos = event_ids
-                            .iter()
-                            .position(|id| id == &e.op_id)
-                            .unwrap_or(usize::MAX);
-                        let target_pos = event_ids
-                            .iter()
-                            .position(|id| id == target_op_id)
-                            .unwrap_or(0);
-                        pos <= target_pos
-                    })
-                    .cloned()
-                    .collect::<Vec<_>>();
-                (bytes, up_to)
-            };
-
-        if replay_events.is_empty() {
-            return Ok(start_bytes);
+        let by_id = events
+            .iter()
+            .map(|event| (event.op_id.as_str(), event))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let mut ancestry = Vec::new();
+        let mut cursor = Some(target_op_id.to_string());
+        let mut seen = std::collections::BTreeSet::new();
+        while let Some(id) = cursor {
+            if !seen.insert(id.clone()) {
+                bail!("legacy event ancestry cycle");
+            }
+            let event = by_id
+                .get(id.as_str())
+                .ok_or_else(|| anyhow!("target event is absent from committed legacy history"))?;
+            ancestry.push(*event);
+            cursor = event.parent_id.clone();
         }
-
-        // Open the workbook and replay events
-        use crate::core::session::WorkbookSession;
-        let mut session = WorkbookSession::from_bytes(&start_bytes)?;
-
-        for event in &replay_events {
+        ancestry.reverse();
+        // Legacy snapshots are derived and untrusted; migration replays the
+        // validated parent ancestry from the immutable base.
+        let bytes = fs::read(self.base_path()).context("failed to read base workbook")?;
+        let mut session = crate::core::session::WorkbookSession::from_bytes(&bytes)?;
+        for event in ancestry {
             replay_event_on_session(&mut session, event)?;
         }
-
         session.to_bytes()
     }
 
     // -- Locking --
 
-    fn acquire_lock(&self) -> Result<SessionLock> {
-        let lock_path = self.lock_path();
-        if lock_path.exists() {
-            // Check if lock is stale (>60 seconds old)
-            if let Ok(metadata) = fs::metadata(&lock_path)
-                && let Ok(modified) = metadata.modified()
-            {
-                if modified.elapsed().unwrap_or_default() > std::time::Duration::from_secs(60) {
-                    // Stale lock, remove it
-                    let _ = fs::remove_file(&lock_path);
-                } else {
-                    bail!(
-                        "session is locked by another writer (lock file: {})",
-                        lock_path.display()
-                    );
-                }
-            }
+    fn ensure_legacy_writable(&self) -> Result<()> {
+        if !fs::symlink_metadata(&self.dir)?.file_type().is_dir() { bail!("legacy session path is fenced or invalid"); }
+        if self.dir.join("resident-import-frozen.json").try_exists()? {
+            bail!("legacy session is frozen for resident import; mutation refused");
         }
+        Ok(())
+    }
 
-        let lock_content = serde_json::json!({
-            "pid": std::process::id(),
-            "acquired_at": chrono::Utc::now().to_rfc3339(),
-        });
-        fs::write(&lock_path, lock_content.to_string())?;
-        Ok(SessionLock { path: lock_path })
+    fn acquire_lock(&self) -> Result<SessionLock> {
+        self.ensure_legacy_writable()?;
+        use fs2::FileExt;
+        let mut options = fs::OpenOptions::new();
+        options.read(true).write(true).create(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+        }
+        let file = options.open(self.lock_path())?;
+        if !file.metadata()?.is_file() {
+            bail!("legacy lock must be a regular file");
+        }
+        file.lock_exclusive()?;
+        self.ensure_legacy_writable()?;
+        Ok(SessionLock { _file: file })
     }
 
     /// Read session metadata.
@@ -615,15 +674,10 @@ impl SessionHandle {
     }
 }
 
-/// RAII lock guard that removes the lock file on drop.
+/// Closing the file releases OS ownership. Never unlink a lock inode: waiting
+/// writers may already hold descriptors referring to it.
 struct SessionLock {
-    path: PathBuf,
-}
-
-impl Drop for SessionLock {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.path);
-    }
+    _file: fs::File,
 }
 
 // ---------------------------------------------------------------------------
@@ -692,8 +746,26 @@ fn replay_event_on_session(
                 .unwrap_or(false);
 
             if let Some(rows_val) = payload.get("rows") {
-                let rows: Vec<Vec<Option<crate::core::session::SessionMatrixCell>>> =
-                    serde_json::from_value(rows_val.clone()).unwrap_or_default();
+                let rows = rows_val
+                    .as_array()
+                    .ok_or_else(|| anyhow!("legacy write_matrix rows must be an array"))?
+                    .iter()
+                    .map(|row| {
+                        row.as_array()
+                            .ok_or_else(|| anyhow!("legacy write_matrix row must be an array"))?
+                            .iter()
+                            .map(|cell| {
+                                if cell.is_null() {
+                                    Ok(None)
+                                } else {
+                                    Ok(Some(crate::core::session::SessionMatrixCell::Value(
+                                        cell.clone(),
+                                    )))
+                                }
+                            })
+                            .collect::<Result<Vec<_>>>()
+                    })
+                    .collect::<Result<Vec<_>>>()?;
 
                 let ops = vec![SessionTransformOp::WriteMatrix {
                     sheet_name,
@@ -888,9 +960,9 @@ fn evaluate_cell_matches(
         };
 
         let actual_value = sheet
-            .get_cell(cell_ref)
+            .cell(cell_ref)
             .map(|c| {
-                let val = c.get_value();
+                let val = c.value();
                 if val.is_empty() {
                     serde_json::Value::Null
                 } else if let Ok(n) = val.parse::<f64>() {
@@ -970,7 +1042,7 @@ mod tests {
     fn create_test_base(dir: &Path) -> PathBuf {
         let base_path = dir.join("base.xlsx");
         let workbook = umya_spreadsheet::new_file();
-        umya_spreadsheet::writer::xlsx::write(&workbook, &base_path).unwrap();
+        crate::xlsx_export::write(&workbook, &base_path).unwrap();
         base_path
     }
 

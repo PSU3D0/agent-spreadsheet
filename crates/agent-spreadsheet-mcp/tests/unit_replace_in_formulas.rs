@@ -23,20 +23,20 @@ fn recalc_state(
 
 fn create_formula_workbook(workspace: &support::TestWorkspace, name: &str) -> std::path::PathBuf {
     workspace.create_workbook(name, |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value("Label");
-        sheet.get_cell_mut("B1").set_value("Value");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("Label");
+        sheet.cell_mut("B1").set_value("Value");
         sheet
-            .get_cell_mut("B2")
+            .cell_mut("B2")
             .set_formula("SUM(C2:C10)".to_string());
         sheet
-            .get_cell_mut("B3")
+            .cell_mut("B3")
             .set_formula("AVERAGE(C2:C10)".to_string());
         sheet
-            .get_cell_mut("B4")
+            .cell_mut("B4")
             .set_formula("Sheet1!D5+Sheet1!D6".to_string());
         // literal value — should NOT be touched
-        sheet.get_cell_mut("B5").set_value("SUM(C2:C10)");
+        sheet.cell_mut("B5").set_value("SUM(C2:C10)");
     })
 }
 
@@ -111,8 +111,8 @@ async fn replace_in_formulas_apply_changes_formulas() -> Result<()> {
     // Verify the fork workbook has updated formulas
     let fork_wb = state.open_workbook(&WorkbookId(fork_id.clone())).await?;
     let (b2_formula, b3_formula) = fork_wb.with_sheet("Sheet1", |sheet| {
-        let b2 = sheet.get_cell("B2").unwrap().get_formula().to_string();
-        let b3 = sheet.get_cell("B3").unwrap().get_formula().to_string();
+        let b2 = sheet.cell("B2").unwrap().formula().to_string();
+        let b3 = sheet.cell("B3").unwrap().formula().to_string();
         (b2, b3)
     })?;
     assert_eq!(b2_formula, "SUM(D2:D20)");
@@ -151,7 +151,7 @@ async fn replace_in_formulas_preview_stages_change() -> Result<()> {
     // Fork should NOT be modified yet (preview mode)
     let fork_wb = state.open_workbook(&WorkbookId(fork_id.clone())).await?;
     let b4_formula = fork_wb.with_sheet("Sheet1", |sheet| {
-        sheet.get_cell("B4").unwrap().get_formula().to_string()
+        sheet.cell("B4").unwrap().formula().to_string()
     })?;
     assert_eq!(b4_formula, "Sheet1!D5+Sheet1!D6");
 
@@ -185,7 +185,7 @@ async fn replace_in_formulas_regex_mode() -> Result<()> {
 
     let fork_wb = state.open_workbook(&WorkbookId(fork_id.clone())).await?;
     let b4_formula = fork_wb.with_sheet("Sheet1", |sheet| {
-        sheet.get_cell("B4").unwrap().get_formula().to_string()
+        sheet.cell("B4").unwrap().formula().to_string()
     })?;
     assert_eq!(b4_formula, "Sheet2!E5+Sheet2!E6");
 
@@ -219,8 +219,8 @@ async fn replace_in_formulas_range_scoped() -> Result<()> {
 
     let fork_wb = state.open_workbook(&WorkbookId(fork_id.clone())).await?;
     let (b2, b3) = fork_wb.with_sheet("Sheet1", |sheet| {
-        let b2 = sheet.get_cell("B2").unwrap().get_formula().to_string();
-        let b3 = sheet.get_cell("B3").unwrap().get_formula().to_string();
+        let b2 = sheet.cell("B2").unwrap().formula().to_string();
+        let b3 = sheet.cell("B3").unwrap().formula().to_string();
         (b2, b3)
     })?;
     assert_eq!(b2, "SUM(X1:X5)");
@@ -296,7 +296,7 @@ async fn replace_in_formulas_fail_policy_rejects_invalid_replacements() -> Resul
     // Ensure fork workbook was not mutated.
     let fork_wb = state.open_workbook(&WorkbookId(fork_id.clone())).await?;
     let b2_formula = fork_wb.with_sheet("Sheet1", |sheet| {
-        sheet.get_cell("B2").unwrap().get_formula().to_string()
+        sheet.cell("B2").unwrap().formula().to_string()
     })?;
     assert_eq!(b2_formula, "SUM(C2:C10)");
 

@@ -14,7 +14,6 @@ COPY crates/agent-spreadsheet-mcp/Cargo.toml crates/agent-spreadsheet-mcp/Cargo.
 COPY crates/agent-spreadsheet/Cargo.toml crates/agent-spreadsheet/Cargo.toml
 COPY crates/agent-spreadsheet-wasm/Cargo.toml crates/agent-spreadsheet-wasm/Cargo.toml
 COPY crates/agent-spreadsheet-render/Cargo.toml crates/agent-spreadsheet-render/Cargo.toml
-COPY crates/vendor/formualizer-workbook crates/vendor/formualizer-workbook
 
 # Create dummy src to build deps
 RUN mkdir -p crates/agent-spreadsheet-mcp/src crates/agent-spreadsheet/src crates/agent-spreadsheet-wasm/src crates/agent-spreadsheet-render/src \

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use agent_spreadsheet::config::{OutputProfile, ServerConfig, TransportKind};
 use agent_spreadsheet::state::AppState;
 use tempfile::{TempDir, tempdir};
-use umya_spreadsheet::{self, Spreadsheet};
+use umya_spreadsheet::{self, Workbook as Spreadsheet};
 
 const DEFAULT_EXTENSIONS: &[&str] = &["xlsx", "xlsm", "xls", "xlsb"];
 

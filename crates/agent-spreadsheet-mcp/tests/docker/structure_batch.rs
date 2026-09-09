@@ -158,14 +158,14 @@ async fn test_structure_batch_insert_rows_updates_cross_sheet_formulas_in_docker
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("structure_rows.xlsx", |book| {
-            let inputs = book.get_sheet_mut(&0).unwrap();
+            let inputs = book.sheet_mut(0).ok().unwrap();
             inputs.set_name("Inputs");
-            inputs.get_cell_mut("A1").set_value_number(1);
-            inputs.get_cell_mut("A2").set_value_number(2);
+            inputs.cell_mut("A1").set_value_number(1);
+            inputs.cell_mut("A2").set_value_number(2);
 
             book.new_sheet("Calc").unwrap();
-            let calc = book.get_sheet_by_name_mut("Calc").unwrap();
-            calc.get_cell_mut("A1")
+            let calc = book.sheet_by_name_mut("Calc").ok().unwrap();
+            calc.cell_mut("A1")
                 .set_formula("SUM(Inputs!A1:A2)".to_string());
         });
 
@@ -234,13 +234,13 @@ async fn test_structure_batch_rename_sheet_preserves_formulas_in_docker() -> Res
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("structure_rename.xlsx", |book| {
-            let inputs = book.get_sheet_mut(&0).unwrap();
+            let inputs = book.sheet_mut(0).ok().unwrap();
             inputs.set_name("Inputs");
-            inputs.get_cell_mut("A1").set_value_number(3);
+            inputs.cell_mut("A1").set_value_number(3);
 
             book.new_sheet("Calc").unwrap();
-            let calc = book.get_sheet_by_name_mut("Calc").unwrap();
-            calc.get_cell_mut("A1").set_formula("Inputs!A1".to_string());
+            let calc = book.sheet_by_name_mut("Calc").ok().unwrap();
+            calc.cell_mut("A1").set_formula("Inputs!A1".to_string());
         });
 
     let client = test.connect().await?;
@@ -308,14 +308,14 @@ async fn test_structure_batch_insert_cols_updates_cross_sheet_formulas_in_docker
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("structure_cols.xlsx", |book| {
-            let inputs = book.get_sheet_mut(&0).unwrap();
+            let inputs = book.sheet_mut(0).ok().unwrap();
             inputs.set_name("Inputs");
-            inputs.get_cell_mut("A1").set_value_number(1);
-            inputs.get_cell_mut("B1").set_value_number(2);
+            inputs.cell_mut("A1").set_value_number(1);
+            inputs.cell_mut("B1").set_value_number(2);
 
             book.new_sheet("Calc").unwrap();
-            let calc = book.get_sheet_by_name_mut("Calc").unwrap();
-            calc.get_cell_mut("A1")
+            let calc = book.sheet_by_name_mut("Calc").ok().unwrap();
+            calc.cell_mut("A1")
                 .set_formula("SUM(Inputs!A1:B1)".to_string());
         });
 
@@ -384,15 +384,15 @@ async fn test_structure_batch_delete_rows_preserves_formula_result_in_docker() -
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("structure_delete_rows.xlsx", |book| {
-            let inputs = book.get_sheet_mut(&0).unwrap();
+            let inputs = book.sheet_mut(0).ok().unwrap();
             inputs.set_name("Inputs");
-            inputs.get_cell_mut("A1").set_value_number(1);
-            inputs.get_cell_mut("A2").set_value_number(2);
-            inputs.get_cell_mut("A3").set_value_number(3);
+            inputs.cell_mut("A1").set_value_number(1);
+            inputs.cell_mut("A2").set_value_number(2);
+            inputs.cell_mut("A3").set_value_number(3);
 
             book.new_sheet("Calc").unwrap();
-            let calc = book.get_sheet_by_name_mut("Calc").unwrap();
-            calc.get_cell_mut("A1")
+            let calc = book.sheet_by_name_mut("Calc").ok().unwrap();
+            calc.cell_mut("A1")
                 .set_formula("SUM(Inputs!A1:A3)".to_string());
         });
 
@@ -462,15 +462,15 @@ async fn test_structure_batch_delete_cols_preserves_formula_result_in_docker() -
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("structure_delete_cols.xlsx", |book| {
-            let inputs = book.get_sheet_mut(&0).unwrap();
+            let inputs = book.sheet_mut(0).ok().unwrap();
             inputs.set_name("Inputs");
-            inputs.get_cell_mut("A1").set_value_number(1);
-            inputs.get_cell_mut("B1").set_value_number(2);
-            inputs.get_cell_mut("C1").set_value_number(3);
+            inputs.cell_mut("A1").set_value_number(1);
+            inputs.cell_mut("B1").set_value_number(2);
+            inputs.cell_mut("C1").set_value_number(3);
 
             book.new_sheet("Calc").unwrap();
-            let calc = book.get_sheet_by_name_mut("Calc").unwrap();
-            calc.get_cell_mut("A1")
+            let calc = book.sheet_by_name_mut("Calc").ok().unwrap();
+            calc.cell_mut("A1")
                 .set_formula("SUM(Inputs!A1:C1)".to_string());
         });
 
@@ -540,13 +540,13 @@ async fn test_structure_batch_rename_quoted_sheet_preserves_formulas_in_docker()
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("structure_rename_quoted.xlsx", |book| {
-            let inputs = book.get_sheet_mut(&0).unwrap();
+            let inputs = book.sheet_mut(0).ok().unwrap();
             inputs.set_name("My Sheet");
-            inputs.get_cell_mut("A1").set_value_number(3);
+            inputs.cell_mut("A1").set_value_number(3);
 
             book.new_sheet("Calc").unwrap();
-            let calc = book.get_sheet_by_name_mut("Calc").unwrap();
-            calc.get_cell_mut("A1")
+            let calc = book.sheet_by_name_mut("Calc").ok().unwrap();
+            calc.cell_mut("A1")
                 .set_formula("'My Sheet'!A1".to_string());
         });
 
@@ -614,14 +614,14 @@ async fn test_structure_batch_copy_range_across_sheets_in_docker() -> Result<()>
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("structure_copy_range_cross_sheet.xlsx", |book| {
-            let sheet1 = book.get_sheet_by_name_mut("Sheet1").unwrap();
-            sheet1.get_cell_mut("A1").set_value_number(1);
-            sheet1.get_cell_mut("B1").set_value_number(10);
-            sheet1.get_cell_mut("C1").set_formula("A1+B1".to_string());
+            let sheet1 = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet1.cell_mut("A1").set_value_number(1);
+            sheet1.cell_mut("B1").set_value_number(10);
+            sheet1.cell_mut("C1").set_formula("A1+B1".to_string());
 
             let sheet2 = book.new_sheet("Sheet2").unwrap();
-            sheet2.get_cell_mut("B1").set_value_number(100);
-            sheet2.get_cell_mut("C1").set_value_number(200);
+            sheet2.cell_mut("B1").set_value_number(100);
+            sheet2.cell_mut("C1").set_value_number(200);
         });
 
     let client = test.connect().await?;
@@ -693,12 +693,12 @@ async fn test_structure_batch_copy_range_shifts_formulas_in_docker() -> Result<(
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("structure_copy_range.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-            sheet.get_cell_mut("A1").set_value_number(1);
-            sheet.get_cell_mut("B1").set_value_number(10);
-            sheet.get_cell_mut("A2").set_value_number(2);
-            sheet.get_cell_mut("B2").set_value_number(20);
-            sheet.get_cell_mut("C1").set_formula("A1+B1".to_string());
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("A1").set_value_number(1);
+            sheet.cell_mut("B1").set_value_number(10);
+            sheet.cell_mut("A2").set_value_number(2);
+            sheet.cell_mut("B2").set_value_number(20);
+            sheet.cell_mut("C1").set_formula("A1+B1".to_string());
         });
 
     let client = test.connect().await?;
@@ -771,8 +771,8 @@ async fn test_structure_batch_move_range_moves_and_clears_source_in_docker() -> 
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("structure_move_range.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-            sheet.get_cell_mut("A1").set_value("x");
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("A1").set_value("x");
         });
 
     let client = test.connect().await?;
@@ -841,14 +841,14 @@ async fn test_structure_batch_insert_rows_preserves_named_range_outputs_in_docke
     let workbook_path =
         test.workspace()
             .create_workbook("structure_rows_named_ranges.xlsx", |book| {
-                let inputs = book.get_sheet_mut(&0).unwrap();
+                let inputs = book.sheet_mut(0).ok().unwrap();
                 inputs.set_name("Inputs");
-                inputs.get_cell_mut("A1").set_value_number(1);
-                inputs.get_cell_mut("A2").set_value_number(2);
+                inputs.cell_mut("A1").set_value_number(1);
+                inputs.cell_mut("A2").set_value_number(2);
 
                 book.new_sheet("Calc").unwrap();
-                let calc = book.get_sheet_by_name_mut("Calc").unwrap();
-                calc.get_cell_mut("A1")
+                let calc = book.sheet_by_name_mut("Calc").ok().unwrap();
+                calc.cell_mut("A1")
                     .set_formula("SUM(InputVals) + SUM(Inputs!A1:A2)".to_string());
             });
     inject_defined_names(&workbook_path, &[("InputVals", "Inputs!$A$1:$A$2")])?;
@@ -939,14 +939,14 @@ async fn test_structure_batch_insert_rows_above_named_range_shifts_ref_in_docker
     let workbook_path =
         test.workspace()
             .create_workbook("structure_rows_named_ranges_above.xlsx", |book| {
-                let inputs = book.get_sheet_mut(&0).unwrap();
+                let inputs = book.sheet_mut(0).ok().unwrap();
                 inputs.set_name("Inputs");
-                inputs.get_cell_mut("A1").set_value_number(1);
-                inputs.get_cell_mut("A2").set_value_number(2);
+                inputs.cell_mut("A1").set_value_number(1);
+                inputs.cell_mut("A2").set_value_number(2);
 
                 book.new_sheet("Calc").unwrap();
-                let calc = book.get_sheet_by_name_mut("Calc").unwrap();
-                calc.get_cell_mut("A1")
+                let calc = book.sheet_by_name_mut("Calc").ok().unwrap();
+                calc.cell_mut("A1")
                     .set_formula("SUM(InputVals) + SUM(Inputs!A1:A2)".to_string());
             });
     inject_defined_names(&workbook_path, &[("InputVals", "Inputs!$A$1:$A$2")])?;
@@ -1037,14 +1037,14 @@ async fn test_structure_batch_insert_rows_multirow_expands_named_range_in_docker
     let workbook_path =
         test.workspace()
             .create_workbook("structure_rows_named_ranges_multirow.xlsx", |book| {
-                let inputs = book.get_sheet_mut(&0).unwrap();
+                let inputs = book.sheet_mut(0).ok().unwrap();
                 inputs.set_name("Inputs");
-                inputs.get_cell_mut("A1").set_value_number(1);
-                inputs.get_cell_mut("A2").set_value_number(2);
+                inputs.cell_mut("A1").set_value_number(1);
+                inputs.cell_mut("A2").set_value_number(2);
 
                 book.new_sheet("Calc").unwrap();
-                let calc = book.get_sheet_by_name_mut("Calc").unwrap();
-                calc.get_cell_mut("A1")
+                let calc = book.sheet_by_name_mut("Calc").ok().unwrap();
+                calc.cell_mut("A1")
                     .set_formula("SUM(InputVals) + SUM(Inputs!A1:A2)".to_string());
             });
     inject_defined_names(&workbook_path, &[("InputVals", "Inputs!$A$1:$A$2")])?;
@@ -1135,14 +1135,14 @@ async fn test_structure_batch_insert_rows_adjusts_union_named_ranges_in_docker()
     let workbook_path =
         test.workspace()
             .create_workbook("structure_rows_named_union.xlsx", |book| {
-                let inputs = book.get_sheet_mut(&0).unwrap();
+                let inputs = book.sheet_mut(0).ok().unwrap();
                 inputs.set_name("Inputs");
-                inputs.get_cell_mut("A1").set_value_number(1);
-                inputs.get_cell_mut("A3").set_value_number(3);
+                inputs.cell_mut("A1").set_value_number(1);
+                inputs.cell_mut("A3").set_value_number(3);
 
                 book.new_sheet("Calc").unwrap();
-                let calc = book.get_sheet_by_name_mut("Calc").unwrap();
-                calc.get_cell_mut("A1")
+                let calc = book.sheet_by_name_mut("Calc").ok().unwrap();
+                calc.cell_mut("A1")
                     .set_formula("SUM(UnionVals)".to_string());
             });
     inject_defined_names(&workbook_path, &[("UnionVals", "Inputs!$A$1,Inputs!$A$3")])?;
@@ -1233,14 +1233,14 @@ async fn test_structure_batch_insert_rows_rewrites_formula_defined_names_in_dock
     let workbook_path =
         test.workspace()
             .create_workbook("structure_rows_named_formula.xlsx", |book| {
-                let inputs = book.get_sheet_mut(&0).unwrap();
+                let inputs = book.sheet_mut(0).ok().unwrap();
                 inputs.set_name("Inputs");
-                inputs.get_cell_mut("A1").set_value_number(1);
-                inputs.get_cell_mut("A2").set_value_number(2);
+                inputs.cell_mut("A1").set_value_number(1);
+                inputs.cell_mut("A2").set_value_number(2);
 
                 book.new_sheet("Calc").unwrap();
-                let calc = book.get_sheet_by_name_mut("Calc").unwrap();
-                calc.get_cell_mut("A1").set_formula("CalcTotal".to_string());
+                let calc = book.sheet_by_name_mut("Calc").ok().unwrap();
+                calc.cell_mut("A1").set_formula("CalcTotal".to_string());
             });
     inject_defined_names(&workbook_path, &[("CalcTotal", "=SUM(Inputs!A1:A2)")])?;
 
@@ -1332,14 +1332,14 @@ async fn test_structure_batch_rename_sheet_updates_named_ranges_in_docker() -> R
     let workbook_path =
         test.workspace()
             .create_workbook("structure_rename_named_ranges.xlsx", |book| {
-                let inputs = book.get_sheet_mut(&0).unwrap();
+                let inputs = book.sheet_mut(0).ok().unwrap();
                 inputs.set_name("Inputs");
-                inputs.get_cell_mut("A1").set_value_number(1);
-                inputs.get_cell_mut("A2").set_value_number(2);
+                inputs.cell_mut("A1").set_value_number(1);
+                inputs.cell_mut("A2").set_value_number(2);
 
                 book.new_sheet("Calc").unwrap();
-                let calc = book.get_sheet_by_name_mut("Calc").unwrap();
-                calc.get_cell_mut("A1")
+                let calc = book.sheet_by_name_mut("Calc").ok().unwrap();
+                calc.cell_mut("A1")
                     .set_formula("SUM(InputVals)".to_string());
             });
     inject_defined_names(&workbook_path, &[("InputVals", "Inputs!$A$1:$A$2")])?;
@@ -1429,14 +1429,14 @@ async fn test_structure_batch_rename_sheet_updates_quoted_named_ranges_in_docker
     let workbook_path =
         test.workspace()
             .create_workbook("structure_rename_named_quoted.xlsx", |book| {
-                let inputs = book.get_sheet_mut(&0).unwrap();
+                let inputs = book.sheet_mut(0).ok().unwrap();
                 inputs.set_name("My Sheet");
-                inputs.get_cell_mut("A1").set_value_number(1);
-                inputs.get_cell_mut("A2").set_value_number(2);
+                inputs.cell_mut("A1").set_value_number(1);
+                inputs.cell_mut("A2").set_value_number(2);
 
                 book.new_sheet("Calc").unwrap();
-                let calc = book.get_sheet_by_name_mut("Calc").unwrap();
-                calc.get_cell_mut("A1")
+                let calc = book.sheet_by_name_mut("Calc").ok().unwrap();
+                calc.cell_mut("A1")
                     .set_formula("SUM(InputVals)".to_string());
             });
     inject_defined_names(&workbook_path, &[("InputVals", "'My Sheet'!$A$1:$A$2")])?;
@@ -1528,14 +1528,14 @@ async fn test_structure_batch_rename_sheet_rewrites_formula_defined_names_in_doc
     let workbook_path =
         test.workspace()
             .create_workbook("structure_rename_named_formula.xlsx", |book| {
-                let inputs = book.get_sheet_mut(&0).unwrap();
+                let inputs = book.sheet_mut(0).ok().unwrap();
                 inputs.set_name("Inputs");
-                inputs.get_cell_mut("A1").set_value_number(1);
-                inputs.get_cell_mut("A2").set_value_number(2);
+                inputs.cell_mut("A1").set_value_number(1);
+                inputs.cell_mut("A2").set_value_number(2);
 
                 book.new_sheet("Calc").unwrap();
-                let calc = book.get_sheet_by_name_mut("Calc").unwrap();
-                calc.get_cell_mut("A1").set_formula("CalcTotal".to_string());
+                let calc = book.sheet_by_name_mut("Calc").ok().unwrap();
+                calc.cell_mut("A1").set_formula("CalcTotal".to_string());
             });
     inject_defined_names(&workbook_path, &[("CalcTotal", "=SUM(Inputs!A1:A2)")])?;
 

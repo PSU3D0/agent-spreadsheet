@@ -67,18 +67,18 @@ async fn widths_abc_after_apply(
         .open_workbook(&agent_spreadsheet_mcp::model::WorkbookId(resp.fork_id.clone()))
         .await?;
     let (a, b, c) = fork_wb.with_sheet("Data", |sheet| {
-        let a = *sheet
-            .get_column_dimension("A")
+        let a = sheet
+            .column_dimension("A")
             .expect("A column")
-            .get_width();
-        let b = *sheet
-            .get_column_dimension("B")
+            .width();
+        let b = sheet
+            .column_dimension("B")
             .expect("B column")
-            .get_width();
-        let c = *sheet
-            .get_column_dimension("C")
+            .width();
+        let c = sheet
+            .column_dimension("C")
             .expect("C column")
-            .get_width();
+            .width();
         (a, b, c)
     })?;
     Ok((a, b, c))
@@ -88,9 +88,9 @@ async fn widths_abc_after_apply(
 async fn column_size_batch_sets_manual_width() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("cols.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.set_name("Data");
-        sheet.get_cell_mut("A1").set_value("x");
+        sheet.cell_mut("A1").set_value("x");
     });
 
     let state = app_state(&workspace);
@@ -128,10 +128,10 @@ async fn column_size_batch_sets_manual_width() -> Result<()> {
         .open_workbook(&agent_spreadsheet_mcp::model::WorkbookId(resp.fork_id.clone()))
         .await?;
     let width = fork_wb.with_sheet("Data", |sheet| {
-        *sheet
-            .get_column_dimension("A")
+        sheet
+            .column_dimension("A")
             .expect("A column")
-            .get_width()
+            .width()
     })?;
     assert!((width - 22.0).abs() < 0.001);
     Ok(())
@@ -141,10 +141,10 @@ async fn column_size_batch_sets_manual_width() -> Result<()> {
 async fn column_size_batch_auto_width_increases_for_long_text() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("cols_auto.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.set_name("Data");
         sheet
-            .get_cell_mut("A1")
+            .cell_mut("A1")
             .set_value("this is a longish header");
     });
 
@@ -173,10 +173,10 @@ async fn column_size_batch_auto_width_increases_for_long_text() -> Result<()> {
         .open_workbook(&agent_spreadsheet_mcp::model::WorkbookId(resp.fork_id.clone()))
         .await?;
     let width = fork_wb.with_sheet("Data", |sheet| {
-        *sheet
-            .get_column_dimension("A")
+        sheet
+            .column_dimension("A")
             .expect("A column")
-            .get_width()
+            .width()
     })?;
     assert!(width > 8.38);
     Ok(())
@@ -186,9 +186,9 @@ async fn column_size_batch_auto_width_increases_for_long_text() -> Result<()> {
 async fn column_size_batch_preview_can_be_applied() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("cols_preview.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.set_name("Data");
-        sheet.get_cell_mut("B1").set_value("x");
+        sheet.cell_mut("B1").set_value("x");
     });
 
     let state = app_state(&workspace);
@@ -229,10 +229,10 @@ async fn column_size_batch_preview_can_be_applied() -> Result<()> {
         .open_workbook(&agent_spreadsheet_mcp::model::WorkbookId(preview.fork_id.clone()))
         .await?;
     let width = fork_wb.with_sheet("Data", |sheet| {
-        *sheet
-            .get_column_dimension("B")
+        sheet
+            .column_dimension("B")
             .expect("B column")
-            .get_width()
+            .width()
     })?;
     assert!((width - 18.0).abs() < 0.001);
     Ok(())
@@ -242,9 +242,9 @@ async fn column_size_batch_preview_can_be_applied() -> Result<()> {
 async fn column_size_batch_warns_for_formula_without_cached_value() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("cols_formula.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.set_name("Data");
-        sheet.get_cell_mut("A1").set_formula("1+1");
+        sheet.cell_mut("A1").set_formula("1+1");
         // no cached formula result
     });
 
@@ -277,11 +277,11 @@ async fn column_size_batch_warns_for_formula_without_cached_value() -> Result<()
 async fn column_size_batch_accepts_reversed_column_spans() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("cols_reverse.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.set_name("Data");
-        sheet.get_cell_mut("A1").set_value("a");
-        sheet.get_cell_mut("B1").set_value("b");
-        sheet.get_cell_mut("C1").set_value("c");
+        sheet.cell_mut("A1").set_value("a");
+        sheet.cell_mut("B1").set_value("b");
+        sheet.cell_mut("C1").set_value("c");
     });
 
     let state = app_state(&workspace);

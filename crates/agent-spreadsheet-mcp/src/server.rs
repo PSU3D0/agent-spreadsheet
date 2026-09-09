@@ -16,7 +16,6 @@ use crate::response_prune::Pruned;
 use crate::response_prune::to_pruned_value;
 use crate::state::AppState;
 use crate::tools;
-use agent_spreadsheet::operations::RuntimeCapabilities;
 use anyhow::{Result, anyhow};
 use rmcp::{
     ErrorData as McpError, Json as McpJson, ServerHandler, ServiceExt,
@@ -38,7 +37,7 @@ fn json<T>(value: T) -> Json<T> {
     McpJson(Pruned(value))
 }
 
-const CANONICAL_INSTRUCTIONS: &str = "Spreadsheet MCP exposes canonical, versioned spreadsheet operations. Start with list_workbooks, then use resource_id and revision_id from canonical envelopes. Reads are bounded; use cursors to continue. For edits, create_fork, write with revision CAS, recalculate, verify_workbook, inspect get_changes, then export_fork or discard_fork. Risk annotations are worst-case hints; read each tool description and use preview/stage/checkpoint actions before destructive changes.";
+const CANONICAL_INSTRUCTIONS: &str = "Spreadsheet MCP exposes canonical, versioned spreadsheet operations. Start with list_workbooks, then use resource_id and revision_id from canonical envelopes. Reads are bounded; use cursors to continue. For edits, create_fork, write with revision CAS, recalculate, verify_workbook, inspect get_changes, then export_fork or discard_fork. Risk annotations are worst-case hints; read each tool description and use preview/stage/checkpoint actions before destructive changes. Optional tools/call _meta[\"agent-spreadsheet/request-id\"] (1-256 bytes) enables identical retries. Otherwise each call gets a fresh ID in result _meta; lost responses are not safe to retry blindly.";
 
 fn build_instructions(_recalc_enabled: bool, _vba_enabled: bool) -> String {
     CANONICAL_INSTRUCTIONS.to_string()
@@ -87,8 +86,7 @@ impl SpreadsheetServer {
     }
 
     pub fn from_state(state: Arc<AppState>) -> Self {
-        let mut capabilities = RuntimeCapabilities::from_state(&state);
-        capabilities.vba = state.config().vba_enabled;
+        let capabilities = canonical_router::runtime_capabilities(&state);
         let mut canonical = canonical_router::canonical_tool_router(&capabilities);
 
         if !state.config().slim_surface {
@@ -175,16 +173,25 @@ impl SpreadsheetServer {
         tool: &str,
         value: &T,
     ) -> Result<(), McpError> {
-        self.ensure_response_size(tool, value)
-            .map_err(|error| to_mcp_error_for_tool(tool, error))
+        self.ensure_response_size(tool, value).map_err(|error| {
+            // This check runs after canonical execution. Do not advise changing
+            // and retrying a mutation whose effects may already be committed.
+            let message = if let Some(size) = error.downcast_ref::<ResponseTooLargeError>() {
+                format!("response is {} bytes, exceeding the {} byte adapter limit", size.size, size.limit)
+            } else {
+                error.to_string()
+            };
+            McpError::internal_error(message, None)
+        })
     }
 
     pub(crate) async fn execute_canonical_operation(
         &self,
         operation: &'static str,
         arguments: Value,
+        request_id: Option<String>,
     ) -> Result<rmcp::model::CallToolResult, McpError> {
-        canonical_router::execute(self, operation, arguments).await
+        canonical_router::execute(self, operation, arguments, request_id).await
     }
 
     fn ensure_vba_enabled(&self, tool: &str) -> Result<()> {

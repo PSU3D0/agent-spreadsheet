@@ -53,6 +53,7 @@ function createFakeBindings(options = {}) {
         (options.operations ?? DEFAULT_OPERATIONS).map((name) => ({ name, available: true }))
       )
     },
+    sessionMetadata(sessionId) { return JSON.stringify({ resource_id: sessionId, revision_id: `rev-${revision}`, durability: "memory" }) },
     createSession(bytes) {
       const id = `session:s${++sequence}`
       state.created.push({ id, bytes })

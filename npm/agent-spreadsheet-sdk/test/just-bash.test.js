@@ -3,6 +3,7 @@ const { spawnSync } = require("node:child_process")
 const fs = require("node:fs")
 const path = require("node:path")
 const test = require("node:test")
+const fileRevision = bytes => require("node:crypto").createHash("sha256").update(bytes).digest("hex")
 
 const { Bash } = require("just-bash")
 const { createAspCommand } = require("agent-spreadsheet-sdk/just-bash")
@@ -38,6 +39,7 @@ function mockBindings() {
         state.sessions.set(id, Uint8Array.from(bytes))
         return id
       },
+      sessionMetadata(resourceId) { return JSON.stringify({ resource_id: resourceId, revision_id: "rev-1", durability: "memory" }) },
       readArtifact(resourceId, handle) {
         state.artifactsRead.push({ resourceId, handle })
         return Uint8Array.from([137, 80, 78, 71])
@@ -169,21 +171,21 @@ test("preview is pure while apply and recalculate export atomically", async () =
   })
 
   const preview = await bash.exec("asp op write --bind /book.xlsx", {
-    stdin: JSON.stringify({ expected_revision: "rev-1", mode: "preview", ops: [] })
+    stdin: JSON.stringify({ expected_revision: fileRevision(await bash.fs.readFileBuffer("/book.xlsx")), mode: "preview", ops: [] })
   })
   assert.equal(parseJsonOutput(preview).data.status, "previewed")
   assert.equal(state.exported.length, 0)
   assert.deepEqual(Array.from(await bash.fs.readFileBuffer("/book.xlsx")), [1, 2, 3])
 
   const applied = await bash.exec("asp op write --bind /book.xlsx --output /applied.xlsx", {
-    stdin: JSON.stringify({ expected_revision: "rev-1", mode: "apply", ops: [] })
+    stdin: JSON.stringify({ expected_revision: fileRevision(await bash.fs.readFileBuffer("/book.xlsx")), mode: "apply", ops: [] })
   })
   assert.equal(parseJsonOutput(applied).data.status, "applied")
   assert.deepEqual(Array.from(await bash.fs.readFileBuffer("/applied.xlsx")), [1, 2, 3, 9])
   assert.equal((await bash.fs.getAllPaths()).some((path) => path.includes(".asp-tmp-")), false)
 
   const recalculated = await bash.exec("asp op recalculate --bind /book.xlsx --in-place", {
-    stdin: JSON.stringify({ expected_revision: "rev-1" })
+    stdin: JSON.stringify({ expected_revision: fileRevision(await bash.fs.readFileBuffer("/book.xlsx")) })
   })
   assert.equal(parseJsonOutput(recalculated).data.state, "clean")
   assert.deepEqual(Array.from(await bash.fs.readFileBuffer("/book.xlsx")), [1, 2, 3, 8])
@@ -208,7 +210,7 @@ test("canonical errors and write completion statuses map to stderr and exit code
   })
 
   const partial = await bash.exec("asp op write --bind /book.xlsx --output /partial.xlsx", {
-    stdin: JSON.stringify({ expected_revision: "rev-1", mode: "apply", atomic: false, ops: [] })
+    stdin: JSON.stringify({ expected_revision: fileRevision(await bash.fs.readFileBuffer("/book.xlsx")), mode: "apply", atomic: false, ops: [] })
   })
   assert.equal(partial.exitCode, 2)
   assert.equal(JSON.parse(partial.stdout).data.status, "partial")
@@ -216,7 +218,7 @@ test("canonical errors and write completion statuses map to stderr and exit code
 
   const exportsBefore = state.exported.length
   const failed = await bash.exec("asp op write --bind /book.xlsx --output /failed.xlsx", {
-    stdin: JSON.stringify({ expected_revision: "rev-1", mode: "apply", label: "fail", ops: [] })
+    stdin: JSON.stringify({ expected_revision: fileRevision(await bash.fs.readFileBuffer("/book.xlsx")), mode: "apply", label: "fail", ops: [] })
   })
   assert.equal(failed.exitCode, 1)
   assert.equal(JSON.parse(failed.stdout).data.status, "failed")
@@ -279,7 +281,7 @@ test("same-target exports are locked, no-clobber, and leave no temporary files",
     customCommands: [createAspCommand({ bindings })]
   })
   const command = "asp op write --bind /book.xlsx --output /winner.xlsx"
-  const input = { stdin: JSON.stringify({ expected_revision: "rev-1", mode: "apply", ops: [] }) }
+  const input = { stdin: JSON.stringify({ expected_revision: fileRevision(await bash.fs.readFileBuffer("/book.xlsx")), mode: "apply", ops: [] }) }
   const results = await Promise.all([bash.exec(command, input), bash.exec(command, input)])
   assert.deepEqual(results.map(({ exitCode }) => exitCode).sort(), [0, 1])
   const loser = results.find(({ exitCode }) => exitCode === 1)
@@ -299,14 +301,14 @@ test("same-target exports are locked, no-clobber, and leave no temporary files",
   }
   const applied = await Promise.all([bash.exec(inPlace, input), bash.exec(inPlace, input)])
   bash.fs.mv = move
-  assert.deepEqual(applied.map(({ exitCode }) => exitCode), [0, 0])
+  assert.deepEqual(applied.map(({ exitCode }) => exitCode).sort(), [0, 1])
   assert.equal(maxActiveMoves, 1)
   assert.equal((await bash.fs.getAllPaths()).some((entry) => entry.includes(".asp-tmp-")), false)
 
   bash.fs.mv = async () => { throw new Error("injected move failure") }
   const failed = await bash.exec(
     "asp op write --bind /book.xlsx --output /broken.xlsx",
-    input
+    { stdin: JSON.stringify({ expected_revision: fileRevision(await bash.fs.readFileBuffer('/book.xlsx')), mode: 'apply', ops: [] }) }
   )
   bash.fs.mv = move
   assert.equal(JSON.parse(failed.stderr).error.path, "adapter_export")

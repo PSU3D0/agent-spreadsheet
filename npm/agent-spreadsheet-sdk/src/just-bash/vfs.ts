@@ -1,5 +1,9 @@
 type Json = any
 
+// Coordinate SDK writers sharing a VFS, including distinct command registrations.
+// This cannot fence writers outside the adapter or promise a durable host fsync.
+const WRITE_LOCKS = new WeakMap<object, Map<string, Promise<void>>>()
+
 export function resolveVfsPath(ctx: Json, path: string): string {
   return ctx.fs.resolvePath(ctx.cwd, path)
 }
@@ -31,14 +35,16 @@ export async function readWorkbook(ctx: Json, path: string, limit: number, flag:
       aspCode: "INVALID_REQUEST", aspPath: flag
     })
   }
-  return bytes
+  return Uint8Array.from(bytes)
 }
 
-export function createVfsWriter(): { atomicWrite: (ctx: Json, target: string, bytes: Uint8Array, replace: boolean) => Promise<void> } {
-  const locks = new Map<string, Promise<void>>()
+export function createVfsWriter(): { atomicWrite: (ctx: Json, target: string, bytes: Uint8Array, replace: boolean, expectedBytes?: Uint8Array) => Promise<void> } {
   let tempSequence = 0
 
-  async function withTargetLock(target: string, task: () => Promise<void>): Promise<void> {
+  async function withTargetLock(ctx: Json, target: string, task: () => Promise<void>): Promise<void> {
+    const identity = ctx.fsIdentity ?? ctx.fs
+    let locks = WRITE_LOCKS.get(identity)
+    if (!locks) { locks = new Map(); WRITE_LOCKS.set(identity, locks) }
     const previous = locks.get(target) || Promise.resolve()
     let release!: () => void
     const current = new Promise<void>((resolve) => { release = resolve })
@@ -52,13 +58,19 @@ export function createVfsWriter(): { atomicWrite: (ctx: Json, target: string, by
     }
   }
 
-  async function atomicWrite(ctx: Json, target: string, bytes: Uint8Array, replace: boolean): Promise<void> {
+  async function atomicWrite(ctx: Json, target: string, bytes: Uint8Array, replace: boolean, expectedBytes?: Uint8Array): Promise<void> {
     const resolved = resolveVfsPath(ctx, target)
-    return withTargetLock(resolved, async () => {
+    return withTargetLock(ctx, resolved, async () => {
       if (!replace && await ctx.fs.exists(resolved)) {
         throw Object.assign(new Error(`output path '${target}' already exists`), {
           aspCode: "INVALID_REQUEST", aspPath: "--output"
         })
+      }
+      if (expectedBytes) {
+        const current = await ctx.fs.readFileBuffer(resolved)
+        if (current.length !== expectedBytes.length || !expectedBytes.every((byte, index) => byte === current[index])) {
+          throw Object.assign(new Error("source changed before in-place publication"), { aspCode: "REVISION_CONFLICT", aspPath: "--in-place" })
+        }
       }
       let temporary: string
       do {

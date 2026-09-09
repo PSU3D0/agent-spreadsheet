@@ -25,9 +25,9 @@ fn make_repo(config: Arc<agent_spreadsheet_mcp::config::ServerConfig>) -> PathWo
 fn path_repo_stable_id_and_revision_behavior() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("finance/model.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value_number(10);
-        sheet.get_cell_mut("A2").set_formula("A1*2");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(10);
+        sheet.cell_mut("A2").set_formula("A1*2");
     });
 
     let config = Arc::new(workspace.config());
@@ -46,8 +46,8 @@ fn path_repo_stable_id_and_revision_behavior() -> Result<()> {
 
     // Mutate workbook content in place.
     let mut book = umya_spreadsheet::reader::xlsx::read(&path)?;
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-    sheet.get_cell_mut("A1").set_value_number(33);
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+    sheet.cell_mut("A1").set_value_number(33);
     umya_spreadsheet::writer::xlsx::write(&book, &path)?;
 
     let list2 = repo.list(&WorkbookFilter::default())?;

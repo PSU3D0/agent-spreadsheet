@@ -298,29 +298,60 @@ console.log(capabilities.includes("create_fork"), capabilities.includes("inspect
 
 ## just-bash
 
-`agent-spreadsheet-sdk/just-bash` registers one `asp` custom command on the local runtime.
-Install `just-bash` explicitly; it is an optional peer dependency. It accepts only
-`asp op <operation> [--bind VFS_PATH] [--baseline VFS_PATH] [--json JSON]
-[--output VFS_PATH|--in-place]`, plus `asp operations`, `asp schema <op>`, and
-`asp example <op>`. It reads and writes workbook bytes only through `ctx.fs`, binds an
-ephemeral session per call, and exports atomically through a temporary file plus `mv`.
+`agent-spreadsheet-sdk/just-bash` registers one `asp` custom command over the same SDK/WASM Rust runtime used by direct JavaScript callers. Install `just-bash` explicitly; it is an optional peer dependency. The shim handles arguments, JSON and VFS bytes—not spreadsheet algorithms.
+
+### Retained sessions
+
+- `asp session open VFS_PATH`: open once; return the resource ID, revision, actual evaluator counters and durability.
+- `asp session op SESSION_ID OPERATION [--json JSON] [--request-id ID] [--baseline SESSION_ID]`: dispatch a canonical operation. Without `--json`, read JSON from stdin. `resource_id` is injected; mutating inputs still require `expected_revision`.
+- `asp session info SESSION_ID`: inspect authoritative owner metadata.
+- `asp session operations`: discover operations supported by the resident runtime. Use `asp schema OPERATION` for the canonical input shape.
+- `asp session export SESSION_ID --output NEW_VFS_PATH`: save an XLSX snapshot without closing the session. Existing destinations are not overwritten.
+- `asp session artifact SESSION_ID HANDLE --output NEW_VFS_PATH`: save an artifact.
+- `asp session close SESSION_ID` or `asp session close --all`: release sessions in this VFS scope.
+
+Writes, recalculation, reads, `session_history`, `checkpoint` and `staged_change` reuse one Rust owner. Ordinary edit/recalculate/read loops do not export/reopen XLSX or repeatedly ingest the evaluator. Supply a stable `--request-id` when an exact retry must reconcile with its original result; query it through `session_history` with `action: "outcome"`. Undo/redo, branches, checkpoints and staged approvals use the same canonical operations as native sessions.
+
+**Durability is `memory`.** History and approval state last only for the runtime/session lifetime. An XLSX export saves the document and caches, not the journal. Closing a session or terminating its worker loses its memory history. Storage durability and rename behavior depend on the host VFS; the adapter does not claim fsync, crash persistence, or protection against writers outside the adapter. Sessions cannot be addressed through a different VFS scope, even if it shares the same command registration.
 
 ```js
+const { readFile } = require("node:fs/promises")
 const { Bash } = require("just-bash")
 const { createWasmRuntime } = require("agent-spreadsheet-wasm")
 const { createAspCommand } = require("agent-spreadsheet-sdk/just-bash")
 
+// The host seeds the sandbox. The command itself accesses only its VFS.
+const asp = createAspCommand({ bindings: await createWasmRuntime() })
 const bash = new Bash({
-  files: { "/workbook.xlsx": Uint8Array.from([1, 2, 3]) },
-  customCommands: [createAspCommand({ bindings: createWasmRuntime({}) })]
+  files: { "/workbook.xlsx": await readFile("book.xlsx") },
+  customCommands: [asp]
 })
-const result = await bash.exec("asp op list_sheets --bind /workbook.xlsx", {
-  stdin: JSON.stringify({})
-})
-console.log(JSON.parse(result.stdout).operation)
+try {
+  const opened = await bash.exec("asp session open /workbook.xlsx")
+  if (opened.exitCode) throw new Error(opened.stderr)
+  const { resource_id, revision_id } = JSON.parse(opened.stdout)
+  const edited = await bash.exec(`asp session op ${resource_id} write --request-id edit-1`, {
+    stdin: JSON.stringify({ expected_revision: revision_id, mode: "apply", ops: [
+      { kind: "set_cells", sheet_name: "Sheet1", cells: { A1: { kind: "value", value: 42 } } }
+    ] })
+  })
+  if (edited.exitCode) throw new Error(edited.stderr || edited.stdout)
+  const saved = await bash.exec(`asp session export ${resource_id} --output /updated.xlsx`)
+  if (saved.exitCode) throw new Error(saved.stderr)
+  const output = await bash.fs.readFileBuffer("/updated.xlsx")
+} finally {
+  // Stop new calls, drain accepted commands, and release resident owner slots.
+  await asp.dispose()
+}
 ```
 
-just-bash 3.4.2 needs Node.js 20.18.1 or newer, and its `js-exec` bridge needs an ESM host.
+### One-shot file commands
+
+`asp op OPERATION --bind VFS_PATH [--baseline VFS_PATH] [--json JSON] [--output VFS_PATH|--in-place]` opens a temporary owner, executes once, exports when required, and disposes it. This is convenient for individual file operations, not warm loops. `asp operations` lists this one-shot subset; `asp schema OPERATION` and `asp example OPERATION` expose registry-derived inputs.
+
+File-command revisions are SHA-256 byte generations, not temporary resident tokens. In-place publication rechecks the captured source under the adapter's VFS write lock. Writes use a temporary file and `mv`; save-as refuses existing destinations. This coordinates adapter writers, not arbitrary external VFS writers. Staging requires a retained session and is rejected by one-shot commands.
+
+just-bash 3.4.2 needs Node.js 20.18.1 or newer, and its `js-exec` bridge needs an ESM host. The CommonJS example above requires Node.js 22.12+ to `require` the ESM WASM package; ESM callers can import `createWasmRuntime` directly.
 Defaults match the WASM ceilings (64 MiB per workbook, 1 MiB per parameter document);
 override them with `maxWorkbookBytes` and `maxParamsBytes`.
 
@@ -328,7 +359,7 @@ override them with `maxWorkbookBytes` and `maxParamsBytes`.
 
 The 0.14 surface — `McpBackend`, `WasmBackend`, the legacy camel-case method layer, and
 `stateless-byte-adapter` — moved to `agent-spreadsheet-sdk/compat` for one release. Every
-export there is `@deprecated` and will be removed in the release after 0.15.
+export there is `@deprecated`. These compatibility exports remain present, but legacy parity is outside the 0.16 resident-runtime acceptance scope; use the canonical SDK interfaces above for new integrations.
 
 Migration: replace `new WasmBackend({ bindings })` with
 `createLocalSpreadsheet({ runtime })` plus `local.open(bytes)`. Replace

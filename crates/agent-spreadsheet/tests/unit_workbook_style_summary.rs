@@ -14,21 +14,21 @@ mod support;
 async fn workbook_style_summary_reports_theme_and_infers_default_style() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("wb_styles.xlsx", |book| {
-        let sheet1 = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet1 = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         for col in ['A', 'B', 'C', 'D', 'E'] {
             let addr = format!("{col}1");
-            sheet1.get_cell_mut(addr.as_str()).set_value("x");
+            sheet1.cell_mut(addr.as_str()).set_value("x");
         }
 
-        sheet1.get_cell_mut("F1").set_value("Header");
-        sheet1.get_style_mut("F1").get_font_mut().set_bold(true);
+        sheet1.cell_mut("F1").set_value("Header");
+        sheet1.style_mut("F1").font_mut().set_bold(true);
 
         book.new_sheet("Sheet2").unwrap();
-        let sheet2 = book.get_sheet_by_name_mut("Sheet2").unwrap();
-        sheet2.get_cell_mut("A1").set_value_number(1);
+        let sheet2 = book.sheet_by_name_mut("Sheet2").ok().unwrap();
+        sheet2.cell_mut("A1").set_value_number(1);
 
         let mut cf = ConditionalFormatting::default();
-        cf.get_sequence_of_references_mut().set_sqref("A1:A3");
+        cf.sequence_of_references_mut().set_sqref("A1:A3");
 
         let mut rule = ConditionalFormattingRule::default();
         rule.set_type(ConditionalFormatValues::Expression);
@@ -112,17 +112,17 @@ async fn workbook_style_summary_reports_theme_and_infers_default_style() -> Resu
 async fn workbook_style_summary_truncates_large_style_counts() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("many_styles.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         for i in 0..205u32 {
             let row = i + 1;
             let addr = format!("A{row}");
-            sheet.get_cell_mut(addr.as_str()).set_value_number(i as i32);
+            sheet.cell_mut(addr.as_str()).set_value_number(i as i32);
             let color = format!("FF{:02X}0000", (i % 256) as u8);
             sheet
-                .get_style_mut(addr.as_str())
-                .get_font_mut()
-                .get_color_mut()
-                .set_argb(color);
+                .style_mut(addr.as_str())
+                .font_mut()
+                .color_mut()
+                .set_argb_str(color);
         }
     });
 
@@ -211,9 +211,9 @@ async fn workbook_style_summary_omits_empty_theme_colors() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("theme.xlsx", |book| {
         let scheme = book
-            .get_theme_mut()
-            .get_theme_elements_mut()
-            .get_color_scheme_mut();
+            .theme_mut()
+            .theme_elements_mut()
+            .color_scheme_mut();
         scheme.set_accent1(Color2Type::default());
         scheme.set_accent2(Color2Type::default());
     });
@@ -259,11 +259,11 @@ async fn workbook_style_summary_omits_empty_theme_colors() -> Result<()> {
 async fn workbook_style_summary_sets_scan_truncated_when_limit_exceeded() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("scan.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         for i in 0..1100u32 {
             let row = i + 1;
             let addr = format!("A{row}");
-            sheet.get_cell_mut(addr.as_str()).set_value_number(i as i32);
+            sheet.cell_mut(addr.as_str()).set_value_number(i as i32);
         }
     });
 
@@ -307,9 +307,9 @@ async fn workbook_style_summary_sets_scan_truncated_when_limit_exceeded() -> Res
 async fn workbook_style_summary_aggregates_multiple_cf_rules_and_sheets() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("cf_multi.xlsx", |book| {
-        let sheet1 = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet1 = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         let mut cf1 = ConditionalFormatting::default();
-        cf1.get_sequence_of_references_mut().set_sqref("A1:A3");
+        cf1.sequence_of_references_mut().set_sqref("A1:A3");
         let mut rule1 = ConditionalFormattingRule::default();
         rule1.set_type(ConditionalFormatValues::Expression);
         rule1.set_priority(1);
@@ -324,9 +324,9 @@ async fn workbook_style_summary_aggregates_multiple_cf_rules_and_sheets() -> Res
         sheet1.add_conditional_formatting_collection(cf1);
 
         book.new_sheet("Sheet2").unwrap();
-        let sheet2 = book.get_sheet_by_name_mut("Sheet2").unwrap();
+        let sheet2 = book.sheet_by_name_mut("Sheet2").ok().unwrap();
         let mut cf2 = ConditionalFormatting::default();
-        cf2.get_sequence_of_references_mut().set_sqref("B1:B2");
+        cf2.sequence_of_references_mut().set_sqref("B1:B2");
         let mut rule3 = ConditionalFormattingRule::default();
         rule3.set_type(ConditionalFormatValues::Expression);
         rule3.set_priority(1);
@@ -386,9 +386,9 @@ async fn workbook_style_summary_aggregates_multiple_cf_rules_and_sheets() -> Res
 async fn workbook_style_summary_truncates_conditional_formats() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("cf_trunc.xlsx", |book| {
-        let sheet1 = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet1 = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         let mut cf1 = ConditionalFormatting::default();
-        cf1.get_sequence_of_references_mut().set_sqref("A1:A2");
+        cf1.sequence_of_references_mut().set_sqref("A1:A2");
         let mut rule1 = ConditionalFormattingRule::default();
         rule1.set_type(ConditionalFormatValues::Expression);
         rule1.set_priority(1);
@@ -399,7 +399,7 @@ async fn workbook_style_summary_truncates_conditional_formats() -> Result<()> {
         sheet1.add_conditional_formatting_collection(cf1);
 
         let mut cf2 = ConditionalFormatting::default();
-        cf2.get_sequence_of_references_mut().set_sqref("B1:B2");
+        cf2.sequence_of_references_mut().set_sqref("B1:B2");
         let mut rule2 = ConditionalFormattingRule::default();
         rule2.set_type(ConditionalFormatValues::Expression);
         rule2.set_priority(1);
@@ -450,14 +450,14 @@ async fn workbook_style_summary_truncates_conditional_formats() -> Result<()> {
 async fn workbook_style_summary_aggregates_identical_styles_across_sheets() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("style_invariant.xlsx", |book| {
-        let sheet1 = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet1.get_cell_mut("A1").set_value("x");
-        sheet1.get_style_mut("A1").get_font_mut().set_bold(true);
+        let sheet1 = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet1.cell_mut("A1").set_value("x");
+        sheet1.style_mut("A1").font_mut().set_bold(true);
 
         book.new_sheet("Sheet2").unwrap();
-        let sheet2 = book.get_sheet_by_name_mut("Sheet2").unwrap();
-        sheet2.get_cell_mut("A1").set_value("x");
-        sheet2.get_style_mut("A1").get_font_mut().set_bold(true);
+        let sheet2 = book.sheet_by_name_mut("Sheet2").ok().unwrap();
+        sheet2.cell_mut("A1").set_value("x");
+        sheet2.style_mut("A1").font_mut().set_bold(true);
     });
 
     let state = workspace.app_state();

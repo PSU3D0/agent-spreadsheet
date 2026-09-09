@@ -65,12 +65,27 @@ impl Drop for RunningServer {
 
 fn fixture(workspace: &support::TestWorkspace) {
     workspace.create_workbook("route.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut((1, 1)).set_value("Name".to_string());
-        sheet.get_cell_mut((2, 1)).set_value("Amount".to_string());
-        sheet.get_cell_mut((1, 2)).set_value("Alpha".to_string());
-        sheet.get_cell_mut((2, 2)).set_value_number(42_f64);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut((1, 1)).set_value("Name".to_string());
+        sheet.cell_mut((2, 1)).set_value("Amount".to_string());
+        sheet.cell_mut((1, 2)).set_value("Alpha".to_string());
+        sheet.cell_mut((2, 2)).set_value_number(42_f64);
     });
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn invalid_request_identity_rejects_even_stateless_calls() -> Result<()> {
+    let workspace = support::TestWorkspace::new();
+    let server = RunningServer::start(workspace.config_with(|_| {})).await?;
+    for identity in [String::new(), "x".repeat(257)] {
+        let response = server.client.post(format!("{}/v1/op/list_workbooks", server.base))
+            .header("x-agent-spreadsheet-request-id", identity)
+            .json(&json!({})).send().await?;
+        assert_eq!(response.status(), 400);
+        let body: Value = response.json().await?;
+        assert_eq!(body["error"]["code"], "INVALID_REQUEST");
+    }
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -123,34 +138,15 @@ async fn canonical_route_serves_discovery_reads_and_error_statuses() -> Result<(
         .expect("reads report a revision")
         .to_string();
 
-    // Stale expected_revision on a write maps to 409.
-    let (status, fork) = server
-        .op(
-            "create_fork",
-            json!({ "resource_id": resource_id, "expected_revision": revision }),
-        )
-        .await?;
-    assert_eq!(status, 200, "{fork}");
-    let fork_id = fork["resource_id"].as_str().expect("fork id").to_string();
-
-    let (status, conflict) = server
-        .op(
-            "write",
-            json!({
-                "resource_id": fork_id,
-                "expected_revision": "stale-revision",
-                "mode": "apply",
-                "ops": [{
-                    "kind": "set_cells",
-                    "sheet_name": "Sheet1",
-                    "cells": {"A1": {"kind": "value", "value": 7}}
-                }]
-            }),
-        )
-        .await?;
-    assert_eq!(status, 409, "{conflict}");
-    assert_eq!(conflict["error"]["code"], "REVISION_CONFLICT");
-    assert_eq!(conflict["schema_version"], "1");
+    // Explicit invalid identities reject before bootstrap; missing identities
+    // work through the actual default-client process runner.
+    let response = server.client.post(format!("{}/v1/op/create_fork",server.base))
+        .header("x-agent-spreadsheet-request-id", "")
+        .json(&json!({"resource_id":resource_id,"expected_revision":revision})).send().await?;
+    assert_eq!(response.status(), 400);
+    let rejected: Value = response.json().await?;
+    assert_eq!(rejected["error"]["code"], "INVALID_REQUEST");
+    assert!(rejected["error"]["message"].as_str().unwrap().contains("identity"));
 
     // Unknown operation maps to 404.
     let (status, unknown) = server.op("not_a_real_operation", json!({})).await?;

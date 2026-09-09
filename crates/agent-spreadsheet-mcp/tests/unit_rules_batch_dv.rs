@@ -28,10 +28,10 @@ async fn rules_batch_set_data_validation_list_persists_and_is_idempotent() -> Re
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("dv.xlsx", |book| {
         let _ = book.new_sheet("Lists");
-        let lists = book.get_sheet_by_name_mut("Lists").unwrap();
-        lists.get_cell_mut("A1").set_value("A");
-        lists.get_cell_mut("A2").set_value("B");
-        lists.get_cell_mut("A3").set_value("C");
+        let lists = book.sheet_by_name_mut("Lists").ok().unwrap();
+        lists.cell_mut("A1").set_value("A");
+        lists.cell_mut("A2").set_value("B");
+        lists.cell_mut("A3").set_value("C");
     });
 
     let state = recalc_state(&workspace);
@@ -107,18 +107,18 @@ async fn rules_batch_set_data_validation_list_persists_and_is_idempotent() -> Re
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     fork_wb.with_sheet("Sheet1", |sheet| {
-        let dvs = sheet.get_data_validations().expect("data validations");
-        let list = dvs.get_data_validation_list();
+        let dvs = sheet.data_validations().expect("data validations");
+        let list = dvs.data_validation_list();
         assert_eq!(list.len(), 1);
         let dv = &list[0];
 
-        assert_eq!(dv.get_sequence_of_references().get_sqref(), "B3:B10");
+        assert_eq!(dv.sequence_of_references().get_sqref(), "B3:B10");
         assert_eq!(dv.get_type(), &umya_spreadsheet::DataValidationValues::List);
-        assert_eq!(dv.get_formula1(), "Lists!$A$1:$A$3");
-        assert_eq!(dv.get_prompt_title(), "Choose");
-        assert_eq!(dv.get_prompt(), "Pick one");
-        assert_eq!(dv.get_error_title(), "Invalid");
-        assert_eq!(dv.get_error_message(), "Use the dropdown");
+        assert_eq!(dv.formula1(), "Lists!$A$1:$A$3");
+        assert_eq!(dv.prompt_title(), "Choose");
+        assert_eq!(dv.prompt(), "Pick one");
+        assert_eq!(dv.error_title(), "Invalid");
+        assert_eq!(dv.error_message(), "Use the dropdown");
     })?;
 
     Ok(())
@@ -129,8 +129,8 @@ async fn rules_batch_preview_then_apply_staged_change() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("dv_preview.xlsx", |book| {
         let _ = book.new_sheet("Lists");
-        let lists = book.get_sheet_by_name_mut("Lists").unwrap();
-        lists.get_cell_mut("A1").set_value("A");
+        let lists = book.sheet_by_name_mut("Lists").ok().unwrap();
+        lists.cell_mut("A1").set_value("A");
     });
 
     let state = recalc_state(&workspace);
@@ -186,7 +186,7 @@ async fn rules_batch_preview_then_apply_staged_change() -> Result<()> {
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     fork_wb.with_sheet("Sheet1", |sheet| {
-        assert!(sheet.get_data_validations().is_none());
+        assert!(sheet.data_validations().is_none());
     })?;
 
     apply_staged_change(
@@ -202,10 +202,10 @@ async fn rules_batch_preview_then_apply_staged_change() -> Result<()> {
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     fork_wb.with_sheet("Sheet1", |sheet| {
-        let dvs = sheet.get_data_validations().expect("data validations");
-        let list = dvs.get_data_validation_list();
+        let dvs = sheet.data_validations().expect("data validations");
+        let list = dvs.data_validation_list();
         assert_eq!(list.len(), 1);
-        assert_eq!(list[0].get_sequence_of_references().get_sqref(), "B3:B10");
+        assert_eq!(list[0].sequence_of_references().get_sqref(), "B3:B10");
     })?;
 
     Ok(())

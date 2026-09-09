@@ -7,7 +7,7 @@ use agent_spreadsheet_wasm::{
     SessionApi, SessionApiError, SheetOverviewParams, SheetPageParams, TransformBatchOptions,
 };
 
-fn workbook_bytes(setup: impl FnOnce(&mut umya_spreadsheet::Spreadsheet)) -> Vec<u8> {
+fn workbook_bytes(setup: impl FnOnce(&mut umya_spreadsheet::Workbook)) -> Vec<u8> {
     let mut book = umya_spreadsheet::new_file();
     setup(&mut book);
 
@@ -19,9 +19,9 @@ fn workbook_bytes(setup: impl FnOnce(&mut umya_spreadsheet::Spreadsheet)) -> Vec
 #[test]
 fn session_lifecycle_reads_and_disposes() {
     let bytes = workbook_bytes(|book| {
-        book.get_sheet_by_name_mut("Sheet1")
+        book.sheet_by_name_mut("Sheet1").ok()
             .expect("sheet")
-            .get_cell_mut("A1")
+            .cell_mut("A1")
             .set_value("hello");
     });
 
@@ -125,13 +125,13 @@ fn session_lifecycle_reads_and_disposes() {
 #[test]
 fn sheet_page_reads_real_session_data() {
     let bytes = workbook_bytes(|book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").expect("sheet");
-        sheet.get_cell_mut("A1").set_value("Name");
-        sheet.get_cell_mut("B1").set_value("Score");
-        sheet.get_cell_mut("A2").set_value("alpha");
-        sheet.get_cell_mut("B2").set_value_number(42.0);
-        sheet.get_cell_mut("A3").set_value("beta");
-        sheet.get_cell_mut("B3").set_value_number(7.0);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().expect("sheet");
+        sheet.cell_mut("A1").set_value("Name");
+        sheet.cell_mut("B1").set_value("Score");
+        sheet.cell_mut("A2").set_value("alpha");
+        sheet.cell_mut("B2").set_value_number(42.0);
+        sheet.cell_mut("A3").set_value("beta");
+        sheet.cell_mut("B3").set_value_number(7.0);
     });
 
     let api = SessionApi::new();
@@ -170,9 +170,9 @@ fn sheet_page_reads_real_session_data() {
 #[test]
 fn transform_batch_roundtrip_and_dry_run() {
     let bytes = workbook_bytes(|book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").expect("sheet");
-        sheet.get_cell_mut("A1").set_value("before");
-        sheet.get_cell_mut("B1").set_formula("1+1");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().expect("sheet");
+        sheet.cell_mut("A1").set_value("before");
+        sheet.cell_mut("B1").set_formula("1+1");
     });
 
     let api = SessionApi::new();

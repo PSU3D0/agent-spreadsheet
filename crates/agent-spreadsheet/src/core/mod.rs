@@ -4,7 +4,10 @@ pub mod engine_bridge;
 pub mod events;
 pub mod read;
 pub mod recalc;
+#[cfg(feature = "recalc")]
+pub mod resident_storage;
 pub mod session;
+#[cfg(feature = "native-fs")]
 pub mod session_store;
 pub mod types;
 pub mod write;

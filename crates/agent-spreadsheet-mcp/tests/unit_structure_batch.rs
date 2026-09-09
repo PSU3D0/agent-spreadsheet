@@ -26,9 +26,9 @@ fn recalc_state(
 async fn structure_batch_insert_rows_moves_cells() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("structure_rows.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value("keep");
-        sheet.get_cell_mut("A2").set_value("move");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("keep");
+        sheet.cell_mut("A2").set_value("move");
     });
 
     let state = recalc_state(&workspace);
@@ -80,14 +80,14 @@ async fn structure_batch_insert_rows_moves_cells() -> Result<()> {
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     let values = fork_wb.with_sheet("Sheet1", |sheet| {
-        let a1 = sheet.get_cell("A1").unwrap().get_value().to_string();
+        let a1 = sheet.cell("A1").unwrap().value().to_string();
         let a2 = sheet
-            .get_cell("A2")
-            .map(|c| c.get_value().to_string())
+            .cell("A2")
+            .map(|c| c.value().to_string())
             .unwrap_or_default();
         let a3 = sheet
-            .get_cell("A3")
-            .map(|c| c.get_value().to_string())
+            .cell("A3")
+            .map(|c| c.value().to_string())
             .unwrap_or_default();
         (a1, a2, a3)
     })?;
@@ -103,14 +103,14 @@ async fn structure_batch_insert_rows_moves_cells() -> Result<()> {
 async fn structure_batch_copy_range_shifts_formulas_and_copies_style() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("structure_copy_range.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value_number(1);
-        sheet.get_cell_mut("B1").set_value_number(10);
-        sheet.get_cell_mut("A2").set_value_number(2);
-        sheet.get_cell_mut("B2").set_value_number(20);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(1);
+        sheet.cell_mut("B1").set_value_number(10);
+        sheet.cell_mut("A2").set_value_number(2);
+        sheet.cell_mut("B2").set_value_number(20);
 
-        sheet.get_cell_mut("C1").set_formula("A1+B1".to_string());
-        sheet.get_style_mut("C1").get_font_mut().set_bold(true);
+        sheet.cell_mut("C1").set_formula("A1+B1".to_string());
+        sheet.style_mut("C1").font_mut().set_bold(true);
     });
 
     let state = recalc_state(&workspace);
@@ -164,9 +164,9 @@ async fn structure_batch_copy_range_shifts_formulas_and_copies_style() -> Result
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     let (src_formula, dest_formula, dest_bold) = fork_wb.with_sheet("Sheet1", |sheet| {
-        let src = sheet.get_cell("C1").expect("C1").get_formula().to_string();
-        let dest = sheet.get_cell("D1").expect("D1").get_formula().to_string();
-        let desc = descriptor_from_style(sheet.get_cell("D1").expect("D1").get_style());
+        let src = sheet.cell("C1").expect("C1").formula().to_string();
+        let dest = sheet.cell("D1").expect("D1").formula().to_string();
+        let desc = descriptor_from_style(sheet.cell("D1").expect("D1").style());
         (src, dest, desc.font.and_then(|f| f.bold).unwrap_or(false))
     })?;
 
@@ -181,9 +181,9 @@ async fn structure_batch_copy_range_shifts_formulas_and_copies_style() -> Result
 async fn structure_batch_move_range_moves_and_clears_source() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("structure_move_range.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value("x");
-        sheet.get_style_mut("A1").get_font_mut().set_bold(true);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("x");
+        sheet.style_mut("A1").font_mut().set_bold(true);
     });
 
     let state = recalc_state(&workspace);
@@ -238,14 +238,14 @@ async fn structure_batch_move_range_moves_and_clears_source() -> Result<()> {
         .await?;
     let (a1_val, c3_val, c3_bold) = fork_wb.with_sheet("Sheet1", |sheet| {
         let a1 = sheet
-            .get_cell("A1")
-            .map(|c| c.get_value().to_string())
+            .cell("A1")
+            .map(|c| c.value().to_string())
             .unwrap_or_default();
-        let c3 = sheet.get_cell("C3").expect("C3");
-        let desc = descriptor_from_style(c3.get_style());
+        let c3 = sheet.cell("C3").expect("C3");
+        let desc = descriptor_from_style(c3.style());
         (
             a1,
-            c3.get_value().to_string(),
+            c3.value().to_string(),
             desc.font.and_then(|f| f.bold).unwrap_or(false),
         )
     })?;
@@ -261,9 +261,9 @@ async fn structure_batch_move_range_moves_and_clears_source() -> Result<()> {
 async fn structure_batch_copy_range_rejects_overlap() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("structure_copy_overlap.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value("x");
-        sheet.get_cell_mut("B2").set_value("y");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("x");
+        sheet.cell_mut("B2").set_value("y");
     });
 
     let state = recalc_state(&workspace);
@@ -322,8 +322,8 @@ async fn structure_batch_copy_range_rejects_overlap() -> Result<()> {
 async fn structure_batch_preview_stages_and_apply() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("structure_preview.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("B1").set_value("move");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("B1").set_value("move");
     });
 
     let state = recalc_state(&workspace);
@@ -376,7 +376,7 @@ async fn structure_batch_preview_stages_and_apply() -> Result<()> {
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     let b1 = fork_wb.with_sheet("Sheet1", |sheet| {
-        sheet.get_cell("B1").unwrap().get_value().to_string()
+        sheet.cell("B1").unwrap().value().to_string()
     })?;
     assert_eq!(b1, "move");
 
@@ -395,10 +395,10 @@ async fn structure_batch_preview_stages_and_apply() -> Result<()> {
     let moved = fork_wb.with_sheet("Sheet1", |sheet| {
         (
             sheet
-                .get_cell("B1")
-                .map(|c| c.get_value().to_string())
+                .cell("B1")
+                .map(|c| c.value().to_string())
                 .unwrap_or_default(),
-            sheet.get_cell("C1").unwrap().get_value().to_string(),
+            sheet.cell("C1").unwrap().value().to_string(),
         )
     })?;
     assert_eq!(moved.0, "");
@@ -411,8 +411,8 @@ async fn structure_batch_preview_stages_and_apply() -> Result<()> {
 async fn structure_batch_preview_includes_change_count() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("structure_preview_count.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value("x");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("x");
     });
 
     let state = recalc_state(&workspace);
@@ -471,13 +471,13 @@ async fn structure_batch_preview_includes_change_count() -> Result<()> {
 async fn structure_batch_rename_sheet_handles_quoted_sheet_names() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("structure_rename_quoted.xlsx", |book| {
-        let inputs = book.get_sheet_mut(&0).unwrap();
+        let inputs = book.sheet_mut(0).ok().unwrap();
         inputs.set_name("My Sheet");
-        inputs.get_cell_mut("A1").set_value_number(3);
+        inputs.cell_mut("A1").set_value_number(3);
 
         book.new_sheet("Calc").unwrap();
-        let calc = book.get_sheet_by_name_mut("Calc").unwrap();
-        calc.get_cell_mut("A1")
+        let calc = book.sheet_by_name_mut("Calc").ok().unwrap();
+        calc.cell_mut("A1")
             .set_formula("'My Sheet'!A1".to_string());
     });
 
@@ -528,7 +528,7 @@ async fn structure_batch_rename_sheet_handles_quoted_sheet_names() -> Result<()>
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     let formula = fork_wb.with_sheet("Calc", |sheet| {
-        sheet.get_cell("A1").unwrap().get_formula().to_string()
+        sheet.cell("A1").unwrap().formula().to_string()
     })?;
     assert_eq!(formula, "Data!A1");
 
@@ -754,13 +754,13 @@ async fn structure_batch_surfaces_alias_warnings_in_summary() -> Result<()> {
 async fn insert_rows_expand_adjacent_sums_single_row() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("expand_sum_single.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         // Rows 1-3: detail data
-        sheet.get_cell_mut("A1").set_value_number(10);
-        sheet.get_cell_mut("A2").set_value_number(20);
-        sheet.get_cell_mut("A3").set_value_number(30);
+        sheet.cell_mut("A1").set_value_number(10);
+        sheet.cell_mut("A2").set_value_number(20);
+        sheet.cell_mut("A3").set_value_number(30);
         // Row 4: subtotal SUM adjacent to detail rows
-        sheet.get_cell_mut("A4").set_formula("SUM(A1:A3)");
+        sheet.cell_mut("A4").set_formula("SUM(A1:A3)");
     });
 
     let state = recalc_state(&workspace);
@@ -815,7 +815,7 @@ async fn insert_rows_expand_adjacent_sums_single_row() -> Result<()> {
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     let formula = fork_wb.with_sheet("Sheet1", |sheet| {
-        sheet.get_cell("A5").unwrap().get_formula().to_string()
+        sheet.cell("A5").unwrap().formula().to_string()
     })?;
     assert_eq!(formula.to_uppercase().replace(' ', ""), "SUM(A1:A4)");
 
@@ -826,11 +826,11 @@ async fn insert_rows_expand_adjacent_sums_single_row() -> Result<()> {
 async fn insert_rows_expand_adjacent_sums_multi_row() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("expand_sum_multi.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("B1").set_value_number(1);
-        sheet.get_cell_mut("B2").set_value_number(2);
-        sheet.get_cell_mut("B3").set_value_number(3);
-        sheet.get_cell_mut("B4").set_formula("SUM(B1:B3)");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("B1").set_value_number(1);
+        sheet.cell_mut("B2").set_value_number(2);
+        sheet.cell_mut("B3").set_value_number(3);
+        sheet.cell_mut("B4").set_formula("SUM(B1:B3)");
     });
 
     let state = recalc_state(&workspace);
@@ -883,7 +883,7 @@ async fn insert_rows_expand_adjacent_sums_multi_row() -> Result<()> {
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     let formula = fork_wb.with_sheet("Sheet1", |sheet| {
-        sheet.get_cell("B7").unwrap().get_formula().to_string()
+        sheet.cell("B7").unwrap().formula().to_string()
     })?;
     assert_eq!(formula.to_uppercase().replace(' ', ""), "SUM(B1:B6)");
 
@@ -894,15 +894,15 @@ async fn insert_rows_expand_adjacent_sums_multi_row() -> Result<()> {
 async fn insert_rows_expand_adjacent_sums_counts_all_expanded_formulas() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("expand_sum_count.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value_number(1);
-        sheet.get_cell_mut("A2").set_value_number(2);
-        sheet.get_cell_mut("A3").set_value_number(3);
-        sheet.get_cell_mut("B1").set_value_number(10);
-        sheet.get_cell_mut("B2").set_value_number(20);
-        sheet.get_cell_mut("B3").set_value_number(30);
-        sheet.get_cell_mut("A4").set_formula("SUM(A1:A3)");
-        sheet.get_cell_mut("B4").set_formula("SUM(B1:B3)");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(1);
+        sheet.cell_mut("A2").set_value_number(2);
+        sheet.cell_mut("A3").set_value_number(3);
+        sheet.cell_mut("B1").set_value_number(10);
+        sheet.cell_mut("B2").set_value_number(20);
+        sheet.cell_mut("B3").set_value_number(30);
+        sheet.cell_mut("A4").set_formula("SUM(A1:A3)");
+        sheet.cell_mut("B4").set_formula("SUM(B1:B3)");
     });
 
     let state = recalc_state(&workspace);
@@ -956,16 +956,16 @@ async fn insert_rows_expand_adjacent_sums_counts_all_expanded_formulas() -> Resu
         .await?;
     let (a6, b6) = fork_wb.with_sheet("Sheet1", |sheet| {
         let a6 = sheet
-            .get_cell("A6")
+            .cell("A6")
             .unwrap()
-            .get_formula()
+            .formula()
             .to_string()
             .to_uppercase()
             .replace(' ', "");
         let b6 = sheet
-            .get_cell("B6")
+            .cell("B6")
             .unwrap()
-            .get_formula()
+            .formula()
             .to_string()
             .to_uppercase()
             .replace(' ', "");
@@ -981,10 +981,10 @@ async fn insert_rows_expand_adjacent_sums_counts_all_expanded_formulas() -> Resu
 async fn insert_rows_no_expansion_when_flag_absent() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("no_expand.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value_number(10);
-        sheet.get_cell_mut("A2").set_value_number(20);
-        sheet.get_cell_mut("A3").set_formula("SUM(A1:A2)");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(10);
+        sheet.cell_mut("A2").set_value_number(20);
+        sheet.cell_mut("A3").set_formula("SUM(A1:A2)");
     });
 
     let state = recalc_state(&workspace);
@@ -1037,7 +1037,7 @@ async fn insert_rows_no_expansion_when_flag_absent() -> Result<()> {
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     let formula = fork_wb.with_sheet("Sheet1", |sheet| {
-        sheet.get_cell("A4").unwrap().get_formula().to_string()
+        sheet.cell("A4").unwrap().formula().to_string()
     })?;
     // Formula rewriter shifts row refs >= at_row, but the range SUM(A1:A2) has
     // row2=2 which is < at_row=3, so it stays SUM(A1:A2).
@@ -1050,12 +1050,12 @@ async fn insert_rows_no_expansion_when_flag_absent() -> Result<()> {
 async fn insert_rows_ambiguous_formula_produces_warning() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("ambiguous_sum.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value_number(10);
-        sheet.get_cell_mut("A2").set_value_number(20);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(10);
+        sheet.cell_mut("A2").set_value_number(20);
         // Complex formula – not a simple SUM(Ax:Ay)
         sheet
-            .get_cell_mut("A3")
+            .cell_mut("A3")
             .set_formula("SUM(A1:A2)+SUM(B1:B2)");
     });
 
@@ -1120,16 +1120,16 @@ async fn insert_rows_ambiguous_formula_produces_warning() -> Result<()> {
 async fn clone_row_copies_template_and_expands_sums() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("clone_row.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         // Row 1: header
-        sheet.get_cell_mut("A1").set_value("Label");
-        sheet.get_cell_mut("B1").set_value("Amount");
+        sheet.cell_mut("A1").set_value("Label");
+        sheet.cell_mut("B1").set_value("Amount");
         // Row 2: template detail row
-        sheet.get_cell_mut("A2").set_value("Item");
-        sheet.get_cell_mut("B2").set_value_number(100);
+        sheet.cell_mut("A2").set_value("Item");
+        sheet.cell_mut("B2").set_value_number(100);
         // Row 3: subtotal
-        sheet.get_cell_mut("A3").set_value("Total");
-        sheet.get_cell_mut("B3").set_formula("SUM(B2:B2)");
+        sheet.cell_mut("A3").set_value("Total");
+        sheet.cell_mut("B3").set_formula("SUM(B2:B2)");
     });
 
     let state = recalc_state(&workspace);
@@ -1186,28 +1186,28 @@ async fn clone_row_copies_template_and_expands_sums() -> Result<()> {
 
     let (a3, b3_val, a4, b4_val, a5, b5_formula) = fork_wb.with_sheet("Sheet1", |sheet| {
         let a3 = sheet
-            .get_cell("A3")
-            .map(|c| c.get_value().to_string())
+            .cell("A3")
+            .map(|c| c.value().to_string())
             .unwrap_or_default();
         let b3 = sheet
-            .get_cell("B3")
-            .map(|c| c.get_value().to_string())
+            .cell("B3")
+            .map(|c| c.value().to_string())
             .unwrap_or_default();
         let a4 = sheet
-            .get_cell("A4")
-            .map(|c| c.get_value().to_string())
+            .cell("A4")
+            .map(|c| c.value().to_string())
             .unwrap_or_default();
         let b4 = sheet
-            .get_cell("B4")
-            .map(|c| c.get_value().to_string())
+            .cell("B4")
+            .map(|c| c.value().to_string())
             .unwrap_or_default();
         let a5 = sheet
-            .get_cell("A5")
-            .map(|c| c.get_value().to_string())
+            .cell("A5")
+            .map(|c| c.value().to_string())
             .unwrap_or_default();
         let b5_formula = sheet
-            .get_cell("B5")
-            .map(|c| c.get_formula().to_string())
+            .cell("B5")
+            .map(|c| c.formula().to_string())
             .unwrap_or_default();
         (a3, b3, a4, b4, a5, b5_formula)
     })?;
@@ -1228,9 +1228,9 @@ async fn clone_row_copies_template_and_expands_sums() -> Result<()> {
 async fn clone_row_source_below_insert_point_shifts_formula_to_new_row() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("clone_row_source_below.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A5").set_value_number(7);
-        sheet.get_cell_mut("B5").set_formula("A5+1");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A5").set_value_number(7);
+        sheet.cell_mut("B5").set_formula("A5+1");
     });
 
     let state = recalc_state(&workspace);
@@ -1283,9 +1283,9 @@ async fn clone_row_source_below_insert_point_shifts_formula_to_new_row() -> Resu
         .await?;
     let cloned_formula = fork_wb.with_sheet("Sheet1", |sheet| {
         sheet
-            .get_cell("B2")
+            .cell("B2")
             .unwrap()
-            .get_formula()
+            .formula()
             .to_string()
             .to_uppercase()
             .replace(' ', "")
@@ -1299,9 +1299,9 @@ async fn clone_row_source_below_insert_point_shifts_formula_to_new_row() -> Resu
 async fn clone_row_without_expansion_keeps_original_sum() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("clone_row_no_expand.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value_number(10);
-        sheet.get_cell_mut("A2").set_formula("SUM(A1:A1)");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(10);
+        sheet.cell_mut("A2").set_formula("SUM(A1:A1)");
     });
 
     let state = recalc_state(&workspace);
@@ -1355,7 +1355,7 @@ async fn clone_row_without_expansion_keeps_original_sum() -> Result<()> {
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     let formula = fork_wb.with_sheet("Sheet1", |sheet| {
-        sheet.get_cell("A3").unwrap().get_formula().to_string()
+        sheet.cell("A3").unwrap().formula().to_string()
     })?;
     assert_eq!(formula.to_uppercase().replace(' ', ""), "SUM(A1:A1)");
 

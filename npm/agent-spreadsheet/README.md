@@ -217,6 +217,8 @@ The preferred surface is the nested `asp` command structure:
 
 ### `session`
 
+Native 0.16 sessions retain their document and Formualizer evaluator in an automatically started private host, with journal-backed history and request outcomes. Use `--request-id` (or `ASP_REQUEST_ID`) for retry reconciliation and `--expected-revision` for explicit CAS. Normal file commands remain stateless; `materialize` is the explicit session-to-XLSX export boundary. Legacy session migration is not provided.
+
 | Command | Purpose |
 | --- | --- |
 | `asp session start ...` | Start a session |
@@ -304,7 +306,8 @@ Prebuilt binaries are downloaded on install for:
 | Linux | x86_64 | `agent-spreadsheet-linux-x86_64` |
 | macOS | x86_64 | `agent-spreadsheet-macos-x86_64` |
 | macOS | arm64 | `agent-spreadsheet-macos-aarch64` |
-| Windows | x86_64 | `agent-spreadsheet-windows-x86_64.exe` |
+
+Windows native binaries are not shipped for 0.16.
 
 ---
 

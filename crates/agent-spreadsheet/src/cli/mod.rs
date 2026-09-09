@@ -178,8 +178,30 @@ pub enum SheetportCommands {
     },
 }
 
+#[derive(Debug, Args)]
+pub struct SessionArgs {
+    /// Stable transport identity for retry/reconciliation; omitted generates a UUID.
+    #[arg(long, global = true)]
+    pub request_id: Option<String>,
+    /// Explicit workbook CAS / named export revision; omitted pins current state.
+    #[arg(long, alias = "revision", global = true)]
+    pub expected_revision: Option<String>,
+    #[command(subcommand)]
+    pub command: SessionCommands,
+}
+
 #[derive(Debug, Subcommand)]
 pub enum SessionCommands {
+    #[command(about = "Execute a canonical operation on the retained session")]
+    Exec {
+        #[arg(long)]
+        session: String,
+        operation: String,
+        #[arg(long, default_value = "{}")]
+        json: String,
+        #[arg(long)]
+        workspace: Option<PathBuf>,
+    },
     #[command(about = "Start a new session tracking a base workbook file")]
     Start {
         #[arg(long, value_name = "FILE", help = "Path to the base workbook")]
@@ -293,9 +315,11 @@ pub enum SessionCommands {
     Materialize {
         #[arg(long, value_name = "ID", help = "Session identifier")]
         session: String,
-        #[arg(long, value_name = "PATH", help = "Output file path")]
-        output: PathBuf,
-        #[arg(long, help = "Allow overwriting existing output file")]
+        #[arg(long, alias = "out", value_name = "PATH", required_unless_present = "source", conflicts_with = "source", help = "Save captured revision to this path")]
+        output: Option<PathBuf>,
+        #[arg(long, help = "Explicitly replace the bound source, checking its original generation")]
+        source: bool,
+        #[arg(long, help = "Allow replacement even if the destination/source changed")]
         force: bool,
         #[arg(long, value_name = "PATH", help = "Workspace root directory")]
         workspace: Option<PathBuf>,
@@ -553,6 +577,8 @@ enum SurfaceCommands {
             help = "Bind a workbook path as an ephemeral resource"
         )]
         bind: Option<PathBuf>,
+        #[arg(long, value_name = "ID", help = "Stable resident request identity; reuse only for an identical retry")]
+        request_id: Option<String>,
         #[arg(
             long,
             value_name = "FILE",
@@ -633,8 +659,8 @@ enum SurfaceCommands {
         #[command(subcommand)]
         command: SurfaceDiscoverabilityCommands,
     },
-    #[command(about = "Event-sourced session management", subcommand, hide = false)]
-    Session(Box<SessionCommands>),
+    #[command(about = "Native durable session management", hide = false)]
+    Session(Box<SessionArgs>),
     #[command(about = "SheetPort manifest lifecycle and execution commands")]
     Sheetport {
         #[command(subcommand)]
@@ -2371,11 +2397,10 @@ Formula parse policy:
         command: DiscoverabilityCommands,
     },
     #[command(
-        about = "Event-sourced session management (start, navigate, stage, apply, materialize)",
-        subcommand,
+        about = "Native durable session management (start, navigate, stage, apply, materialize)",
         after_long_help = "Session commands provide event-sourced workbook editing with undo/redo, branching, staged apply, and payload discovery.\n\nWorkflow:\n  1. asp session start --base model.xlsx\n  2. asp example session-op transform.write_matrix\n  3. asp session op --session <id> --ops @edits.json\n  4. asp session apply --session <id> <staged_id>\n  5. asp session materialize --session <id> --output result.xlsx\n\nDiscoverability:\n  • asp schema session-op transform.write_matrix\n  • asp example session-op transform.write_matrix"
     )]
-    Session(Box<SessionCommands>),
+    Session(Box<SessionArgs>),
     #[command(
         about = "[Deprecated] Execute a SheetPort manifest with JSON inputs",
         after_long_help = "Use `agent-spreadsheet sheetport run ...` for new workflows.\n\nExamples:\n  agent-spreadsheet run-manifest data.xlsx manifest.yaml --inputs '{\"loan\": 10000}'\n  agent-spreadsheet sheetport run data.xlsx manifest.yaml --inputs @inputs.json"
@@ -2394,6 +2419,12 @@ Formula parse policy:
     },
 }
 
+async fn native_session_read(session: String, workspace: Option<PathBuf>, operation: &str, payload: Value) -> Result<Value> {
+    commands::session::run(SessionArgs { request_id: None, expected_revision: None, command: SessionCommands::Exec {
+        session, workspace, operation: operation.into(), json: payload.to_string(),
+    }}).await
+}
+
 pub async fn run_command(command: Commands) -> Result<Value> {
     match command {
         Commands::ListSheets {
@@ -2401,6 +2432,7 @@ pub async fn run_command(command: Commands) -> Result<Value> {
             session,
             session_workspace,
         } => {
+            if let Some(session) = session { return native_session_read(session, session_workspace, "list_sheets", serde_json::json!({})).await; }
             let (resolved, _guard) =
                 commands::read::resolve_file_or_session(file, session, session_workspace)?;
             commands::read::list_sheets(resolved).await
@@ -2411,22 +2443,19 @@ pub async fn run_command(command: Commands) -> Result<Value> {
             session,
             session_workspace,
         } => {
+            if let Some(session) = session { return native_session_read(session, session_workspace, "sheet_overview", serde_json::json!({"sheet_name":sheet})).await; }
             let (resolved, _guard) =
                 commands::read::resolve_file_or_session(file, session, session_workspace)?;
             commands::read::sheet_overview(resolved, sheet).await
         }
-        Commands::RangeValues {
-            file,
-            sheet,
-            ranges,
-            format,
-            include_formulas,
-            session,
-            session_workspace,
-        } => {
-            let (resolved, _guard) =
-                commands::read::resolve_file_or_session(file, session, session_workspace)?;
-            commands::read::range_values(resolved, sheet, ranges, format, include_formulas).await
+        Commands::RangeValues { file, sheet, ranges, format, include_formulas, session, session_workspace } => {
+            if let Some(session) = session {
+                let format = match format.unwrap_or(RangeValuesFormatArg::Json) { RangeValuesFormatArg::Json => "json", RangeValuesFormatArg::Values => "values", RangeValuesFormatArg::Csv => "csv", RangeValuesFormatArg::Dense => "dense", RangeValuesFormatArg::Rows => "rows" };
+                return commands::session::run(SessionArgs { request_id: None, expected_revision: None, command: SessionCommands::Exec {
+                    session, workspace:session_workspace, operation:"read_cells".into(), json:serde_json::json!({"sheet_name":sheet,"selection":{"kind":"range","ranges":ranges},"format":format,"include_formulas":include_formulas}).to_string()
+                }}).await;
+            }
+            commands::read::range_values(file, sheet, ranges, format, include_formulas).await
         }
         Commands::RangeExport {
             file,
@@ -2438,6 +2467,29 @@ pub async fn run_command(command: Commands) -> Result<Value> {
             session,
             session_workspace,
         } => {
+            if let Some(session) = session {
+                if !matches!(format.as_str(), "csv" | "json" | "grid") { anyhow::bail!("unsupported format: {format}"); }
+                let response = if format == "grid" {
+                    native_session_read(session, session_workspace, "export_grid", serde_json::json!({"sheet_name":sheet,"range":range})).await?
+                } else {
+                    native_session_read(session, session_workspace, "read_cells", serde_json::json!({"sheet_name":sheet,"selection":{"kind":"range","ranges":[range]},"format":format,"include_formulas":include_formulas})).await?
+                };
+                let data = &response["data"];
+                if data["complete"] == false || data["page"]["next_cursor"].is_string() { anyhow::bail!("range export exceeds one canonical page; use session exec with pagination"); }
+                let payload = if format == "grid" { data["grid"].clone() } else {
+                    let block = &data["blocks"][0];
+                    let mut payload = block["payload"].clone();
+                    if let Some(object) = payload.as_object_mut() { object.insert("range".into(), block["returned_range"].clone()); object.remove("encoding"); }
+                    payload
+                };
+                let text = if format == "csv" { payload["csv"].as_str().ok_or_else(|| anyhow::anyhow!("missing canonical CSV payload"))?.to_owned() } else { serde_json::to_string_pretty(&payload)? };
+                if let Some(path) = output {
+                    if path != "-" { std::fs::write(&path, text)?; return Ok(serde_json::json!({"status":"ok","path":path})); }
+                    print!("{text}"); std::process::exit(0);
+                }
+                if format == "csv" { print!("{text}"); std::process::exit(0); }
+                return Ok(payload);
+            }
             let (resolved, _guard) =
                 commands::read::resolve_file_or_session(file, session, session_workspace)?;
             commands::read::range_export(resolved, sheet, range, format, output, include_formulas)
@@ -2480,6 +2532,7 @@ pub async fn run_command(command: Commands) -> Result<Value> {
             session,
             session_workspace,
         } => {
+            if let Some(session) = session { return native_session_read(session, session_workspace, "inspect_cells", serde_json::json!({"sheet_name":sheet,"targets":targets,"include_empty":include_empty,"budget":budget})).await; }
             let (resolved, _guard) =
                 commands::read::resolve_file_or_session(file, session, session_workspace)?;
             commands::read::inspect_cells(resolved, sheet, targets, include_empty, budget).await
@@ -2498,6 +2551,18 @@ pub async fn run_command(command: Commands) -> Result<Value> {
             session,
             session_workspace,
         } => {
+            if let Some(session) = session {
+                commands::read::validate_sheet_page_arguments(page_size, columns.as_ref())?;
+                if columns.is_some() && columns_by_header.is_some() { anyhow::bail!("--columns and --columns-by-header are mutually exclusive"); }
+                let columns = if let Some(values) = columns { serde_json::json!({"kind":"letters","values":values}) }
+                    else if let Some(values) = columns_by_header { serde_json::json!({"kind":"headers","values":values}) }
+                    else { serde_json::json!({"kind":"all"}) };
+                return native_session_read(session, session_workspace, "read_cells", serde_json::json!({
+                    "sheet_name":sheet,"selection":{"kind":"rows","start_row":start_row.unwrap_or(1),"row_count":page_size.unwrap_or(50),"columns":columns,"include_header":include_header.unwrap_or(true)},
+                    "include_formulas":include_formulas.unwrap_or(true),"include_styles":include_styles.unwrap_or(false),
+                    "format":commands::read::map_sheet_page_format(format)
+                })).await;
+            }
             let (resolved, _guard) =
                 commands::read::resolve_file_or_session(file, session, session_workspace)?;
             commands::read::sheet_page(
@@ -2529,6 +2594,16 @@ pub async fn run_command(command: Commands) -> Result<Value> {
             session,
             session_workspace,
         } => {
+            if let Some(session) = session {
+                commands::read::validate_read_table_arguments(limit, offset, sample_mode)?;
+                let filters = commands::read::parse_table_filters(filters_json, filters_file)?.map(|filters| filters.into_iter().map(|f| serde_json::json!({"column":f.column,"op":f.op,"value":f.value})).collect::<Vec<_>>());
+                return native_session_read(session, session_workspace, "read_table", serde_json::json!({
+                    "sheet_name":sheet,"range":range,"table_name":table_name,"region_id":region_id,
+                    "limit":limit,"offset":offset,"filters":filters,
+                    "sample_mode":sample_mode.map(commands::read::map_table_sample_mode),
+                    "format":table_format.map(commands::read::map_table_read_format)
+                })).await;
+            }
             let (resolved, _guard) =
                 commands::read::resolve_file_or_session(file, session, session_workspace)?;
             commands::read::read_table(
@@ -2555,6 +2630,14 @@ pub async fn run_command(command: Commands) -> Result<Value> {
             session,
             session_workspace,
         } => {
+            if let Some(session) = session {
+                let mode = mode.map(commands::read::map_find_value_mode);
+                let label = matches!(mode, Some(crate::model::FindMode::Label)).then(|| query.clone());
+                return native_session_read(session, session_workspace, "search_values", serde_json::json!({
+                    "query":query,"sheet_name":sheet,"mode":mode,"label":label,
+                    "direction":label_direction.map(commands::read::map_label_direction)
+                })).await;
+            }
             let (resolved, _guard) =
                 commands::read::resolve_file_or_session(file, session, session_workspace)?;
             commands::read::find_value(resolved, query, sheet, mode, label_direction).await
@@ -2566,6 +2649,7 @@ pub async fn run_command(command: Commands) -> Result<Value> {
             session,
             session_workspace,
         } => {
+            if let Some(session) = session { return native_session_read(session, session_workspace, "named_ranges", serde_json::json!({"sheet_name":sheet,"name_prefix":name_prefix})).await; }
             let (resolved, _guard) =
                 commands::read::resolve_file_or_session(file, session, session_workspace)?;
             commands::read::named_ranges(resolved, sheet, name_prefix).await
@@ -2677,6 +2761,13 @@ pub async fn run_command(command: Commands) -> Result<Value> {
             session,
             session_workspace,
         } => {
+            if let Some(session) = session {
+                if cursor_depth.is_some() || cursor_offset.is_some() { anyhow::bail!("native formula trace uses revision-bound cursors; continue with session exec formula_trace and the returned next_cursor"); }
+                return native_session_read(session, session_workspace, "formula_trace", serde_json::json!({
+                    "sheet_name":sheet,"cell_address":cell,"direction":commands::read::map_trace_direction(direction),
+                    "depth":depth,"page_size":page_size,"formula_parse_policy":formula_parse_policy
+                })).await;
+            }
             let (resolved, _guard) =
                 commands::read::resolve_file_or_session(file, session, session_workspace)?;
             commands::read::formula_trace(
@@ -2697,6 +2788,7 @@ pub async fn run_command(command: Commands) -> Result<Value> {
             session,
             session_workspace,
         } => {
+            if let Some(session) = session { return native_session_read(session, session_workspace, "describe_workbook", serde_json::json!({})).await; }
             let (resolved, _guard) =
                 commands::read::resolve_file_or_session(file, session, session_workspace)?;
             commands::read::describe(resolved).await
@@ -2707,6 +2799,7 @@ pub async fn run_command(command: Commands) -> Result<Value> {
             session,
             session_workspace,
         } => {
+            if let Some(session) = session { return native_session_read(session, session_workspace, "profile_table", serde_json::json!({"sheet_name":sheet})).await; }
             let (resolved, _guard) =
                 commands::read::resolve_file_or_session(file, session, session_workspace)?;
             commands::read::table_profile(resolved, sheet).await
@@ -2724,6 +2817,14 @@ pub async fn run_command(command: Commands) -> Result<Value> {
             session,
             session_workspace,
         } => {
+            if let Some(session) = session {
+                return native_session_read(session, session_workspace, "read_layout", serde_json::json!({
+                    "sheet_name":sheet,"range":range.or(range_positional),
+                    "mode":mode.map(|m| match m { LayoutModeArg::Values => "values", LayoutModeArg::Formulas => "formulas" }),
+                    "max_col_width":max_col_width,"fit_columns":fit_columns,"trim_empty_columns":!skip_empty_columns_trim,
+                    "render":render.map(|r| match r { LayoutRenderArg::Json => "json", LayoutRenderArg::Ascii => "ascii", LayoutRenderArg::Both => "both" })
+                })).await;
+            }
             let (resolved, _guard) =
                 commands::read::resolve_file_or_session(file, session, session_workspace)?;
             commands::read::layout_page(
@@ -3177,63 +3278,7 @@ pub async fn run_command(command: Commands) -> Result<Value> {
         }
         Commands::Schema { command } => run_schema_command(command),
         Commands::Example { command } => run_example_command(command),
-        Commands::Session(command) => match *command {
-            SessionCommands::Start {
-                base,
-                label,
-                workspace,
-            } => commands::session::session_start(base, label, workspace).await,
-            SessionCommands::Log {
-                session,
-                since,
-                kind,
-                workspace,
-            } => commands::session::session_log(session, workspace, since, kind).await,
-            SessionCommands::Branches { session, workspace } => {
-                commands::session::session_branches(session, workspace).await
-            }
-            SessionCommands::Switch {
-                session,
-                branch,
-                workspace,
-            } => commands::session::session_switch(session, branch, workspace).await,
-            SessionCommands::Checkout {
-                session,
-                op_id,
-                workspace,
-            } => commands::session::session_checkout(session, op_id, workspace).await,
-            SessionCommands::Undo { session, workspace } => {
-                commands::session::session_undo(session, workspace).await
-            }
-            SessionCommands::Redo { session, workspace } => {
-                commands::session::session_redo(session, workspace).await
-            }
-            SessionCommands::Fork {
-                session,
-                from,
-                label,
-                branch_name,
-                workspace,
-            } => {
-                commands::session::session_fork(session, from, label, branch_name, workspace).await
-            }
-            SessionCommands::Op {
-                session,
-                ops,
-                workspace,
-            } => commands::session::session_op_stage(session, ops, workspace).await,
-            SessionCommands::Apply {
-                session,
-                staged_id,
-                workspace,
-            } => commands::session::session_apply(session, staged_id, workspace).await,
-            SessionCommands::Materialize {
-                session,
-                output,
-                force,
-                workspace,
-            } => commands::session::session_materialize(session, output, workspace, force).await,
-        },
+        Commands::Session(command) => commands::session::run(*command).await,
         Commands::RunManifest {
             file,
             manifest,
@@ -3425,6 +3470,7 @@ enum ResolvedSurfaceCommand {
     Operation {
         operation: String,
         bind: Option<PathBuf>,
+        request_id: Option<String>,
         baseline: Option<PathBuf>,
         json: Option<String>,
         output: Option<PathBuf>,
@@ -3883,6 +3929,7 @@ fn resolve_surface_command(
         SurfaceCommands::Op {
             operation,
             bind,
+            request_id,
             baseline,
             json,
             output,
@@ -3891,6 +3938,7 @@ fn resolve_surface_command(
         } => Ok(ResolvedSurfaceCommand::Operation {
             operation,
             bind,
+            request_id,
             baseline,
             json,
             output,
@@ -4528,6 +4576,7 @@ async fn run_render_command(
         "screenshot_sheet",
         Some(file),
         None,
+        None,
         Some(request.to_string()),
         Some(target.clone()),
         false,
@@ -4620,6 +4669,7 @@ fn write_artifact_bytes(
 async fn run_machine_operation(
     operation: &str,
     bind: Option<PathBuf>,
+    request_id: Option<String>,
     baseline: Option<PathBuf>,
     json_payload: Option<String>,
     output: Option<PathBuf>,
@@ -4638,17 +4688,6 @@ async fn run_machine_operation(
         )
     })?;
     let adapter = descriptor.adapters.cli;
-    if !adapter.is_supported() {
-        return Err(CanonicalErrorEnvelope::new(
-            CanonicalErrorCode::CapabilityUnavailable,
-            format!(
-                "canonical operation '{operation}' is unavailable in the stateless CLI adapter"
-            ),
-            Some(operation),
-            Some("adapter".to_string()),
-        ));
-    }
-
     let payload_text = match json_payload {
         Some(payload) => payload,
         None => {
@@ -4687,6 +4726,67 @@ async fn run_machine_operation(
         )
     })?;
 
+    #[cfg(feature = "recalc-formualizer")]
+    if matches!(operation, "create_fork" | "list_forks") {
+        let invalid = |message: String| CanonicalErrorEnvelope::new(CanonicalErrorCode::InvalidRequest, message, Some(operation), None);
+        if bind.is_some() || baseline.is_some() || output.is_some() || in_place || force {
+            return Err(invalid("resident lifecycle discovery/creation accepts canonical workspace payloads, not stateless file binding/writeback flags".into()));
+        }
+        let identity = request_id.or_else(|| std::env::var("ASP_REQUEST_ID").ok())
+            .or_else(|| (operation == "list_forks").then(|| uuid::Uuid::new_v4().to_string()))
+            .filter(|id| !id.is_empty() && id.len() <= 256)
+            .ok_or_else(|| invalid("create_fork requires --request-id (1-256 bytes) for durable retry/reconciliation".into()))?;
+        let decoded = crate::operations::decode_operation(operation, payload.clone())?;
+        let resource = decoded.resource_id().map(|resource| resource.as_str()).unwrap_or("").to_owned();
+        let files = crate::runtime::stateless::StatelessRuntime.open_unbound_state_for_operation(Some("create_fork"))
+            .map_err(|error| invalid(error.to_string()))?;
+        let root = crate::native_host::workspace_root(&files.config().workspace_root).map_err(|error| invalid(error.to_string()))?;
+        let client = crate::native_host::NativeHostClient::connect(&root).await.map_err(|error| invalid(error.to_string()))?;
+        // Native lifecycle uses the shared server authority defaults, not the
+        // ephemeral file adapter's small cache/single-recalc/overwrite profile.
+        let config = crate::config::ServerConfig::from_args(crate::config::CliArgs {
+            workspace_root: Some(files.config().workspace_root.clone()),
+            recalc_enabled: true,
+            ..Default::default()
+        }).map_err(|error| invalid(error.to_string()))?;
+        client.request(&crate::native_host::HostRequest::Configure { config }).await
+            .map_err(|error| invalid(error.to_string()))?;
+        return client.execute(resource, identity, operation.into(), payload).await
+            .map_err(|error| CanonicalErrorEnvelope::new(CanonicalErrorCode::OutcomeUnknown, error.to_string(), Some(operation), None))?;
+    }
+
+    #[cfg(feature = "recalc-formualizer")]
+    if let Some(resource) = bind.as_ref().and_then(|path| path.to_str()).filter(|value| value.starts_with("session:") || value.starts_with("fork:")) {
+        let invalid = |message: String| CanonicalErrorEnvelope::new(CanonicalErrorCode::InvalidRequest, message, Some(operation), Some("--bind".into()));
+        if baseline.is_some() || output.is_some() || in_place || force {
+            return Err(invalid("resident binding does not use stateless baseline/writeback flags; use canonical export".into()));
+        }
+        if object.get("resource_id").is_some_and(|value| value.as_str() != Some(resource)) {
+            return Err(invalid("payload resource_id differs from resident --bind".into()));
+        }
+        object.insert("resource_id".into(), Value::String(resource.into()));
+        let request_id = request_id.or_else(|| std::env::var("ASP_REQUEST_ID").ok())
+            .filter(|id| !id.is_empty() && id.len() <= 256)
+            .ok_or_else(|| invalid("resident requests require --request-id (1-256 bytes); retain it for retry/reconciliation".into()))?;
+        let workspace = std::env::current_dir().map_err(|error| invalid(error.to_string()))?;
+        let root = crate::native_host::workspace_root(&workspace).map_err(|error| invalid(error.to_string()))?;
+        let client = crate::native_host::NativeHostClient::connect(&root).await.map_err(|error| invalid(error.to_string()))?;
+        return client.execute(resource.into(), request_id, operation.into(), payload).await.map_err(|error| CanonicalErrorEnvelope::new(CanonicalErrorCode::OutcomeUnknown, error.to_string(), Some(operation), None))?;
+    }
+    if request_id.is_some() {
+        return Err(CanonicalErrorEnvelope::new(
+            CanonicalErrorCode::InvalidRequest,
+            "--request-id requires a resident --bind; stateless file writes do not provide durable outcome reconciliation",
+            Some(operation), Some("--request-id".into()),
+        ));
+    }
+    if !adapter.is_supported() {
+        return Err(CanonicalErrorEnvelope::new(
+            CanonicalErrorCode::CapabilityUnavailable,
+            format!("canonical operation '{operation}' is unavailable in the stateless CLI adapter"),
+            Some(operation), Some("adapter".into()),
+        ));
+    }
     let bind_rule = machine_bind_rule(descriptor, object);
     let two_resource = matches!(
         adapter.binding_kind,
@@ -5097,13 +5197,14 @@ pub async fn run() -> Result<()> {
             Ok(ResolvedSurfaceCommand::Operation {
                 operation,
                 bind,
+                request_id,
                 baseline,
                 json,
                 output,
                 in_place,
                 force,
             }) => match run_machine_operation(
-                &operation, bind, baseline, json, output, in_place, force,
+                &operation, bind, request_id, baseline, json, output, in_place, force,
             )
             .await
             {

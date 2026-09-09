@@ -57,9 +57,6 @@ function supportedTriple(platform, arch) {
   if (platform === "darwin" && arch === "arm64") {
     return { asset: "macos-aarch64", dest: "agent-spreadsheet" }
   }
-  if (platform === "win32" && arch === "x64") {
-    return { asset: "windows-x86_64.exe", dest: "agent-spreadsheet.exe" }
-  }
   return null
 }
 

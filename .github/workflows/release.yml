@@ -43,11 +43,6 @@ jobs:
             asset_suffix: macos-aarch64
             binary_extension: ""
             archive_extension: .tar.gz
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            asset_suffix: windows-x86_64
-            binary_extension: .exe
-            archive_extension: .zip
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5

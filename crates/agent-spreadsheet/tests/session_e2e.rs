@@ -13,11 +13,41 @@ use tempfile::tempdir;
 // Helpers
 // ---------------------------------------------------------------------------
 
+struct TestHost {
+    _parent: tempfile::TempDir,
+    root: std::path::PathBuf,
+}
+impl TestHost {
+    fn new() -> Self {
+        let parent = tempdir().unwrap();
+        #[cfg(unix)] { use std::os::unix::fs::PermissionsExt; std::fs::set_permissions(parent.path(), std::fs::Permissions::from_mode(0o700)).unwrap(); }
+        let root = agent_spreadsheet::native_host::provision_root(&parent.path().canonicalize().unwrap(), "host").unwrap();
+        Self { _parent: parent, root }
+    }
+}
+impl Drop for TestHost {
+    fn drop(&mut self) {
+        if let Ok(client) = agent_spreadsheet::native_host::NativeHostClient::discover(&self.root) {
+            let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+            runtime.block_on(async { let _ = client.request(&agent_spreadsheet::native_host::HostRequest::Shutdown).await; });
+            for _ in 0..400 { if !self.root.join("discovery.json").exists() { break; } std::thread::sleep(std::time::Duration::from_millis(25)); }
+        }
+    }
+}
+thread_local! { static TEST_HOST: TestHost = TestHost::new(); }
 fn run_cli(args: &[&str]) -> std::process::Output {
-    Command::new(assert_cmd::cargo::cargo_bin!("agent-spreadsheet"))
-        .args(args)
-        .output()
-        .expect("run agent-spreadsheet")
+    // Test fixtures are ordinary owned 0755 output directories, not credential
+    // roots; only the separate host root is 0700. Do not launch into real HOME.
+    #[cfg(unix)]
+    for pair in args.windows(2) {
+        if pair[0] == "--workspace" || pair[0] == "--session-workspace" {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(pair[1], std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+    TEST_HOST.with(|host| Command::new(assert_cmd::cargo::cargo_bin!("agent-spreadsheet"))
+        .env("ASP_RESIDENT_ROOT", &host.root).env_remove("ASP_REQUEST_ID")
+        .args(args).output().expect("run agent-spreadsheet"))
 }
 
 fn parse_stdout_json(output: &std::process::Output) -> Value {
@@ -45,23 +75,23 @@ fn write_fixture(path: &Path) {
     let mut workbook = umya_spreadsheet::new_file();
     {
         let sheet = workbook
-            .get_sheet_by_name_mut("Sheet1")
+            .sheet_by_name_mut("Sheet1").ok()
             .expect("default sheet");
-        sheet.get_cell_mut("A1").set_value("Name");
-        sheet.get_cell_mut("B1").set_value("Amount");
-        sheet.get_cell_mut("C1").set_value("Total");
-        sheet.get_cell_mut("A2").set_value("Alice");
-        sheet.get_cell_mut("B2").set_value_number(10.0);
-        sheet.get_cell_mut("C2").set_formula("B2*2");
-        sheet.get_cell_mut("A3").set_value("Bob");
-        sheet.get_cell_mut("B3").set_value_number(20.0);
-        sheet.get_cell_mut("C3").set_formula("B3*2");
+        sheet.cell_mut("A1").set_value("Name");
+        sheet.cell_mut("B1").set_value("Amount");
+        sheet.cell_mut("C1").set_value("Total");
+        sheet.cell_mut("A2").set_value("Alice");
+        sheet.cell_mut("B2").set_value_number(10.0);
+        sheet.cell_mut("C2").set_formula("B2*2");
+        sheet.cell_mut("A3").set_value("Bob");
+        sheet.cell_mut("B3").set_value_number(20.0);
+        sheet.cell_mut("C3").set_formula("B3*2");
     }
     workbook.new_sheet("Summary").expect("add summary sheet");
     {
-        let s = workbook.get_sheet_by_name_mut("Summary").expect("summary");
-        s.get_cell_mut("A1").set_value("Flag");
-        s.get_cell_mut("B1").set_value("Ready");
+        let s = workbook.sheet_by_name_mut("Summary").ok().expect("summary");
+        s.cell_mut("A1").set_value("Flag");
+        s.cell_mut("B1").set_value("Ready");
     }
     umya_spreadsheet::writer::xlsx::write(&workbook, path).expect("write fixture");
 }
@@ -721,7 +751,7 @@ fn session_cas_conflict_rejects_stale_stage() {
     );
     let stderr = String::from_utf8_lossy(&apply1.stderr);
     assert!(
-        stderr.contains("CAS conflict") || stderr.contains("HEAD has advanced"),
+        stderr.contains("REVISION_CONFLICT"),
         "expected CAS conflict error, got stderr: {}",
         stderr
     );
@@ -1530,11 +1560,11 @@ fn session_dry_run_impact_on_stage() {
 }
 
 // ---------------------------------------------------------------------------
-// Precondition cell_matches blocks apply when value mismatches
+// Native approval preconditions reject forged workbook CAS without effects
 // ---------------------------------------------------------------------------
 
 #[test]
-fn session_precondition_cell_match_blocks_apply() {
+fn session_precondition_rejects_forged_revision_without_effects() {
     let tmp = tempdir().expect("tempdir");
     let workspace = tmp.path();
     let base_path = workspace.join("precond_base.xlsx");
@@ -1557,8 +1587,8 @@ fn session_precondition_cell_match_blocks_apply() {
     };
     let session_id = start_json["session_id"].as_str().unwrap();
 
-    // Stage an op with a cell_matches precondition that WILL FAIL
-    // A1 is "Name" but we claim it should be "WRONG_VALUE"
+    // The native approval is bound to the whole observed workbook state,
+    // rather than a writable staged-sidecar cell_matches field.
     let ops_path = workspace.join("precond_ops.json");
     let payload = serde_json::json!({
         "kind": "transform.write_matrix",
@@ -1585,30 +1615,11 @@ fn session_precondition_cell_match_blocks_apply() {
     };
     let stg_id = stg["staged_id"].as_str().unwrap();
 
-    // Manually edit the staged artifact to add cell_matches precondition
-    let staged_path = workspace
-        .join(".asp/sessions")
-        .join(session_id)
-        .join("staged")
-        .join(format!("{}.json", stg_id));
-    let staged_content: Value =
-        serde_json::from_str(&std::fs::read_to_string(&staged_path).unwrap()).unwrap();
-
-    let mut modified = staged_content.clone();
-    modified["preconditions"] = serde_json::json!({
-        "cell_matches": [
-            {"address": "Sheet1!A1", "value": "WRONG_VALUE"}
-        ]
-    });
-    std::fs::write(
-        &staged_path,
-        serde_json::to_string_pretty(&modified).unwrap(),
-    )
-    .unwrap();
-
-    // Apply should fail because A1 is "Name" not "WRONG_VALUE"
+    assert!(!workspace.join(".asp/sessions").exists());
+    // Forge the caller's CAS while retaining a genuine durable approval ID.
     let apply = run_cli(&[
         "session",
+        "--expected-revision", "forged-cas",
         "apply",
         "--session",
         session_id,
@@ -1622,18 +1633,21 @@ fn session_precondition_cell_match_blocks_apply() {
     );
     let stderr = String::from_utf8_lossy(&apply.stderr);
     assert!(
-        stderr.contains("precondition") || stderr.contains("cell_match"),
-        "expected precondition error, got stderr: {}",
-        stderr
+        stderr.contains("REVISION_CONFLICT"),
+        "expected revision precondition error, got stderr: {}", stderr
     );
+    let read = run_cli(&["range-values",base_str,"Sheet1","A2:A2","--session",session_id,"--session-workspace",ws_str]);
+    assert_success(&read);
+    let value = parse_stdout_json(&read).to_string();
+    assert!(value.contains("Alice") && !value.contains("Eve"), "rejected apply must have zero effects: {value}");
 }
 
 // ---------------------------------------------------------------------------
-// Precondition cell_matches passes when value matches
+// Native approval applies when the caller's original workbook CAS matches
 // ---------------------------------------------------------------------------
 
 #[test]
-fn session_precondition_cell_match_passes() {
+fn session_precondition_original_revision_applies() {
     let tmp = tempdir().expect("tempdir");
     let workspace = tmp.path();
     let base_path = workspace.join("precond_pass_base.xlsx");
@@ -1682,30 +1696,12 @@ fn session_precondition_cell_match_passes() {
     };
     let stg_id = stg["staged_id"].as_str().unwrap();
 
-    // Manually edit to add cell_matches precondition with CORRECT value
-    let staged_path = workspace
-        .join(".asp/sessions")
-        .join(session_id)
-        .join("staged")
-        .join(format!("{}.json", stg_id));
-    let staged_content: Value =
-        serde_json::from_str(&std::fs::read_to_string(&staged_path).unwrap()).unwrap();
-
-    let mut modified = staged_content.clone();
-    modified["preconditions"] = serde_json::json!({
-        "cell_matches": [
-            {"address": "Sheet1!A1", "value": "Name"}
-        ]
-    });
-    std::fs::write(
-        &staged_path,
-        serde_json::to_string_pretty(&modified).unwrap(),
-    )
-    .unwrap();
-
-    // Apply should succeed because A1 is indeed "Name"
+    assert!(!workspace.join(".asp/sessions").exists());
+    let original_revision = stg["data"]["revision_before"].as_str().unwrap();
+    // The explicit caller precondition and durable approval bind the same state.
     let apply = run_cli(&[
         "session",
+        "--expected-revision", original_revision,
         "apply",
         "--session",
         session_id,
@@ -1716,6 +1712,9 @@ fn session_precondition_cell_match_passes() {
     assert_success(&apply);
     let apply_json = parse_stdout_json(&apply);
     assert_eq!(apply_json["applied"], true);
+    let read = run_cli(&["range-values",base_str,"Sheet1","A2:A2","--session",session_id,"--session-workspace",ws_str]);
+    assert_success(&read);
+    assert!(parse_stdout_json(&read).to_string().contains("Eve"));
 }
 
 // ---------------------------------------------------------------------------

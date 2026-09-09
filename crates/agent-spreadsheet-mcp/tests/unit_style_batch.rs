@@ -30,16 +30,16 @@ fn recalc_state(
 async fn style_batch_merge_set_clear_semantics() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("style.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value("x");
-        let style = sheet.get_style_mut("A1");
-        style.get_font_mut().set_bold(true);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("x");
+        let style = sheet.style_mut("A1");
+        style.font_mut().set_bold(true);
         style
-            .get_fill_mut()
-            .get_pattern_fill_mut()
+            .fill_mut()
+            .pattern_fill_mut()
             .set_pattern_type(umya_spreadsheet::PatternValues::Solid)
-            .get_foreground_color_mut()
-            .set_argb("FF0000FF");
+            .foreground_color_mut()
+            .set_argb_str("FF0000FF");
     });
 
     let state = recalc_state(&workspace);
@@ -101,7 +101,7 @@ async fn style_batch_merge_set_clear_semantics() -> Result<()> {
         .await?;
     let desc_a1 = fork_wb.with_sheet("Sheet1", |sheet| {
         agent_spreadsheet_mcp::styles::descriptor_from_style(
-            sheet.get_cell("A1").expect("A1 cell").get_style(),
+            sheet.cell("A1").expect("A1 cell").style(),
         )
     })?;
     assert!(desc_a1.font.as_ref().and_then(|f| f.bold).is_none());
@@ -145,7 +145,7 @@ async fn style_batch_merge_set_clear_semantics() -> Result<()> {
         .await?;
     let desc_a1 = fork_wb.with_sheet("Sheet1", |sheet| {
         agent_spreadsheet_mcp::styles::descriptor_from_style(
-            sheet.get_cell("A1").expect("A1 cell").get_style(),
+            sheet.cell("A1").expect("A1 cell").style(),
         )
     })?;
     assert!(desc_a1.font.as_ref().and_then(|f| f.bold).is_none());
@@ -164,8 +164,8 @@ async fn style_batch_merge_set_clear_semantics() -> Result<()> {
 async fn style_batch_preview_stages_and_apply() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("preview.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value("x");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("x");
     });
 
     let state = recalc_state(&workspace);
@@ -227,7 +227,7 @@ async fn style_batch_preview_stages_and_apply() -> Result<()> {
         .await?;
     let desc_a1 = fork_wb.with_sheet("Sheet1", |sheet| {
         agent_spreadsheet_mcp::styles::descriptor_from_style(
-            sheet.get_cell("A1").expect("A1 cell").get_style(),
+            sheet.cell("A1").expect("A1 cell").style(),
         )
     })?;
     assert!(desc_a1.font.is_none());
@@ -246,7 +246,7 @@ async fn style_batch_preview_stages_and_apply() -> Result<()> {
         .await?;
     let desc_a1 = fork_wb.with_sheet("Sheet1", |sheet| {
         agent_spreadsheet_mcp::styles::descriptor_from_style(
-            sheet.get_cell("A1").expect("A1 cell").get_style(),
+            sheet.cell("A1").expect("A1 cell").style(),
         )
     })?;
     assert_eq!(desc_a1.font.as_ref().and_then(|f| f.bold), Some(true));
@@ -258,9 +258,9 @@ async fn style_batch_preview_stages_and_apply() -> Result<()> {
 async fn style_batch_overlap_ordering_last_wins() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("overlap.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         for addr in ["A1", "B1", "C1", "A2"] {
-            sheet.get_cell_mut(addr).set_value("x");
+            sheet.cell_mut(addr).set_value("x");
         }
     });
 
@@ -337,12 +337,12 @@ async fn style_batch_overlap_ordering_last_wins() -> Result<()> {
         .await?;
     let desc_a1 = fork_wb.with_sheet("Sheet1", |sheet| {
         agent_spreadsheet_mcp::styles::descriptor_from_style(
-            sheet.get_cell("A1").expect("A1").get_style(),
+            sheet.cell("A1").expect("A1").style(),
         )
     })?;
     let desc_a2 = fork_wb.with_sheet("Sheet1", |sheet| {
         agent_spreadsheet_mcp::styles::descriptor_from_style(
-            sheet.get_cell("A2").expect("A2").get_style(),
+            sheet.cell("A2").expect("A2").style(),
         )
     })?;
 
@@ -358,11 +358,11 @@ async fn style_batch_overlap_ordering_last_wins() -> Result<()> {
 async fn style_batch_nested_null_clear_only_subfield() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("null_clear.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value("x");
-        let style = sheet.get_style_mut("A1");
-        style.get_font_mut().set_bold(true);
-        style.get_font_mut().get_color_mut().set_argb("FFFF0000");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("x");
+        let style = sheet.style_mut("A1");
+        style.font_mut().set_bold(true);
+        style.font_mut().color_mut().set_argb_str("FFFF0000");
     });
 
     let state = recalc_state(&workspace);
@@ -421,7 +421,7 @@ async fn style_batch_nested_null_clear_only_subfield() -> Result<()> {
         .await?;
     let desc_a1 = fork_wb.with_sheet("Sheet1", |sheet| {
         agent_spreadsheet_mcp::styles::descriptor_from_style(
-            sheet.get_cell("A1").expect("A1").get_style(),
+            sheet.cell("A1").expect("A1").style(),
         )
     })?;
     assert_eq!(desc_a1.font.as_ref().and_then(|f| f.bold), Some(true));
@@ -440,19 +440,19 @@ async fn style_batch_nested_null_clear_only_subfield() -> Result<()> {
 async fn style_batch_region_target_resolves() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("region.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value("H1");
-        sheet.get_cell_mut("B1").set_value("H2");
-        sheet.get_cell_mut("C1").set_value("H3");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("H1");
+        sheet.cell_mut("B1").set_value("H2");
+        sheet.cell_mut("C1").set_value("H3");
         for r in 2..=5 {
             sheet
-                .get_cell_mut(format!("A{r}").as_str())
+                .cell_mut(format!("A{r}").as_str())
                 .set_value_number(r);
             sheet
-                .get_cell_mut(format!("B{r}").as_str())
+                .cell_mut(format!("B{r}").as_str())
                 .set_value_number(r);
             sheet
-                .get_cell_mut(format!("C{r}").as_str())
+                .cell_mut(format!("C{r}").as_str())
                 .set_value_number(r);
         }
     });
@@ -518,11 +518,11 @@ async fn style_batch_region_target_resolves() -> Result<()> {
         .await?;
     let desc_a1 = fork_wb.with_sheet("Sheet1", |sheet| {
         agent_spreadsheet_mcp::styles::descriptor_from_style(
-            sheet.get_cell("A1").expect("A1").get_style(),
+            sheet.cell("A1").expect("A1").style(),
         )
     })?;
     let desc_j1 = fork_wb.with_sheet("Sheet1", |sheet| {
-        agent_spreadsheet_mcp::styles::descriptor_from_style(sheet.get_style("J1"))
+        agent_spreadsheet_mcp::styles::descriptor_from_style(sheet.style("J1"))
     })?;
     assert_eq!(desc_a1.font.as_ref().and_then(|f| f.bold), Some(true));
     assert!(desc_j1.font.is_none());
@@ -534,9 +534,9 @@ async fn style_batch_region_target_resolves() -> Result<()> {
 async fn style_batch_idempotent_noop_counts_and_no_diff() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("noop.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value("x");
-        sheet.get_style_mut("A1").get_font_mut().set_bold(true);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("x");
+        sheet.style_mut("A1").font_mut().set_bold(true);
     });
 
     let state = recalc_state(&workspace);
@@ -622,11 +622,11 @@ async fn style_batch_idempotent_noop_counts_and_no_diff() -> Result<()> {
 async fn style_batch_preserves_conditional_formats() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("cf.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value_number(1);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(1);
 
         let mut cf = ConditionalFormatting::default();
-        cf.get_sequence_of_references_mut().set_sqref("A1:A3");
+        cf.sequence_of_references_mut().set_sqref("A1:A3");
 
         let mut rule = ConditionalFormattingRule::default();
         rule.set_type(ConditionalFormatValues::Expression);
@@ -637,11 +637,11 @@ async fn style_batch_preserves_conditional_formats() -> Result<()> {
 
         let mut style = umya_spreadsheet::Style::default();
         style
-            .get_fill_mut()
-            .get_pattern_fill_mut()
+            .fill_mut()
+            .pattern_fill_mut()
             .set_pattern_type(PatternValues::Solid)
-            .get_foreground_color_mut()
-            .set_argb("FFFFFF00");
+            .foreground_color_mut()
+            .set_argb_str("FFFFFF00");
         rule.set_style(style);
 
         cf.add_conditional_collection(rule);
@@ -703,7 +703,7 @@ async fn style_batch_preserves_conditional_formats() -> Result<()> {
         .open_workbook(&agent_spreadsheet_mcp::model::WorkbookId(fork.fork_id.clone()))
         .await?;
     let cf_count = fork_wb.with_sheet("Sheet1", |sheet| {
-        sheet.get_conditional_formatting_collection().len()
+        sheet.conditional_formatting_collection().len()
     })?;
     assert_eq!(cf_count, 1);
 
@@ -714,12 +714,12 @@ async fn style_batch_preserves_conditional_formats() -> Result<()> {
 async fn style_batch_number_format_shorthand_applies_and_is_idempotent() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("numfmt.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value_number(123.45);
-        sheet.get_cell_mut("B1").set_value_number(0.25);
-        sheet.get_cell_mut("C1").set_value_number(45123.0);
-        sheet.get_cell_mut("D1").set_value_number(123.45);
-        sheet.get_cell_mut("E1").set_value_number(42);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(123.45);
+        sheet.cell_mut("B1").set_value_number(0.25);
+        sheet.cell_mut("C1").set_value_number(45123.0);
+        sheet.cell_mut("D1").set_value_number(123.45);
+        sheet.cell_mut("E1").set_value_number(42);
     });
 
     let state = recalc_state(&workspace);
@@ -775,7 +775,7 @@ async fn style_batch_number_format_shorthand_applies_and_is_idempotent() -> Resu
     for (cell, expected_fmt) in expect {
         let desc = fork_wb.with_sheet("Sheet1", |sheet| {
             agent_spreadsheet_mcp::styles::descriptor_from_style(
-                sheet.get_cell(cell).unwrap().get_style(),
+                sheet.cell(cell).unwrap().style(),
             )
         })?;
         assert_eq!(desc.number_format.as_deref(), Some(expected_fmt));

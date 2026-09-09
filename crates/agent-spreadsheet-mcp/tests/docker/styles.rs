@@ -9,11 +9,11 @@ use crate::support::mcp::{McpTestClient, call_tool, extract_json};
 async fn test_sheet_styles_reports_descriptors_in_docker() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("styles.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-        sheet.get_cell_mut("A1").set_value("Header");
-        let style_a1 = sheet.get_style_mut("A1");
-        style_a1.get_font_mut().set_bold(true);
-        style_a1.get_number_format_mut().set_format_code("0.00");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("Header");
+        let style_a1 = sheet.style_mut("A1");
+        style_a1.font_mut().set_bold(true);
+        style_a1.number_format_mut().set_format_code("0.00");
     });
 
     let client = test.connect().await?;
@@ -55,17 +55,17 @@ async fn test_sheet_styles_truncates_large_style_counts_in_docker() -> Result<()
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("many_styles.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
             for i in 0..205u32 {
                 let row = i + 1;
                 let addr = format!("A{row}");
-                sheet.get_cell_mut(addr.as_str()).set_value_number(i as i32);
+                sheet.cell_mut(addr.as_str()).set_value_number(i as i32);
                 let color = format!("FF{:02X}0000", (i % 256) as u8);
                 sheet
-                    .get_style_mut(addr.as_str())
-                    .get_font_mut()
-                    .get_color_mut()
-                    .set_argb(color);
+                    .style_mut(addr.as_str())
+                    .font_mut()
+                    .color_mut()
+                    .set_argb_str(color);
             }
         });
 
@@ -99,12 +99,12 @@ async fn test_sheet_styles_reports_runs_in_docker() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("styles_overview.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
-            sheet.get_cell_mut("A1").set_value("a");
-            sheet.get_cell_mut("B1").set_value("b");
-            sheet.get_cell_mut("C1").set_value("c");
-            sheet.get_style_mut("A1").get_font_mut().set_bold(true);
-            sheet.get_style_mut("B1").get_font_mut().set_bold(true);
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("A1").set_value("a");
+            sheet.cell_mut("B1").set_value("b");
+            sheet.cell_mut("C1").set_value("c");
+            sheet.style_mut("A1").font_mut().set_bold(true);
+            sheet.style_mut("B1").font_mut().set_bold(true);
         });
 
     let client = test.connect().await?;
