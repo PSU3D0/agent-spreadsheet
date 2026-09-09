@@ -10,9 +10,9 @@ async fn test_transform_batch_preview_and_apply_keeps_formulas() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("transform_batch.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-            sheet.get_cell_mut("A1").set_value("x");
-            sheet.get_cell_mut("B1").set_formula("A1".to_string());
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("A1").set_value("x");
+            sheet.cell_mut("B1").set_formula("A1".to_string());
         });
 
     let client = test.connect().await?;
@@ -112,9 +112,9 @@ async fn test_transform_batch_apply_emits_value_and_formula_diffs_in_docker() ->
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("transform_batch_diffs.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-            sheet.get_cell_mut("A1").set_value("x");
-            sheet.get_cell_mut("B1").set_formula("A1".to_string());
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("A1").set_value("x");
+            sheet.cell_mut("B1").set_formula("A1".to_string());
         });
 
     let client = test.connect().await?;
@@ -199,10 +199,10 @@ async fn test_transform_batch_region_target_clears_region_in_docker() -> Result<
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("transform_batch_region.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-            sheet.get_cell_mut("A1").set_value("x");
-            sheet.get_cell_mut("B1").set_value("y");
-            sheet.get_cell_mut("A2").set_value("z");
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("A1").set_value("x");
+            sheet.cell_mut("B1").set_value("y");
+            sheet.cell_mut("A2").set_value("z");
         });
 
     let client = test.connect().await?;
@@ -282,8 +282,8 @@ async fn test_transform_batch_fill_range_sets_values_and_preserves_formulas_in_d
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("transform_batch_fill.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-            sheet.get_cell_mut("A1").set_formula("1+1".to_string());
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("A1").set_formula("1+1".to_string());
         });
 
     let client = test.connect().await?;
@@ -368,9 +368,9 @@ async fn test_transform_batch_replace_in_range_emits_value_and_formula_edits_in_
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("transform_batch_replace.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-            sheet.get_cell_mut("A1").set_value("Foo");
-            sheet.get_cell_mut("B1").set_formula("A1".to_string());
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("A1").set_value("Foo");
+            sheet.cell_mut("B1").set_formula("A1".to_string());
         });
 
     let client = test.connect().await?;
@@ -456,8 +456,8 @@ async fn test_transform_batch_fill_range_preview_stages_and_apply_in_docker() ->
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("transform_batch_fill_preview.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-            sheet.get_cell_mut("A1").set_value("x");
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("A1").set_value("x");
         });
 
     let client = test.connect().await?;
@@ -553,8 +553,8 @@ async fn test_transform_batch_replace_in_range_preview_stages_and_apply_in_docke
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("transform_batch_replace_preview.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-            sheet.get_cell_mut("A1").set_value("Foo");
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("A1").set_value("Foo");
         });
 
     let client = test.connect().await?;
@@ -650,10 +650,10 @@ async fn test_transform_batch_fill_range_region_target_in_docker() -> Result<()>
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("transform_batch_fill_region.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-            sheet.get_cell_mut("A1").set_value("x");
-            sheet.get_cell_mut("B1").set_value("y");
-            sheet.get_cell_mut("A2").set_value("z");
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("A1").set_value("x");
+            sheet.cell_mut("B1").set_value("y");
+            sheet.cell_mut("A2").set_value("z");
         });
 
     let client = test.connect().await?;
@@ -734,8 +734,8 @@ async fn test_transform_batch_fill_range_overwrite_formulas_removes_formula_in_d
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("transform_batch_fill_overwrite.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-            sheet.get_cell_mut("A1").set_formula("1+1".to_string());
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("A1").set_formula("1+1".to_string());
         });
 
     let client = test.connect().await?;
@@ -821,7 +821,7 @@ async fn test_get_changeset_paging_and_summary_only_in_docker() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("changeset_paging.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
             sheet.set_name("Sheet1");
         });
 
@@ -911,11 +911,11 @@ async fn test_get_changeset_exclude_recalc_result_in_docker() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("changeset_filter.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
             sheet.set_name("Sheet1");
-            sheet.get_cell_mut("A1").set_value_number(1);
+            sheet.cell_mut("A1").set_value_number(1);
             sheet
-                .get_cell_mut("B1")
+                .cell_mut("B1")
                 .set_formula("A1*2".to_string())
                 .set_formula_result_default("2");
         });
@@ -995,11 +995,11 @@ async fn test_find_formula_defaults_and_paging_in_docker() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("find_formula.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
             sheet.set_name("Sheet1");
             for row in 1..=6 {
                 sheet
-                    .get_cell_mut((2, row))
+                    .cell_mut((2, row))
                     .set_formula(format!("SUM(A{row}:A{row})"));
             }
         });

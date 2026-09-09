@@ -120,7 +120,7 @@ pub fn extract(
     }
 
     let mut scene = Scene::default();
-    let theme = Some(workbook.get_theme());
+    let theme = Some(workbook.theme());
     let normal = options
         .styles_xml
         .and_then(styles::extract_normal_font)
@@ -196,10 +196,10 @@ pub fn extract(
     // 3. gridlines
     let show_gridlines = options.gridlines.unwrap_or_else(|| {
         sheet
-            .get_sheets_views()
-            .get_sheet_view_list()
+            .sheets_views()
+            .sheet_view_list()
             .first()
-            .map(|view| view.get_show_grid_lines())
+            .map(|view| view.show_grid_lines())
             .unwrap_or(true)
     });
     if show_gridlines {
@@ -297,13 +297,13 @@ pub fn extract(
         push_headings(&mut scene, &columns, &rows, origin_x, origin_y, scale);
     }
 
-    if !sheet.get_conditional_formatting_collection().is_empty() {
+    if !sheet.conditional_formatting_collection().is_empty() {
         scene.warn(Warning::ConditionalFormatOmitted);
     }
-    if !sheet.get_image_collection().is_empty() {
+    if !sheet.image_collection().is_empty() {
         scene.warn(Warning::ImageOmitted);
     }
-    if !sheet.get_chart_collection().is_empty() {
+    if !sheet.chart_collection().is_empty() {
         scene.warn(Warning::ChartOmitted);
     }
     Ok(scene)
@@ -351,15 +351,15 @@ fn build_column_tracks(
     unit_pt: f64,
     scale: f32,
 ) -> Vec<Track> {
-    let properties = sheet.get_sheet_format_properties();
+    let properties = sheet.sheet_format_properties();
     // office2pdf's `> 0` guards: umya reports 0 for an absent attribute, a
     // width Excel never writes.
     let declared_default = {
-        let value = properties.get_default_column_width();
+        let value = properties.default_column_width();
         (value > 0.0).then_some(value)
     };
     let base = {
-        let value = properties.get_base_column_width();
+        let value = properties.base_column_width();
         (value > 0).then_some(value)
     };
     let default_pt = metrics::default_column_width_pt(declared_default, base, unit_pt);
@@ -367,16 +367,16 @@ fn build_column_tracks(
     let mut tracks = Vec::new();
     let mut x = 0.0f32;
     for index in bounds.first_col..=bounds.last_col {
-        let dimension = sheet.get_column_dimension_by_number(&index);
+        let dimension = sheet.column_dimension_by_number(index);
         let (width_pt, hidden) = match dimension {
             Some(dimension) => {
-                let width = dimension.get_width();
+                let width = dimension.width();
                 let width_pt = if width > 0.0 {
                     metrics::column_width_to_pt(width, unit_pt)
                 } else {
                     default_pt
                 };
-                (width_pt, dimension.get_hidden())
+                (width_pt, dimension.hidden())
             }
             None => (default_pt, false),
         };
@@ -406,9 +406,9 @@ fn build_row_tracks(
     fonts: &Fonts,
     scale: f32,
 ) -> Vec<Track> {
-    let properties = sheet.get_sheet_format_properties();
+    let properties = sheet.sheet_format_properties();
     let default_pt = {
-        let value = properties.get_default_row_height();
+        let value = properties.default_row_height();
         if value > 0.0 {
             value
         } else {
@@ -418,10 +418,10 @@ fn build_row_tracks(
     let mut tracks = Vec::new();
     let mut y = 0.0f32;
     for index in bounds.first_row..=bounds.last_row {
-        let dimension = sheet.get_row_dimension(&index);
-        let hidden = dimension.map(|d| d.get_hidden()).unwrap_or(false);
-        let recorded = dimension.map(|d| d.get_height()).filter(|h| *h > 0.0);
-        let custom = dimension.map(|d| d.get_custom_height()).unwrap_or(false);
+        let dimension = sheet.row_dimension(index);
+        let hidden = dimension.map(|d| d.hidden()).unwrap_or(false);
+        let recorded = dimension.map(|d| d.height()).filter(|h| *h > 0.0);
+        let custom = dimension.map(|d| d.custom_height()).unwrap_or(false);
         let base_px = (recorded.unwrap_or(default_pt) as f32) * PX_PER_PT * scale;
         // A recorded height with `customHeight` is the user's; anything else
         // is Excel auto-fitting the row to its tallest content, which is what
@@ -490,27 +490,27 @@ fn merged_width(plan: &CellPlan, columns: &[Track]) -> f32 {
 
 fn merges(sheet: &Worksheet) -> Vec<Merge> {
     sheet
-        .get_merge_cells()
+        .merge_cells()
         .iter()
         .map(|range| {
             let first_col = range
-                .get_coordinate_start_col()
-                .map(|c| c.get_num())
+                .coordinate_start_col()
+                .map(|c| c.num())
                 .unwrap_or(1);
             let first_row = range
-                .get_coordinate_start_row()
-                .map(|c| c.get_num())
+                .coordinate_start_row()
+                .map(|c| c.num())
                 .unwrap_or(1);
             Merge {
                 first_col,
                 first_row,
                 last_col: range
-                    .get_coordinate_end_col()
-                    .map(|c| c.get_num())
+                    .coordinate_end_col()
+                    .map(|c| c.num())
                     .unwrap_or(first_col),
                 last_row: range
-                    .get_coordinate_end_row()
-                    .map(|c| c.get_num())
+                    .coordinate_end_row()
+                    .map(|c| c.num())
                     .unwrap_or(first_row),
             }
         })
@@ -545,22 +545,22 @@ fn plan_cells(
             {
                 continue; // interior of a merge; the top-left member owns it
             }
-            let Some(cell) = sheet.get_cell((col, row)) else {
+            let Some(cell) = sheet.cell((col, row)) else {
                 continue;
             };
-            let style = cell.get_style();
+            let style = cell.style();
 
             // Fill. office2pdf reads the pattern fill directly rather than
             // `Style::get_background_color()`, which hands back `fgColor`
             // whatever the pattern type is, collapsing every hatch onto a
             // solid foreground.
             let mut fill = None;
-            if let Some(pattern) = style.get_fill().and_then(|f| f.get_pattern_fill()) {
-                let pattern_type = pattern.get_pattern_type();
+            if let Some(pattern) = style.fill().and_then(|f| f.pattern_fill()) {
+                let pattern_type = pattern.pattern_type();
                 let coverage = metrics::pattern_ink_coverage(pattern_type);
                 if coverage > 0.0 {
                     let foreground = pattern
-                        .get_foreground_color()
+                        .foreground_color()
                         .and_then(|c| color::resolve(c, theme))
                         .unwrap_or(Rgba::BLACK);
                     fill = Some(if coverage >= 1.0 {
@@ -569,7 +569,7 @@ fn plan_cells(
                         scene.warn(Warning::PatternFillApproximated);
                         // An omitted `bgColor` is white.
                         let background = pattern
-                            .get_background_color()
+                            .background_color()
                             .and_then(|c| color::resolve(c, theme))
                             .unwrap_or(Rgba::WHITE);
                         metrics::blend_color(background, foreground, coverage)
@@ -584,41 +584,41 @@ fn plan_cells(
 
             // Text. Never recalculated: a formula cell with no cached value
             // renders empty and declares it.
-            let raw = cell.get_cell_value();
-            let has_formula = !cell.get_formula().is_empty();
-            let empty_value = matches!(raw.get_raw_value(), umya_spreadsheet::CellRawValue::Empty);
+            let raw = cell.cell_value();
+            let has_formula = !cell.formula().is_empty();
+            let empty_value = matches!(raw.raw_value(), umya_spreadsheet::CellRawValue::Empty);
             if has_formula && empty_value {
                 scene.warn(Warning::FormulasUnevaluated);
             }
             if matches!(
-                raw.get_raw_value(),
+                raw.raw_value(),
                 umya_spreadsheet::CellRawValue::RichText(_)
             ) {
                 scene.warn(Warning::RichTextFlattened);
             }
             let format_code = style
-                .get_number_format()
-                .map(|f| f.get_format_code().to_string())
+                .number_format()
+                .map(|f| f.format_code().to_string())
                 .unwrap_or_default();
             let (text, format_color) = render_value(cell, &format_code, scene);
 
-            let font = style.get_font();
+            let font = style.font();
             let (bold, italic, underline, strike, size_pt, font_color, family) = match font {
                 Some(font) => (
-                    font.get_bold(),
-                    font.get_italic(),
+                    font.bold(),
+                    font.italic(),
                     !matches!(
-                        font.get_font_underline().get_val(),
+                        font.font_underline().val(),
                         umya_spreadsheet::UnderlineValues::None
                     ),
-                    font.get_strikethrough(),
+                    font.strikethrough(),
                     {
-                        let size = font.get_size();
+                        let size = font.size();
                         if size > 0.0 { size } else { normal.size_pt }
                     },
-                    color::resolve(font.get_color(), theme).unwrap_or(Rgba::BLACK),
+                    color::resolve(font.color(), theme).unwrap_or(Rgba::BLACK),
                     {
-                        let name = font.get_name();
+                        let name = font.name();
                         if name.is_empty() {
                             normal.family.clone()
                         } else {
@@ -643,31 +643,31 @@ fn plan_cells(
                 scene.warn(Warning::FontSubstituted);
             }
 
-            let (explicit_halign, valign, wrap) = match style.get_alignment() {
+            let (explicit_halign, valign, wrap) = match style.alignment() {
                 Some(alignment) => {
                     use umya_spreadsheet::{
                         HorizontalAlignmentValues as H, VerticalAlignmentValues as V,
                     };
-                    let horizontal = match alignment.get_horizontal() {
+                    let horizontal = match alignment.horizontal() {
                         H::Center | H::CenterContinuous => Some(HAlign::Center),
                         H::Right => Some(HAlign::Right),
                         H::Left | H::Justify => Some(HAlign::Left),
                         _ => None,
                     };
-                    let vertical = match alignment.get_vertical() {
+                    let vertical = match alignment.vertical() {
                         V::Center => VAlign::Center,
                         V::Top => VAlign::Top,
                         _ => VAlign::Bottom,
                     };
-                    if alignment.get_text_rotation() != 0 {
+                    if alignment.text_rotation() != 0 {
                         scene.warn(Warning::TextRotationOmitted);
                     }
-                    (horizontal, vertical, alignment.get_wrap_text())
+                    (horizontal, vertical, alignment.wrap_text())
                 }
                 None => (None, VAlign::Bottom, false),
             };
             // Excel's "general" horizontal default: numbers right, text left.
-            let numeric = cell.get_value_number().is_some();
+            let numeric = cell.value_number().is_some();
             let halign =
                 explicit_halign.unwrap_or(if numeric { HAlign::Right } else { HAlign::Left });
 
@@ -721,8 +721,8 @@ fn render_value(
     format_code: &str,
     scene: &mut Scene,
 ) -> (String, Option<Rgba>) {
-    let raw = cell.get_cell_value();
-    match raw.get_raw_value() {
+    let raw = cell.cell_value();
+    match raw.raw_value() {
         umya_spreadsheet::CellRawValue::Empty => (String::new(), None),
         umya_spreadsheet::CellRawValue::Numeric(value) => {
             if format_code.is_empty() || format_code.eq_ignore_ascii_case("general") {
@@ -732,12 +732,12 @@ fn render_value(
                 Some(formatted) => (formatted.text, formatted.color),
                 None => {
                     scene.warn(Warning::NumberFormatApproximated);
-                    (cell.get_formatted_value(), None)
+                    (cell.formatted_value(), None)
                 }
             }
         }
         _ => {
-            let text = raw.get_value().to_string();
+            let text = raw.value().to_string();
             if format_code.is_empty() || format_code.eq_ignore_ascii_case("general") {
                 return (text, None);
             }
@@ -745,7 +745,7 @@ fn render_value(
                 Some(formatted) => (formatted.text, formatted.color),
                 None => {
                     scene.warn(Warning::NumberFormatApproximated);
-                    (cell.get_formatted_value(), None)
+                    (cell.formatted_value(), None)
                 }
             }
         }
@@ -753,7 +753,7 @@ fn render_value(
 }
 
 fn edge_of(border: &umya_spreadsheet::Border, theme: Option<&Theme>, scale: f32) -> Option<Edge> {
-    let style = border.get_border_style();
+    let style = border.border_style();
     let width_pt = metrics::border_style_to_width(style)?;
     Some(Edge {
         width_px: width_pt * PX_PER_PT * scale,
@@ -765,14 +765,14 @@ fn edge_of(border: &umya_spreadsheet::Border, theme: Option<&Theme>, scale: f32)
 type Edges = (Option<Edge>, Option<Edge>, Option<Edge>, Option<Edge>);
 
 fn cell_borders(cell: &umya_spreadsheet::Cell, theme: Option<&Theme>, scale: f32) -> Edges {
-    let Some(borders) = cell.get_style().get_borders() else {
+    let Some(borders) = cell.style().borders() else {
         return (None, None, None, None);
     };
     (
-        edge_of(borders.get_top(), theme, scale),
-        edge_of(borders.get_bottom(), theme, scale),
-        edge_of(borders.get_left(), theme, scale),
-        edge_of(borders.get_right(), theme, scale),
+        edge_of(borders.top(), theme, scale),
+        edge_of(borders.bottom(), theme, scale),
+        edge_of(borders.left(), theme, scale),
+        edge_of(borders.right(), theme, scale),
     )
 }
 
@@ -794,7 +794,7 @@ fn merged_range_border(
     let side = |cells: &mut dyn Iterator<Item = (u32, u32)>, index: usize| -> Option<Edge> {
         cells
             .filter_map(|(col, row)| {
-                let edges = cell_borders(sheet.get_cell((col, row))?, theme, scale);
+                let edges = cell_borders(sheet.cell((col, row))?, theme, scale);
                 match index {
                     0 => edges.0,
                     1 => edges.1,
@@ -853,10 +853,10 @@ fn spill_clip(
     let mut extra = 0.0f32;
     for track in columns.iter().filter(|t| t.index > plan.col && !t.hidden) {
         let occupied = sheet
-            .get_cell((track.index, plan.row))
+            .cell((track.index, plan.row))
             .map(|cell| {
                 !matches!(
-                    cell.get_cell_value().get_raw_value(),
+                    cell.cell_value().raw_value(),
                     umya_spreadsheet::CellRawValue::Empty
                 )
             })

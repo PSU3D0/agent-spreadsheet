@@ -7,8 +7,8 @@
     "to JavaScript or pursuing a broader Formualizer dependency reduction in this release.",
     "Initial resident web artifact: raw 10355187, Brotli 2510016 bytes; wasm-release,",
     "Rust 1.93.0, Binaryen 123 -Oz. Ceilings are that measurement plus 10 percent,",
-    "rounded up. Final registry-only Umya 3 artifact: raw 10668574, Brotli 2602922 bytes,",
-    "within the same ceilings. Prior ceilings were 9434281 raw / 2265295 Brotli.",
+    "rounded up. Umya 3 cold-I/O retains these ceilings; the gate measures each build.",
+    "Prior ceilings were 9434281 raw / 2265295 Brotli.",
     "The guard remains enforced. Future increases require an explicit justification."
   ],
   "target": "web",

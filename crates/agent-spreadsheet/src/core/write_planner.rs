@@ -730,14 +730,14 @@ fn expand_table_target_on_workbook(
     appended_rows: u32,
 ) -> Result<()> {
     let sheet = book
-        .get_sheet_by_name_mut(sheet_name).ok()
+        .sheet_by_name_mut(sheet_name).ok()
         .ok_or_else(|| invalid_argument(format!("sheet '{}' was not found", sheet_name)))?;
     let table = sheet
-        .get_tables_mut()
+        .tables_mut()
         .iter_mut()
         .find(|table| {
-            table.get_name().eq_ignore_ascii_case(table_name)
-                || table.get_display_name().eq_ignore_ascii_case(table_name)
+            table.name().eq_ignore_ascii_case(table_name)
+                || table.display_name().eq_ignore_ascii_case(table_name)
         })
         .ok_or_else(|| {
             invalid_argument(format!(
@@ -745,10 +745,10 @@ fn expand_table_target_on_workbook(
                 table_name, sheet_name
             ))
         })?;
-    let start_col = table.get_area().0.get_col_num();
-    let start_row = table.get_area().0.get_row_num();
-    let end_col = table.get_area().1.get_col_num();
-    let end_row = table.get_area().1.get_row_num();
+    let start_col = table.area().0.col_num();
+    let start_row = table.area().0.row_num();
+    let end_col = table.area().1.col_num();
+    let end_row = table.area().1.row_num();
     table.set_area(((start_col, start_row), (end_col, end_row + appended_rows)));
     Ok(())
 }
@@ -1013,7 +1013,7 @@ pub fn build_clone_template_row_plan_from_workbook(
     }
     let (anchor_kind, anchor_row, insert_at_row) = resolve_clone_anchor(before, after, insert_at)?;
     let sheet = book
-        .get_sheet_by_name(sheet_name).ok()
+        .sheet_by_name(sheet_name).ok()
         .ok_or_else(|| invalid_argument(format!("sheet '{}' was not found", sheet_name)))?;
 
     let template_cells = inspect_template_row_cells(sheet, source_row);
@@ -1137,7 +1137,7 @@ pub fn build_clone_template_row_plan_from_workbook(
         confidence_reason,
         contained_merges,
         contained_validations,
-        row_dimension: sheet.get_row_dimension(&source_row).cloned(),
+        row_dimension: sheet.row_dimension(source_row).cloned(),
     })
 }
 
@@ -1176,15 +1176,15 @@ fn inspect_template_row_cells(
     sheet: &umya_spreadsheet::Worksheet,
     source_row: u32,
 ) -> Vec<CloneTemplateCellPreview> {
-    let max_col = sheet.get_highest_column();
+    let max_col = sheet.highest_column();
     let mut cells = Vec::new();
     for col in 1..=max_col {
-        let Some(cell) = sheet.get_cell((col, source_row)) else {
+        let Some(cell) = sheet.cell((col, source_row)) else {
             continue;
         };
         cells.push(CloneTemplateCellPreview {
             col,
-            value: cell.get_value().to_string(),
+            value: cell.value().to_string(),
             is_formula: cell.is_formula(),
         });
     }
@@ -1197,8 +1197,8 @@ fn inspect_clone_row_merges(
 ) -> Result<(Vec<CloneMergeSpan>, Vec<String>)> {
     let mut contained = Vec::new();
     let mut crossing = Vec::new();
-    for range in sheet.get_merge_cells() {
-        let raw = range.get_range();
+    for range in sheet.merge_cells() {
+        let raw = range.range();
         let Some(bounds) = parse_append_region_bounds(&raw) else {
             continue;
         };
@@ -1226,17 +1226,17 @@ fn inspect_clone_row_validations(
     let mut crossing = Vec::new();
     let mut validation_cols = BTreeSet::new();
 
-    let Some(validations) = sheet.get_data_validations() else {
+    let Some(validations) = sheet.data_validations() else {
         return Ok((contained, crossing, 0));
     };
 
-    for data_validation in validations.get_data_validation_list() {
+    for data_validation in validations.data_validation_list() {
         let mut seen_ranges = BTreeSet::new();
         for range in data_validation
-            .get_sequence_of_references()
-            .get_range_collection()
+            .sequence_of_references()
+            .range_collection()
         {
-            let raw = range.get_range();
+            let raw = range.range();
             if !seen_ranges.insert(raw.clone()) {
                 continue;
             }
@@ -1252,7 +1252,7 @@ fn inspect_clone_row_validations(
             if bounds.start_row == source_row && bounds.end_row == source_row {
                 let mut clone = data_validation.clone();
                 clone
-                    .get_sequence_of_references_mut()
+                    .sequence_of_references_mut()
                     .remove_range_collection()
                     .set_sqref(format_a1_range(
                         bounds.start_col,
@@ -1381,15 +1381,15 @@ fn preview_adjacent_sum_targets(
     let pre_shift_subtotal_row = insert_at_row;
     let post_shift_subtotal_row = insert_at_row + count;
     let sum_re = simple_sum_range_regex();
-    let max_col = sheet.get_highest_column();
+    let max_col = sheet.highest_column();
     for col in 1..=max_col {
-        let Some(cell) = sheet.get_cell((col, pre_shift_subtotal_row)) else {
+        let Some(cell) = sheet.cell((col, pre_shift_subtotal_row)) else {
             continue;
         };
         if !cell.is_formula() {
             continue;
         }
-        let formula_text = cell.get_formula().to_string();
+        let formula_text = cell.formula().to_string();
         let formula_bare = formula_text.strip_prefix('=').unwrap_or(&formula_text);
         let Some(caps) = sum_re.captures(formula_bare) else {
             continue;
@@ -1420,12 +1420,12 @@ fn copy_supported_row_dimension(
     destination: &mut umya_spreadsheet::structs::Row,
 ) {
     destination
-        .set_height(source.get_height())
-        .set_descent(source.get_descent())
-        .set_thick_bot(source.get_thick_bot())
-        .set_custom_height(source.get_custom_height())
-        .set_hidden(source.get_hidden())
-        .set_style(source.get_style().clone());
+        .set_height(source.height())
+        .set_descent(source.descent())
+        .set_thick_bot(source.thick_bot())
+        .set_custom_height(source.custom_height())
+        .set_hidden(source.hidden())
+        .set_style(source.style().clone());
 }
 
 pub fn apply_clone_template_row_plan_to_file(
@@ -1474,13 +1474,13 @@ fn apply_clone_template_row_postprocess(
         return Ok(());
     }
     let sheet = book
-        .get_sheet_by_name_mut(&plan.sheet_name).ok()
+        .sheet_by_name_mut(&plan.sheet_name).ok()
         .ok_or_else(|| invalid_argument(format!("sheet '{}' was not found", plan.sheet_name)))?;
 
     for copy_idx in 0..plan.count {
         let dest_row = plan.insert_at_row + copy_idx;
         if let Some(source) = &plan.row_dimension {
-            copy_supported_row_dimension(source, sheet.get_row_dimension_mut(&dest_row));
+            copy_supported_row_dimension(source, sheet.row_dimension_mut(dest_row));
         }
         for merge in &plan.contained_merges {
             sheet.add_merge_cells(format_a1_range(
@@ -1493,18 +1493,18 @@ fn apply_clone_template_row_postprocess(
     }
 
     if !plan.contained_validations.is_empty() {
-        if sheet.get_data_validations().is_none() {
+        if sheet.data_validations().is_none() {
             sheet.set_data_validations(umya_spreadsheet::structs::DataValidations::default());
         }
         let validations = sheet
-            .get_data_validations_mut()
+            .data_validations_mut()
             .expect("data validations exist after initialization");
         for copy_idx in 0..plan.count {
             let dest_row = plan.insert_at_row + copy_idx;
             for spec in &plan.contained_validations {
                 let mut clone = spec.data_validation.clone();
                 clone
-                    .get_sequence_of_references_mut()
+                    .sequence_of_references_mut()
                     .remove_range_collection()
                     .set_sqref(format_a1_range(
                         spec.start_col,
@@ -1584,7 +1584,7 @@ pub fn build_clone_row_band_plan_from_workbook(
     let source_row_count = source_end_row - source_start_row + 1;
     let (anchor_kind, anchor_row, insert_at_row) = resolve_clone_anchor(before, after, insert_at)?;
     let sheet = book
-        .get_sheet_by_name(sheet_name).ok()
+        .sheet_by_name(sheet_name).ok()
         .ok_or_else(|| invalid_argument(format!("sheet '{}' was not found", sheet_name)))?;
 
     let template_rows = inspect_clone_band_rows(sheet, source_start_row, source_end_row);
@@ -1758,17 +1758,17 @@ fn inspect_clone_band_rows(
     source_start_row: u32,
     source_end_row: u32,
 ) -> Vec<CloneBandTemplateRow> {
-    let max_col = sheet.get_highest_column();
+    let max_col = sheet.highest_column();
     let mut rows = Vec::new();
     for source_row in source_start_row..=source_end_row {
         let row_offset = source_row - source_start_row;
         let mut preview_cells = Vec::new();
         let mut cell_data = Vec::new();
         for col in 1..=max_col {
-            let Some(cell) = sheet.get_cell((col, source_row)) else {
+            let Some(cell) = sheet.cell((col, source_row)) else {
                 continue;
             };
-            let value = cell.get_value().to_string();
+            let value = cell.value().to_string();
             let is_formula = cell.is_formula();
             preview_cells.push(CloneTemplateCellPreview {
                 col,
@@ -1779,11 +1779,11 @@ fn inspect_clone_band_rows(
                 col,
                 value,
                 formula: if is_formula {
-                    Some(cell.get_formula().to_string())
+                    Some(cell.formula().to_string())
                 } else {
                     None
                 },
-                style: cell.get_style().clone(),
+                style: cell.style().clone(),
             });
         }
         rows.push(CloneBandTemplateRow {
@@ -1791,7 +1791,7 @@ fn inspect_clone_band_rows(
             row_offset,
             preview_cells,
             cell_data,
-            row_dimension: sheet.get_row_dimension(&source_row).cloned(),
+            row_dimension: sheet.row_dimension(source_row).cloned(),
         });
     }
     rows
@@ -1804,8 +1804,8 @@ fn inspect_clone_band_merges(
 ) -> Result<(Vec<CloneBandMergeSpan>, Vec<String>)> {
     let mut contained = Vec::new();
     let mut crossing = Vec::new();
-    for range in sheet.get_merge_cells() {
-        let raw = range.get_range();
+    for range in sheet.merge_cells() {
+        let raw = range.range();
         let Some(bounds) = parse_append_region_bounds(&raw) else {
             continue;
         };
@@ -1836,17 +1836,17 @@ fn inspect_clone_band_validations(
     let mut crossing = Vec::new();
     let mut validation_cells = BTreeSet::new();
 
-    let Some(validations) = sheet.get_data_validations() else {
+    let Some(validations) = sheet.data_validations() else {
         return Ok((contained, crossing, 0));
     };
 
-    for data_validation in validations.get_data_validation_list() {
+    for data_validation in validations.data_validation_list() {
         let mut seen_ranges = BTreeSet::new();
         for range in data_validation
-            .get_sequence_of_references()
-            .get_range_collection()
+            .sequence_of_references()
+            .range_collection()
         {
-            let raw = range.get_range();
+            let raw = range.range();
             if !seen_ranges.insert(raw.clone()) {
                 continue;
             }
@@ -1866,7 +1866,7 @@ fn inspect_clone_band_validations(
             if bounds.start_row >= source_start_row && bounds.end_row <= source_end_row {
                 let mut clone = data_validation.clone();
                 clone
-                    .get_sequence_of_references_mut()
+                    .sequence_of_references_mut()
                     .remove_range_collection()
                     .set_sqref(format_a1_range(
                         bounds.start_col,
@@ -2000,7 +2000,7 @@ fn apply_clone_row_band_postprocess(
     plan: &CloneRowBandPlan,
 ) -> Result<()> {
     let sheet = book
-        .get_sheet_by_name_mut(&plan.sheet_name).ok()
+        .sheet_by_name_mut(&plan.sheet_name).ok()
         .ok_or_else(|| invalid_argument(format!("sheet '{}' was not found", plan.sheet_name)))?;
 
     for block_index in 0..plan.repeat {
@@ -2008,12 +2008,12 @@ fn apply_clone_row_band_postprocess(
         for row in &plan.template_rows {
             let dest_row = block_start + row.row_offset;
             if let Some(source) = &row.row_dimension {
-                copy_supported_row_dimension(source, sheet.get_row_dimension_mut(&dest_row));
+                copy_supported_row_dimension(source, sheet.row_dimension_mut(dest_row));
             }
             for cell in &row.cell_data {
-                let dest_cell = sheet.get_cell_mut((cell.col, dest_row));
+                let dest_cell = sheet.cell_mut((cell.col, dest_row));
                 dest_cell.set_style(cell.style.clone());
-                dest_cell.get_cell_value_mut().remove_formula();
+                dest_cell.cell_value_mut().remove_formula();
                 if let Some(formula) = &cell.formula {
                     let shifted = parse_base_formula(formula)
                         .and_then(|ast| {
@@ -2045,18 +2045,18 @@ fn apply_clone_row_band_postprocess(
     }
 
     if !plan.contained_validations.is_empty() {
-        if sheet.get_data_validations().is_none() {
+        if sheet.data_validations().is_none() {
             sheet.set_data_validations(umya_spreadsheet::structs::DataValidations::default());
         }
         let validations = sheet
-            .get_data_validations_mut()
+            .data_validations_mut()
             .expect("data validations exist after initialization");
         for block_index in 0..plan.repeat {
             let block_start = plan.insert_at_row + block_index * plan.source_row_count;
             for spec in &plan.contained_validations {
                 let mut clone = spec.data_validation.clone();
                 clone
-                    .get_sequence_of_references_mut()
+                    .sequence_of_references_mut()
                     .remove_range_collection()
                     .set_sqref(format_a1_range(
                         spec.start_col,
@@ -2093,7 +2093,7 @@ fn detect_append_footer_on_workbook(
     region_end_row: u32,
 ) -> Result<AppendFooterScan> {
     let sheet = book
-        .get_sheet_by_name(sheet_name).ok()
+        .sheet_by_name(sheet_name).ok()
         .ok_or_else(|| invalid_argument(format!("sheet '{}' was not found", sheet_name)))?;
 
     let mut footer_row = None;
@@ -2132,10 +2132,10 @@ fn footer_formula_targets_for_row(
 ) -> Vec<String> {
     let mut addresses = Vec::new();
     for col in start_col..=end_col {
-        let Some(cell) = sheet.get_cell((col, row)) else {
+        let Some(cell) = sheet.cell((col, row)) else {
             continue;
         };
-        if !cell.get_formula().trim().is_empty() {
+        if !cell.formula().trim().is_empty() {
             addresses.push(format!("{}{}", column_number_to_name(col), row));
         }
     }
@@ -2152,11 +2152,11 @@ fn footer_reason_for_row(
     let mut saw_non_formula_non_empty = false;
     let mut saw_footer_label = None;
     for col in start_col..=end_col {
-        let Some(cell) = sheet.get_cell((col, row)) else {
+        let Some(cell) = sheet.cell((col, row)) else {
             continue;
         };
-        let value = cell.get_value().trim().to_string();
-        let formula = cell.get_formula().trim().to_string();
+        let value = cell.value().trim().to_string();
+        let formula = cell.formula().trim().to_string();
         let has_formula = !formula.is_empty();
         if has_formula {
             saw_formula = true;
@@ -2305,7 +2305,7 @@ mod tests {
         F: FnOnce(&mut umya_spreadsheet::Worksheet),
     {
         let mut workbook = umya_spreadsheet::new_file();
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().expect("sheet1");
+        let sheet = workbook.sheet_by_name_mut("Sheet1").ok().expect("sheet1");
         configure(sheet);
         workbook
     }
@@ -2322,12 +2322,12 @@ mod tests {
     }
 
     fn seed_basic_region(sheet: &mut umya_spreadsheet::Worksheet) {
-        sheet.get_cell_mut("A1").set_value("Name");
-        sheet.get_cell_mut("B1").set_value("Amount");
-        sheet.get_cell_mut("A2").set_value("Alice");
-        sheet.get_cell_mut("B2").set_value_number(10.0);
-        sheet.get_cell_mut("A3").set_value("Bob");
-        sheet.get_cell_mut("B3").set_value_number(20.0);
+        sheet.cell_mut("A1").set_value("Name");
+        sheet.cell_mut("B1").set_value("Amount");
+        sheet.cell_mut("A2").set_value("Alice");
+        sheet.cell_mut("B2").set_value_number(10.0);
+        sheet.cell_mut("A3").set_value("Bob");
+        sheet.cell_mut("B3").set_value_number(20.0);
     }
 
     fn set_formula(
@@ -2336,9 +2336,9 @@ mod tests {
         formula: &str,
         result: &str,
     ) {
-        let cell = sheet.get_cell_mut(address);
+        let cell = sheet.cell_mut(address);
         cell.set_formula(formula);
-        cell.get_cell_value_mut().set_formula_result_default(result);
+        cell.cell_value_mut().set_formula_result_default(result);
     }
 
     fn sample_append_rows() -> Vec<Vec<Option<MatrixCell>>> {
@@ -2366,10 +2366,10 @@ mod tests {
     #[test]
     fn footer_detects_exact_total_keyword() {
         let workbook = with_sheet(|sheet| {
-            sheet.get_cell_mut("A4").set_value("Total");
+            sheet.cell_mut("A4").set_value("Total");
             set_formula(sheet, "B4", "SUM(B1:B3)", "100");
         });
-        let sheet = workbook.get_sheet_by_name("Sheet1").ok().expect("sheet1");
+        let sheet = workbook.sheet_by_name("Sheet1").ok().expect("sheet1");
 
         let reason = footer_reason_for_row(sheet, 1, 2, 4);
         assert!(
@@ -2383,10 +2383,10 @@ mod tests {
     #[test]
     fn footer_detects_grand_total_keyword() {
         let workbook = with_sheet(|sheet| {
-            sheet.get_cell_mut("A4").set_value("Grand Total");
+            sheet.cell_mut("A4").set_value("Grand Total");
             set_formula(sheet, "B4", "SUM(B1:B3)", "100");
         });
-        let sheet = workbook.get_sheet_by_name("Sheet1").ok().expect("sheet1");
+        let sheet = workbook.sheet_by_name("Sheet1").ok().expect("sheet1");
 
         let reason = footer_reason_for_row(sheet, 1, 2, 4);
         assert!(
@@ -2400,10 +2400,10 @@ mod tests {
     #[test]
     fn footer_detects_subtotal_keyword() {
         let workbook = with_sheet(|sheet| {
-            sheet.get_cell_mut("A4").set_value("Subtotal");
+            sheet.cell_mut("A4").set_value("Subtotal");
             set_formula(sheet, "B4", "SUM(B1:B3)", "100");
         });
-        let sheet = workbook.get_sheet_by_name("Sheet1").ok().expect("sheet1");
+        let sheet = workbook.sheet_by_name("Sheet1").ok().expect("sheet1");
 
         let reason = footer_reason_for_row(sheet, 1, 2, 4);
         assert!(
@@ -2417,10 +2417,10 @@ mod tests {
     #[test]
     fn footer_detects_footer_keyword() {
         let workbook = with_sheet(|sheet| {
-            sheet.get_cell_mut("A4").set_value("Footer");
+            sheet.cell_mut("A4").set_value("Footer");
             set_formula(sheet, "B4", "SUM(B1:B3)", "100");
         });
-        let sheet = workbook.get_sheet_by_name("Sheet1").ok().expect("sheet1");
+        let sheet = workbook.sheet_by_name("Sheet1").ok().expect("sheet1");
 
         let reason = footer_reason_for_row(sheet, 1, 2, 4);
         assert!(
@@ -2436,7 +2436,7 @@ mod tests {
         let workbook = with_sheet(|sheet| {
             set_formula(sheet, "B4", "SUM(B2:B3)", "30");
         });
-        let sheet = workbook.get_sheet_by_name("Sheet1").ok().expect("sheet1");
+        let sheet = workbook.sheet_by_name("Sheet1").ok().expect("sheet1");
 
         assert_eq!(
             footer_reason_for_row(sheet, 1, 2, 4).as_deref(),
@@ -2449,7 +2449,7 @@ mod tests {
         let workbook = with_sheet(|sheet| {
             set_formula(sheet, "D4", "SUM(D2:D3)", "30");
         });
-        let sheet = workbook.get_sheet_by_name("Sheet1").ok().expect("sheet1");
+        let sheet = workbook.sheet_by_name("Sheet1").ok().expect("sheet1");
 
         assert_eq!(
             footer_reason_for_row(sheet, 1, 4, 4).as_deref(),
@@ -2460,10 +2460,10 @@ mod tests {
     #[test]
     fn footer_detection_trims_and_normalizes_case() {
         let workbook = with_sheet(|sheet| {
-            sheet.get_cell_mut("A4").set_value("  ToTaL  ");
+            sheet.cell_mut("A4").set_value("  ToTaL  ");
             set_formula(sheet, "B4", "SUM(B1:B3)", "100");
         });
-        let sheet = workbook.get_sheet_by_name("Sheet1").ok().expect("sheet1");
+        let sheet = workbook.sheet_by_name("Sheet1").ok().expect("sheet1");
 
         let reason = footer_reason_for_row(sheet, 1, 2, 4);
         assert!(
@@ -2477,9 +2477,9 @@ mod tests {
     #[test]
     fn footer_ignores_non_footer_total_phrase_without_formula() {
         let workbook = with_sheet(|sheet| {
-            sheet.get_cell_mut("A4").set_value("Total Revenue Plan");
+            sheet.cell_mut("A4").set_value("Total Revenue Plan");
         });
-        let sheet = workbook.get_sheet_by_name("Sheet1").ok().expect("sheet1");
+        let sheet = workbook.sheet_by_name("Sheet1").ok().expect("sheet1");
 
         assert!(footer_reason_for_row(sheet, 1, 2, 4).is_none());
     }
@@ -2487,10 +2487,10 @@ mod tests {
     #[test]
     fn footer_detects_starts_with_total_with_formula() {
         let workbook = with_sheet(|sheet| {
-            sheet.get_cell_mut("A4").set_value("Total Revenue Plan");
+            sheet.cell_mut("A4").set_value("Total Revenue Plan");
             set_formula(sheet, "B4", "SUM(B1:B3)", "100");
         });
-        let sheet = workbook.get_sheet_by_name("Sheet1").ok().expect("sheet1");
+        let sheet = workbook.sheet_by_name("Sheet1").ok().expect("sheet1");
 
         let reason = footer_reason_for_row(sheet, 1, 2, 4);
         assert!(
@@ -2504,10 +2504,10 @@ mod tests {
     #[test]
     fn footer_ignores_last_data_row_with_formula_and_label() {
         let workbook = with_sheet(|sheet| {
-            sheet.get_cell_mut("A4").set_value("Alice");
+            sheet.cell_mut("A4").set_value("Alice");
             set_formula(sheet, "B4", "B2+B3", "30");
         });
-        let sheet = workbook.get_sheet_by_name("Sheet1").ok().expect("sheet1");
+        let sheet = workbook.sheet_by_name("Sheet1").ok().expect("sheet1");
 
         assert!(footer_reason_for_row(sheet, 1, 2, 4).is_none());
     }
@@ -2531,7 +2531,7 @@ mod tests {
     fn detect_append_footer_prefers_region_end_row_when_it_is_summary() {
         let (_tmp, path) = write_workbook_fixture("append-region-footer-at-end.xlsx", |sheet| {
             seed_basic_region(sheet);
-            sheet.get_cell_mut("A4").set_value("Total");
+            sheet.cell_mut("A4").set_value("Total");
             set_formula(sheet, "B4", "SUM(B2:B3)", "30");
         });
 
@@ -2549,7 +2549,7 @@ mod tests {
     fn detect_append_footer_finds_summary_on_row_after_region_end() {
         let (_tmp, path) = write_workbook_fixture("append-region-footer-after-end.xlsx", |sheet| {
             seed_basic_region(sheet);
-            sheet.get_cell_mut("A4").set_value("Total");
+            sheet.cell_mut("A4").set_value("Total");
             set_formula(sheet, "B4", "SUM(B2:B3)", "30");
         });
 
@@ -2567,7 +2567,7 @@ mod tests {
     fn build_append_region_plan_inserts_before_footer_and_sets_target_range() {
         let (_tmp, path) = write_workbook_fixture("append-region-plan-footer.xlsx", |sheet| {
             seed_basic_region(sheet);
-            sheet.get_cell_mut("A4").set_value("Total");
+            sheet.cell_mut("A4").set_value("Total");
             set_formula(sheet, "B4", "SUM(B2:B3)", "30");
         });
         let region_id = detect_primary_region_id(&path, "Sheet1");
@@ -2627,11 +2627,11 @@ mod tests {
     fn build_append_region_plan_does_not_treat_formula_data_row_as_footer() {
         let (_tmp, path) =
             write_workbook_fixture("append-region-plan-formula-data-row.xlsx", |sheet| {
-                sheet.get_cell_mut("A1").set_value("Name");
-                sheet.get_cell_mut("B1").set_value("Amount");
-                sheet.get_cell_mut("A2").set_value("Alice");
-                sheet.get_cell_mut("B2").set_value_number(10.0);
-                sheet.get_cell_mut("A3").set_value("Bob");
+                sheet.cell_mut("A1").set_value("Name");
+                sheet.cell_mut("B1").set_value("Amount");
+                sheet.cell_mut("A2").set_value("Alice");
+                sheet.cell_mut("B2").set_value_number(10.0);
+                sheet.cell_mut("A3").set_value("Bob");
                 set_formula(sheet, "B3", "B2*2", "20");
             });
         let region_id = detect_primary_region_id(&path, "Sheet1");
@@ -2653,11 +2653,11 @@ mod tests {
     fn build_append_region_plan_table_target_does_not_treat_formula_data_row_as_footer() {
         let (_tmp, path) =
             write_workbook_fixture("append-region-plan-table-formula-data-row.xlsx", |sheet| {
-                sheet.get_cell_mut("A1").set_value("Name");
-                sheet.get_cell_mut("B1").set_value("Amount");
-                sheet.get_cell_mut("A2").set_value("Alice");
-                sheet.get_cell_mut("B2").set_value_number(10.0);
-                sheet.get_cell_mut("A3").set_value("Bob");
+                sheet.cell_mut("A1").set_value("Name");
+                sheet.cell_mut("B1").set_value("Amount");
+                sheet.cell_mut("A2").set_value("Alice");
+                sheet.cell_mut("B2").set_value_number(10.0);
+                sheet.cell_mut("A3").set_value("Bob");
                 set_formula(sheet, "B3", "B2*2", "20");
                 let mut table = umya_spreadsheet::structs::Table::new("SalesTable", ("A1", "B3"));
                 table.set_display_name("SalesTable");
@@ -2682,11 +2682,11 @@ mod tests {
         let (_tmp, path) = write_workbook_fixture(
             "append-region-plan-formula-data-row-before-footer.xlsx",
             |sheet| {
-                sheet.get_cell_mut("A1").set_value("Name");
-                sheet.get_cell_mut("B1").set_value("Amount");
-                sheet.get_cell_mut("A2").set_value("Alice");
-                sheet.get_cell_mut("B2").set_value_number(10.0);
-                sheet.get_cell_mut("A3").set_value("Bob");
+                sheet.cell_mut("A1").set_value("Name");
+                sheet.cell_mut("B1").set_value("Amount");
+                sheet.cell_mut("A2").set_value("Alice");
+                sheet.cell_mut("B2").set_value_number(10.0);
+                sheet.cell_mut("A3").set_value("Bob");
                 set_formula(sheet, "B3", "B2*2", "20");
             },
         );
@@ -2713,7 +2713,7 @@ mod tests {
         let (_tmp, path) =
             write_workbook_fixture("append-region-plan-append-at-end.xlsx", |sheet| {
                 seed_basic_region(sheet);
-                sheet.get_cell_mut("A4").set_value("Total");
+                sheet.cell_mut("A4").set_value("Total");
                 set_formula(sheet, "B4", "SUM(B2:B3)", "30");
             });
         let region_id = detect_primary_region_id(&path, "Sheet1");
@@ -2767,12 +2767,12 @@ mod tests {
     #[test]
     fn build_append_region_plan_resolves_table_target() {
         let (_tmp, path) = write_workbook_fixture("append-region-plan-table.xlsx", |sheet| {
-            sheet.get_cell_mut("A1").set_value("Name");
-            sheet.get_cell_mut("B1").set_value("Amount");
-            sheet.get_cell_mut("A2").set_value("Alice");
-            sheet.get_cell_mut("B2").set_value_number(10.0);
-            sheet.get_cell_mut("A3").set_value("Bob");
-            sheet.get_cell_mut("B3").set_value_number(20.0);
+            sheet.cell_mut("A1").set_value("Name");
+            sheet.cell_mut("B1").set_value("Amount");
+            sheet.cell_mut("A2").set_value("Alice");
+            sheet.cell_mut("B2").set_value_number(10.0);
+            sheet.cell_mut("A3").set_value("Bob");
+            sheet.cell_mut("B3").set_value_number(20.0);
             let mut table = umya_spreadsheet::structs::Table::new("SalesTable", ("A1", "B3"));
             table.set_display_name("SalesTable");
             sheet.add_table(table);
@@ -2851,13 +2851,13 @@ mod tests {
     #[test]
     fn build_clone_template_row_plan_reports_targets_and_adjacent_sum_candidates() {
         let (_tmp, path) = write_workbook_fixture("clone-template-row-plan.xlsx", |sheet| {
-            sheet.get_cell_mut("A1").set_value("Item");
-            sheet.get_cell_mut("B1").set_value("Input");
-            sheet.get_cell_mut("C1").set_value("Calc");
-            sheet.get_cell_mut("A2").set_value("Alpha");
-            sheet.get_cell_mut("B2").set_value_number(10.0);
+            sheet.cell_mut("A1").set_value("Item");
+            sheet.cell_mut("B1").set_value("Input");
+            sheet.cell_mut("C1").set_value("Calc");
+            sheet.cell_mut("A2").set_value("Alpha");
+            sheet.cell_mut("B2").set_value_number(10.0);
             set_formula(sheet, "C2", "B2*2", "20");
-            sheet.get_cell_mut("A3").set_value("Total");
+            sheet.cell_mut("A3").set_value("Total");
             set_formula(sheet, "C3", "SUM(C2:C2)", "20");
         });
 
@@ -2887,9 +2887,9 @@ mod tests {
     fn build_clone_template_row_plan_strict_merge_policy_fails_for_crossing_merge() {
         let (_tmp, path) =
             write_workbook_fixture("clone-template-row-strict-merge.xlsx", |sheet| {
-                sheet.get_cell_mut("A1").set_value("Header");
-                sheet.get_cell_mut("A2").set_value("Alpha");
-                sheet.get_cell_mut("B2").set_value_number(10.0);
+                sheet.cell_mut("A1").set_value("Header");
+                sheet.cell_mut("A2").set_value("Alpha");
+                sheet.cell_mut("B2").set_value_number(10.0);
                 sheet.add_merge_cells("A1:A2");
             });
 
@@ -2912,17 +2912,17 @@ mod tests {
     #[test]
     fn apply_clone_template_row_plan_preserves_horizontal_merges_and_row_validations() {
         let (_tmp, path) = write_workbook_fixture("clone-template-row-apply.xlsx", |sheet| {
-            sheet.get_cell_mut("A1").set_value("Name");
-            sheet.get_cell_mut("B1").set_value("Input");
-            sheet.get_cell_mut("C1").set_value("Calc");
-            sheet.get_cell_mut("A2").set_value("Alpha");
-            sheet.get_cell_mut("B2").set_value_number(10.0);
+            sheet.cell_mut("A1").set_value("Name");
+            sheet.cell_mut("B1").set_value("Input");
+            sheet.cell_mut("C1").set_value("Calc");
+            sheet.cell_mut("A2").set_value("Alpha");
+            sheet.cell_mut("B2").set_value_number(10.0);
             set_formula(sheet, "C2", "B2*2", "20");
             sheet.add_merge_cells("A2:B2");
             let mut row_style = umya_spreadsheet::Style::default();
-            row_style.get_font_mut().set_bold(true);
+            row_style.font_mut().set_bold(true);
             sheet
-                .get_row_dimension_mut(&2)
+                .row_dimension_mut(2)
                 .set_height(27.5)
                 .set_custom_height(true)
                 .set_hidden(true)
@@ -2932,11 +2932,11 @@ mod tests {
 
             let mut dv = umya_spreadsheet::structs::DataValidation::default();
             dv.set_type(umya_spreadsheet::structs::DataValidationValues::List);
-            dv.get_sequence_of_references_mut().set_sqref("B2 B2 C2:D2");
+            dv.sequence_of_references_mut().set_sqref("B2 B2 C2:D2");
             dv.set_formula1("\"A,B,C\"");
             sheet.set_data_validations(umya_spreadsheet::structs::DataValidations::default());
             sheet
-                .get_data_validations_mut()
+                .data_validations_mut()
                 .unwrap()
                 .add_data_validation_list(dv);
         });
@@ -2957,36 +2957,36 @@ mod tests {
         apply_clone_template_row_plan_to_file(&path, &plan).expect("apply plan");
 
         let book = crate::xlsx_import::read(&path).expect("read workbook");
-        let sheet = book.get_sheet_by_name("Sheet1").ok().expect("sheet1");
-        assert_eq!(sheet.get_cell("A3").expect("A3").get_value(), "Alpha");
-        assert_eq!(sheet.get_cell("B4").expect("B4").get_value(), "10");
+        let sheet = book.sheet_by_name("Sheet1").ok().expect("sheet1");
+        assert_eq!(sheet.cell("A3").expect("A3").value(), "Alpha");
+        assert_eq!(sheet.cell("B4").expect("B4").value(), "10");
         let merge_ranges: Vec<String> = sheet
-            .get_merge_cells()
+            .merge_cells()
             .iter()
-            .map(|range| range.get_range())
+            .map(|range| range.range())
             .collect();
         assert!(merge_ranges.contains(&"A3:B3".to_string()));
         assert!(merge_ranges.contains(&"A4:B4".to_string()));
-        let source_dimension = sheet.get_row_dimension(&2).expect("source row dimension");
+        let source_dimension = sheet.row_dimension(2).expect("source row dimension");
         for row_number in [3, 4] {
             let cloned = sheet
-                .get_row_dimension(&row_number)
+                .row_dimension(row_number)
                 .expect("cloned row dimension");
-            assert_eq!(cloned.get_height(), source_dimension.get_height());
+            assert_eq!(cloned.height(), source_dimension.height());
             assert_eq!(
-                cloned.get_custom_height(),
-                source_dimension.get_custom_height()
+                cloned.custom_height(),
+                source_dimension.custom_height()
             );
-            assert_eq!(cloned.get_hidden(), source_dimension.get_hidden());
-            assert_eq!(cloned.get_descent(), source_dimension.get_descent());
-            assert_eq!(cloned.get_thick_bot(), source_dimension.get_thick_bot());
-            assert_eq!(cloned.get_style(), source_dimension.get_style());
+            assert_eq!(cloned.hidden(), source_dimension.hidden());
+            assert_eq!(cloned.descent(), source_dimension.descent());
+            assert_eq!(cloned.thick_bot(), source_dimension.thick_bot());
+            assert_eq!(cloned.style(), source_dimension.style());
         }
-        let validations = sheet.get_data_validations().expect("validations");
+        let validations = sheet.data_validations().expect("validations");
         let sqrefs: Vec<String> = validations
-            .get_data_validation_list()
+            .data_validation_list()
             .iter()
-            .map(|dv| dv.get_sequence_of_references().get_sqref())
+            .map(|dv| dv.sequence_of_references().get_sqref())
             .collect();
         assert_eq!(sqrefs, vec!["B2 C2:D2", "B3", "C3:D3", "B4", "C4:D4"]);
     }
@@ -2995,14 +2995,14 @@ mod tests {
     fn clone_template_row_before_source_relocates_original_and_adds_only_destination_sqrefs() {
         let (_tmp, path) =
             write_workbook_fixture("clone-row-before-source-validation.xlsx", |sheet| {
-                sheet.get_cell_mut("A4").set_value("template");
+                sheet.cell_mut("A4").set_value("template");
                 let mut validation = umya_spreadsheet::structs::DataValidation::default();
                 validation
-                    .get_sequence_of_references_mut()
+                    .sequence_of_references_mut()
                     .set_sqref("B4 C4:D4");
                 sheet.set_data_validations(umya_spreadsheet::structs::DataValidations::default());
                 sheet
-                    .get_data_validations_mut()
+                    .data_validations_mut()
                     .expect("validations")
                     .add_data_validation_list(validation);
             });
@@ -3023,13 +3023,13 @@ mod tests {
         apply_clone_template_row_plan_to_file(&path, &plan).expect("apply plan");
 
         let workbook = crate::xlsx_import::read(&path).expect("read workbook");
-        let sheet = workbook.get_sheet_by_name("Sheet1").ok().expect("sheet1");
+        let sheet = workbook.sheet_by_name("Sheet1").ok().expect("sheet1");
         let sqrefs = sheet
-            .get_data_validations()
+            .data_validations()
             .expect("validations")
-            .get_data_validation_list()
+            .data_validation_list()
             .iter()
-            .map(|validation| validation.get_sequence_of_references().get_sqref())
+            .map(|validation| validation.sequence_of_references().get_sqref())
             .collect::<Vec<_>>();
         assert_eq!(sqrefs, vec!["B5 C5:D5", "B2", "C2:D2"]);
     }
@@ -3037,16 +3037,16 @@ mod tests {
     #[test]
     fn build_clone_row_band_plan_reports_inserted_blocks_and_targets() {
         let (_tmp, path) = write_workbook_fixture("clone-row-band-plan.xlsx", |sheet| {
-            sheet.get_cell_mut("A1").set_value("Item");
-            sheet.get_cell_mut("B1").set_value("Input");
-            sheet.get_cell_mut("C1").set_value("Calc");
-            sheet.get_cell_mut("A2").set_value("Alpha");
-            sheet.get_cell_mut("B2").set_value_number(10.0);
+            sheet.cell_mut("A1").set_value("Item");
+            sheet.cell_mut("B1").set_value("Input");
+            sheet.cell_mut("C1").set_value("Calc");
+            sheet.cell_mut("A2").set_value("Alpha");
+            sheet.cell_mut("B2").set_value_number(10.0);
             set_formula(sheet, "C2", "B2*2", "20");
-            sheet.get_cell_mut("A3").set_value("Beta");
-            sheet.get_cell_mut("B3").set_value_number(20.0);
+            sheet.cell_mut("A3").set_value("Beta");
+            sheet.cell_mut("B3").set_value_number(20.0);
             set_formula(sheet, "C3", "B3*2", "40");
-            sheet.get_cell_mut("A4").set_value("Total");
+            sheet.cell_mut("A4").set_value("Total");
             set_formula(sheet, "C4", "SUM(C2:C3)", "60");
         });
 
@@ -3078,9 +3078,9 @@ mod tests {
     #[test]
     fn build_clone_row_band_plan_strict_merge_policy_fails_for_crossing_merge() {
         let (_tmp, path) = write_workbook_fixture("clone-row-band-strict-merge.xlsx", |sheet| {
-            sheet.get_cell_mut("A1").set_value("Header");
-            sheet.get_cell_mut("A2").set_value("Alpha");
-            sheet.get_cell_mut("A3").set_value("Beta");
+            sheet.cell_mut("A1").set_value("Header");
+            sheet.cell_mut("A2").set_value("Alpha");
+            sheet.cell_mut("A3").set_value("Beta");
             sheet.add_merge_cells("A1:A2");
         });
 
@@ -3103,32 +3103,32 @@ mod tests {
     #[test]
     fn apply_clone_row_band_plan_preserves_contained_merges_validations_and_row_heights() {
         let (_tmp, path) = write_workbook_fixture("clone-row-band-apply.xlsx", |sheet| {
-            sheet.get_cell_mut("A1").set_value("Name");
-            sheet.get_cell_mut("B1").set_value("Input");
-            sheet.get_cell_mut("C1").set_value("Calc");
-            sheet.get_cell_mut("A2").set_value("Alpha");
-            sheet.get_cell_mut("B2").set_value_number(10.0);
+            sheet.cell_mut("A1").set_value("Name");
+            sheet.cell_mut("B1").set_value("Input");
+            sheet.cell_mut("C1").set_value("Calc");
+            sheet.cell_mut("A2").set_value("Alpha");
+            sheet.cell_mut("B2").set_value_number(10.0);
             set_formula(sheet, "C2", "B2*2", "20");
-            sheet.get_cell_mut("A3").set_value("Beta");
-            sheet.get_cell_mut("B3").set_value_number(20.0);
+            sheet.cell_mut("A3").set_value("Beta");
+            sheet.cell_mut("B3").set_value_number(20.0);
             set_formula(sheet, "C3", "B3*2", "40");
             sheet.add_merge_cells("A2:A3");
             sheet
-                .get_row_dimension_mut(&2)
+                .row_dimension_mut(2)
                 .set_height(28.0)
                 .set_custom_height(true);
             sheet
-                .get_row_dimension_mut(&3)
+                .row_dimension_mut(3)
                 .set_height(32.0)
                 .set_custom_height(true);
 
             let mut dv = umya_spreadsheet::structs::DataValidation::default();
             dv.set_type(umya_spreadsheet::structs::DataValidationValues::List);
-            dv.get_sequence_of_references_mut().set_sqref("B2:B3");
+            dv.sequence_of_references_mut().set_sqref("B2:B3");
             dv.set_formula1("\"A,B,C\"");
             sheet.set_data_validations(umya_spreadsheet::structs::DataValidations::default());
             sheet
-                .get_data_validations_mut()
+                .data_validations_mut()
                 .unwrap()
                 .add_data_validation_list(dv);
         });
@@ -3149,45 +3149,45 @@ mod tests {
         apply_clone_row_band_plan_to_file(&path, &plan).expect("apply plan");
 
         let book = crate::xlsx_import::read(&path).expect("read workbook");
-        let sheet = book.get_sheet_by_name("Sheet1").ok().expect("sheet1");
-        assert_eq!(sheet.get_cell("A4").expect("A4").get_value(), "Alpha");
-        assert_eq!(sheet.get_cell("A5").expect("A5").get_value(), "Beta");
+        let sheet = book.sheet_by_name("Sheet1").ok().expect("sheet1");
+        assert_eq!(sheet.cell("A4").expect("A4").value(), "Alpha");
+        assert_eq!(sheet.cell("A5").expect("A5").value(), "Beta");
         assert_eq!(
             sheet
-                .get_cell("C4")
+                .cell("C4")
                 .expect("C4")
-                .get_formula()
+                .formula()
                 .replace(' ', ""),
             "B4*2"
         );
         assert_eq!(
             sheet
-                .get_cell("C7")
+                .cell("C7")
                 .expect("C7")
-                .get_formula()
+                .formula()
                 .replace(' ', ""),
             "B7*2"
         );
         let merge_ranges: Vec<String> = sheet
-            .get_merge_cells()
+            .merge_cells()
             .iter()
-            .map(|range| range.get_range())
+            .map(|range| range.range())
             .collect();
         assert!(merge_ranges.contains(&"A4:A5".to_string()));
         assert!(merge_ranges.contains(&"A6:A7".to_string()));
         assert_eq!(
-            sheet.get_row_dimension(&4).map(|row| row.get_height()),
+            sheet.row_dimension(4).map(|row| row.height()),
             Some(28.0)
         );
         assert_eq!(
-            sheet.get_row_dimension(&5).map(|row| row.get_height()),
+            sheet.row_dimension(5).map(|row| row.height()),
             Some(32.0)
         );
-        let validations = sheet.get_data_validations().expect("validations");
+        let validations = sheet.data_validations().expect("validations");
         let sqrefs: Vec<String> = validations
-            .get_data_validation_list()
+            .data_validation_list()
             .iter()
-            .map(|dv| dv.get_sequence_of_references().get_sqref())
+            .map(|dv| dv.sequence_of_references().get_sqref())
             .collect();
         assert!(
             sqrefs
@@ -3204,13 +3204,13 @@ mod tests {
     #[test]
     fn apply_clone_row_band_shifts_formulas_correctly_for_internal_external_and_absolute_refs() {
         let (_tmp, path) = write_workbook_fixture("clone-row-band-formulas.xlsx", |sheet| {
-            sheet.get_cell_mut("A1").set_value("Rate");
-            sheet.get_cell_mut("Z1").set_value_number(0.05);
+            sheet.cell_mut("A1").set_value("Rate");
+            sheet.cell_mut("Z1").set_value_number(0.05);
 
             // Row 2
             set_formula(sheet, "A2", "A1", ""); // External relative
             set_formula(sheet, "B2", "$Z$1", ""); // Absolute
-            sheet.get_cell_mut("C2").set_value_number(100.0);
+            sheet.cell_mut("C2").set_value_number(100.0);
 
             // Row 3
             set_formula(sheet, "A3", "A2", ""); // Internal relative
@@ -3235,22 +3235,22 @@ mod tests {
         apply_clone_row_band_plan_to_file(&path, &plan).expect("apply plan");
 
         let book = crate::xlsx_import::read(&path).expect("read workbook");
-        let sheet = book.get_sheet_by_name("Sheet1").ok().expect("sheet1");
+        let sheet = book.sheet_by_name("Sheet1").ok().expect("sheet1");
 
         // Row 4 (cloned from Row 2, offset +2)
         assert_eq!(
             sheet
-                .get_cell("A4")
+                .cell("A4")
                 .expect("A4")
-                .get_formula()
+                .formula()
                 .replace(' ', ""),
             "A3"
         );
         assert_eq!(
             sheet
-                .get_cell("B4")
+                .cell("B4")
                 .expect("B4")
-                .get_formula()
+                .formula()
                 .replace(' ', ""),
             "$Z$1"
         );
@@ -3258,25 +3258,25 @@ mod tests {
         // Row 5 (cloned from Row 3, offset +2)
         assert_eq!(
             sheet
-                .get_cell("A5")
+                .cell("A5")
                 .expect("A5")
-                .get_formula()
+                .formula()
                 .replace(' ', ""),
             "A4"
         );
         assert_eq!(
             sheet
-                .get_cell("B5")
+                .cell("B5")
                 .expect("B5")
-                .get_formula()
+                .formula()
                 .replace(' ', ""),
             "$Z$1"
         );
         assert_eq!(
             sheet
-                .get_cell("D5")
+                .cell("D5")
                 .expect("D5")
-                .get_formula()
+                .formula()
                 .replace(' ', ""),
             "SUM(C4:C5)"
         );
@@ -3285,10 +3285,10 @@ mod tests {
     #[test]
     fn apply_clone_row_band_safe_policy_drops_crossing_merges_but_keeps_contained_merges() {
         let (_tmp, path) = write_workbook_fixture("clone-row-band-safe-merges.xlsx", |sheet| {
-            sheet.get_cell_mut("A1").set_value("A1");
-            sheet.get_cell_mut("A2").set_value("A2");
-            sheet.get_cell_mut("A3").set_value("A3");
-            sheet.get_cell_mut("A4").set_value("A4");
+            sheet.cell_mut("A1").set_value("A1");
+            sheet.cell_mut("A2").set_value("A2");
+            sheet.cell_mut("A3").set_value("A3");
+            sheet.cell_mut("A4").set_value("A4");
 
             sheet.add_merge_cells("A2:A3"); // Fully contained in 2:3
             sheet.add_merge_cells("B3:B4"); // Crossing bottom boundary
@@ -3312,12 +3312,12 @@ mod tests {
         apply_clone_row_band_plan_to_file(&path, &plan).expect("apply plan");
 
         let book = crate::xlsx_import::read(&path).expect("read workbook");
-        let sheet = book.get_sheet_by_name("Sheet1").ok().expect("sheet1");
+        let sheet = book.sheet_by_name("Sheet1").ok().expect("sheet1");
 
         let merge_ranges: Vec<String> = sheet
-            .get_merge_cells()
+            .merge_cells()
             .iter()
-            .map(|range| range.get_range())
+            .map(|range| range.range())
             .collect();
 
         // Original merges should still exist (or be properly expanded)
@@ -3338,31 +3338,31 @@ mod tests {
     #[test]
     fn build_clone_template_row_plan_identifies_likely_inputs_correctly() {
         let (_tmp, path) = write_workbook_fixture("clone-likely-inputs.xlsx", |sheet| {
-            sheet.get_cell_mut("A1").set_value("Expense"); // String label, skip
-            sheet.get_cell_mut("B1").set_value_number(150.0); // Numeric, include
+            sheet.cell_mut("A1").set_value("Expense"); // String label, skip
+            sheet.cell_mut("B1").set_value_number(150.0); // Numeric, include
             // C1 is completely empty, no validation
-            sheet.get_cell_mut("D1").set_value_number(200.0); // Numeric, include
+            sheet.cell_mut("D1").set_value_number(200.0); // Numeric, include
             set_formula(sheet, "E1", "B1+D1", "350"); // Formula, skip
 
             // F1 is a string but has data validation, include
-            sheet.get_cell_mut("F1").set_value("Select...");
+            sheet.cell_mut("F1").set_value("Select...");
             let mut dv = umya_spreadsheet::structs::DataValidation::default();
             dv.set_type(umya_spreadsheet::structs::DataValidationValues::List);
-            dv.get_sequence_of_references_mut().set_sqref("F1:F1");
+            dv.sequence_of_references_mut().set_sqref("F1:F1");
             dv.set_formula1("\"A,B,C\"");
             sheet.set_data_validations(umya_spreadsheet::structs::DataValidations::default());
             sheet
-                .get_data_validations_mut()
+                .data_validations_mut()
                 .unwrap()
                 .add_data_validation_list(dv);
 
             // G1 is completely empty but has data validation, include
             let mut dv2 = umya_spreadsheet::structs::DataValidation::default();
             dv2.set_type(umya_spreadsheet::structs::DataValidationValues::List);
-            dv2.get_sequence_of_references_mut().set_sqref("G1:G1");
+            dv2.sequence_of_references_mut().set_sqref("G1:G1");
             dv2.set_formula1("\"X,Y,Z\"");
             sheet
-                .get_data_validations_mut()
+                .data_validations_mut()
                 .unwrap()
                 .add_data_validation_list(dv2);
         });

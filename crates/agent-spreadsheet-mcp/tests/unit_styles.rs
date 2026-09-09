@@ -15,46 +15,46 @@ mod support;
 async fn sheet_styles_reports_full_descriptors() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("styled.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
 
-        sheet.get_cell_mut("A1").set_value("Header");
-        sheet.get_cell_mut("A2").set_value_number(123.0);
+        sheet.cell_mut("A1").set_value("Header");
+        sheet.cell_mut("A2").set_value_number(123.0);
 
-        let style_a1 = sheet.get_style_mut("A1");
-        style_a1.get_font_mut().set_bold(true);
+        let style_a1 = sheet.style_mut("A1");
+        style_a1.font_mut().set_bold(true);
         style_a1
-            .get_fill_mut()
-            .get_pattern_fill_mut()
+            .fill_mut()
+            .pattern_fill_mut()
             .set_pattern_type(PatternValues::Solid)
-            .get_foreground_color_mut()
+            .foreground_color_mut()
             .set_argb_str("FF0000FF");
         {
-            let borders = style_a1.get_borders_mut();
-            borders.get_left_border_mut().set_border_style("thin");
-            borders.get_right_border_mut().set_border_style("thin");
-            borders.get_top_border_mut().set_border_style("thin");
-            borders.get_bottom_border_mut().set_border_style("thin");
+            let borders = style_a1.borders_mut();
+            borders.left_border_mut().set_border_style("thin");
+            borders.right_border_mut().set_border_style("thin");
+            borders.top_border_mut().set_border_style("thin");
+            borders.bottom_border_mut().set_border_style("thin");
         }
         style_a1
-            .get_alignment_mut()
+            .alignment_mut()
             .set_horizontal(HorizontalAlignmentValues::Center);
         style_a1
-            .get_alignment_mut()
+            .alignment_mut()
             .set_vertical(VerticalAlignmentValues::Top);
-        style_a1.get_alignment_mut().set_wrap_text(true);
+        style_a1.alignment_mut().set_wrap_text(true);
         style_a1
-            .get_number_format_mut()
+            .number_format_mut()
             .set_format_code(NumberingFormat::FORMAT_NUMBER_00);
 
         // A2 shares some style (number format only).
         sheet
-            .get_style_mut("A2")
-            .get_number_format_mut()
+            .style_mut("A2")
+            .number_format_mut()
             .set_format_code(NumberingFormat::FORMAT_NUMBER_00);
 
         // B1 italic text.
-        sheet.get_cell_mut("B1").set_value("Italic");
-        sheet.get_style_mut("B1").get_font_mut().set_italic(true);
+        sheet.cell_mut("B1").set_value("Italic");
+        sheet.style_mut("B1").font_mut().set_italic(true);
     });
 
     let config = workspace.config_with(|config| {
@@ -127,14 +127,14 @@ async fn sheet_styles_reports_full_descriptors() -> Result<()> {
 async fn sheet_styles_runs_respect_scope() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("style_overview.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("a");
-        sheet.get_cell_mut("B1").set_value("b");
-        sheet.get_cell_mut("C1").set_value("c");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("a");
+        sheet.cell_mut("B1").set_value("b");
+        sheet.cell_mut("C1").set_value("c");
 
-        sheet.get_style_mut("A1").get_font_mut().set_bold(true);
-        sheet.get_style_mut("B1").get_font_mut().set_bold(true);
-        sheet.get_style_mut("C1").get_font_mut().set_italic(true);
+        sheet.style_mut("A1").font_mut().set_bold(true);
+        sheet.style_mut("B1").font_mut().set_bold(true);
+        sheet.style_mut("C1").font_mut().set_italic(true);
     });
 
     let config = workspace.config_with(|config| {
@@ -194,10 +194,10 @@ async fn sheet_styles_runs_respect_scope() -> Result<()> {
 async fn sheet_styles_cells_truncates() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("style_overview_cells.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("a");
-        sheet.get_cell_mut("B1").set_value("b");
-        sheet.get_cell_mut("C1").set_value("c");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("a");
+        sheet.cell_mut("B1").set_value("b");
+        sheet.cell_mut("C1").set_value("c");
     });
 
     let config = workspace.config_with(|config| {
@@ -248,16 +248,16 @@ async fn sheet_styles_cells_truncates() -> Result<()> {
 async fn sheet_styles_truncates_large_style_counts() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("many_styles.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         for i in 0..205u32 {
             let row = i + 1;
             let addr = format!("A{row}");
-            sheet.get_cell_mut(addr.as_str()).set_value_number(i as i32);
+            sheet.cell_mut(addr.as_str()).set_value_number(i as i32);
             let color = format!("FF{:02X}0000", (i % 256) as u8);
             sheet
-                .get_style_mut(addr.as_str())
-                .get_font_mut()
-                .get_color_mut()
+                .style_mut(addr.as_str())
+                .font_mut()
+                .color_mut()
                 .set_argb_str(color);
         }
     });
@@ -306,14 +306,14 @@ async fn sheet_styles_truncates_large_style_counts() -> Result<()> {
 async fn sheet_styles_truncates_ranges_for_disjoint_runs() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("many_runs.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         for i in 0..51u32 {
             let row = 1 + i * 2;
             let addr = format!("A{row}");
-            sheet.get_cell_mut(addr.as_str()).set_value("x");
+            sheet.cell_mut(addr.as_str()).set_value("x");
             sheet
-                .get_style_mut(addr.as_str())
-                .get_font_mut()
+                .style_mut(addr.as_str())
+                .font_mut()
                 .set_bold(true);
         }
     });
@@ -364,39 +364,39 @@ async fn sheet_styles_truncates_ranges_for_disjoint_runs() -> Result<()> {
 async fn sheet_styles_maps_gradient_pattern_underline_borders_rotation() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("breadth.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("Breadth");
-        sheet.get_cell_mut("B1").set_value("Pattern");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("Breadth");
+        sheet.cell_mut("B1").set_value("Pattern");
 
-        let style_a1 = sheet.get_style_mut("A1");
-        style_a1.get_font_mut().set_bold(true);
-        style_a1.get_font_mut().set_underline("double");
-        style_a1.get_alignment_mut().set_text_rotation(45);
+        let style_a1 = sheet.style_mut("A1");
+        style_a1.font_mut().set_bold(true);
+        style_a1.font_mut().set_underline("double");
+        style_a1.alignment_mut().set_text_rotation(45);
 
         {
-            let borders = style_a1.get_borders_mut();
-            borders.get_diagonal_border_mut().set_border_style("thick");
+            let borders = style_a1.borders_mut();
+            borders.diagonal_border_mut().set_border_style("thick");
             borders.set_diagonal_up(true);
             borders.set_diagonal_down(true);
         }
 
         {
-            let grad = style_a1.get_fill_mut().get_gradient_fill_mut();
+            let grad = style_a1.fill_mut().gradient_fill_mut();
             grad.set_degree(45.0);
             let mut stop1 = GradientStop::default();
             stop1.set_position(0.0);
-            stop1.get_color_mut().set_argb_str("FFFF0000");
+            stop1.color_mut().set_argb_str("FFFF0000");
             grad.set_gradient_stop(stop1);
             let mut stop2 = GradientStop::default();
             stop2.set_position(1.0);
-            stop2.get_color_mut().set_argb_str("FF00FF00");
+            stop2.color_mut().set_argb_str("FF00FF00");
             grad.set_gradient_stop(stop2);
         }
 
-        let style_b1 = sheet.get_style_mut("B1");
+        let style_b1 = sheet.style_mut("B1");
         style_b1
-            .get_fill_mut()
-            .get_pattern_fill_mut()
+            .fill_mut()
+            .pattern_fill_mut()
             .set_pattern_type(PatternValues::Gray125);
     });
 
@@ -482,11 +482,11 @@ async fn sheet_styles_maps_gradient_pattern_underline_borders_rotation() -> Resu
 async fn sheet_styles_dedupes_identical_visible_formats() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("stable.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("A");
-        sheet.get_cell_mut("B1").set_value("B");
-        sheet.get_style_mut("A1").get_font_mut().set_bold(true);
-        sheet.get_style_mut("B1").get_font_mut().set_bold(true);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("A");
+        sheet.cell_mut("B1").set_value("B");
+        sheet.style_mut("A1").font_mut().set_bold(true);
+        sheet.style_mut("B1").font_mut().set_bold(true);
     });
 
     let state = workspace.app_state();

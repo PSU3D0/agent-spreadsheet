@@ -67,9 +67,9 @@ impl WorkbookSession {
     /// Return sheet names in workbook order.
     pub fn list_sheets(&self) -> Vec<String> {
         self.spreadsheet
-            .get_sheet_collection()
+            .sheet_collection()
             .iter()
-            .map(|sheet| sheet.get_name().to_string())
+            .map(|sheet| sheet.name().to_string())
             .collect()
     }
 
@@ -128,36 +128,36 @@ impl WorkbookSession {
                 let sn = scope_sheet_name.unwrap();
                 let sheet_index = resolve_sheet_index_on_spreadsheet(book, sn)?;
                 let sheet = book
-                    .get_sheet_by_name_mut(sn).ok()
+                    .sheet_by_name_mut(sn).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sn))?;
                 sheet
                     .add_defined_name(name.to_string(), refers_to.to_string())
                     .map_err(|e| anyhow!("failed to add defined name: {e}"))?;
                 let sheet = book
-                    .get_sheet_by_name_mut(sn).ok()
+                    .sheet_by_name_mut(sn).ok()
                     .ok_or_else(|| anyhow!("sheet disappeared"))?;
-                if let Some(last) = sheet.get_defined_names_mut().last_mut()
-                    && last.get_name() == name
+                if let Some(last) = sheet.defined_names_mut().last_mut()
+                    && last.name() == name
                 {
                     last.set_local_sheet_id(sheet_index);
                 }
             }
             NamedRangeScope::Workbook => {
                 let first_sheet: String = book
-                    .get_sheet_collection()
+                    .sheet_collection()
                     .first()
-                    .map(|s| s.get_name().to_string())
+                    .map(|s| s.name().to_string())
                     .ok_or_else(|| anyhow!("workbook has no sheets"))?;
                 let sheet = book
-                    .get_sheet_by_name_mut(&first_sheet).ok()
+                    .sheet_by_name_mut(&first_sheet).ok()
                     .ok_or_else(|| anyhow!("sheet not found"))?;
                 sheet
                     .add_defined_name(name.to_string(), refers_to.to_string())
                     .map_err(|e| anyhow!("failed to add defined name: {e}"))?;
                 let sheet = book
-                    .get_sheet_by_name_mut(&first_sheet).ok()
+                    .sheet_by_name_mut(&first_sheet).ok()
                     .ok_or_else(|| anyhow!("sheet disappeared"))?;
-                let entry = sheet.get_defined_names_mut().pop();
+                let entry = sheet.defined_names_mut().pop();
                 if let Some(entry) = entry {
                     book.add_defined_names(entry);
                 }
@@ -206,12 +206,12 @@ impl WorkbookSession {
 
         // Workbook-level.
         if scope_kind.is_none() || scope_kind == Some(NamedRangeScope::Workbook) {
-            for defined in book.get_defined_names_mut().iter_mut() {
-                if defined.get_name() == name
+            for defined in book.defined_names_mut().iter_mut() {
+                if defined.name() == name
                     && (scope_kind == Some(NamedRangeScope::Workbook)
                         || !defined.has_local_sheet_id())
                 {
-                    previous_refers_to = defined.get_address();
+                    previous_refers_to = defined.address();
                     if let Some(new_addr) = refers_to {
                         defined.set_address(new_addr.to_string());
                     }
@@ -225,9 +225,9 @@ impl WorkbookSession {
         // Sheet-level.
         if !found && (scope_kind.is_none() || scope_kind == Some(NamedRangeScope::Sheet)) {
             let sheet_names: Vec<String> = book
-                .get_sheet_collection()
+                .sheet_collection()
                 .iter()
-                .map(|s| s.get_name().to_string())
+                .map(|s| s.name().to_string())
                 .collect();
             for sn in &sheet_names {
                 if let Some(filter) = scope_sheet_name
@@ -235,10 +235,10 @@ impl WorkbookSession {
                 {
                     continue;
                 }
-                if let Some(sheet) = book.get_sheet_by_name_mut(sn).ok() {
-                    for defined in sheet.get_defined_names_mut().iter_mut() {
-                        if defined.get_name() == name {
-                            previous_refers_to = defined.get_address();
+                if let Some(sheet) = book.sheet_by_name_mut(sn).ok() {
+                    for defined in sheet.defined_names_mut().iter_mut() {
+                        if defined.name() == name {
+                            previous_refers_to = defined.address();
                             if let Some(new_addr) = refers_to {
                                 defined.set_address(new_addr.to_string());
                             }
@@ -264,20 +264,20 @@ impl WorkbookSession {
         if let Some(new_addr) = refers_to {
             match effective_scope {
                 NamedRangeScope::Workbook => {
-                    book.get_defined_names_mut()
-                        .retain(|defined| defined.get_name() != name);
+                    book.defined_names_mut()
+                        .retain(|defined| defined.name() != name);
                     let first_sheet = book
-                        .get_sheet_collection()
+                        .sheet_collection()
                         .first()
-                        .map(|sheet| sheet.get_name().to_string())
+                        .map(|sheet| sheet.name().to_string())
                         .ok_or_else(|| anyhow!("workbook has no sheets"))?;
                     let sheet = book
-                        .get_sheet_by_name_mut(&first_sheet).ok()
+                        .sheet_by_name_mut(&first_sheet).ok()
                         .ok_or_else(|| anyhow!("sheet disappeared"))?;
                     sheet
                         .add_defined_name(name.to_string(), new_addr.to_string())
                         .map_err(|error| anyhow!("failed to replace defined name: {error}"))?;
-                    if let Some(replacement) = sheet.get_defined_names_mut().pop() {
+                    if let Some(replacement) = sheet.defined_names_mut().pop() {
                         book.add_defined_names(replacement);
                     }
                 }
@@ -287,15 +287,15 @@ impl WorkbookSession {
                         .ok_or_else(|| anyhow!("sheet-scoped name has no sheet"))?;
                     let sheet_index = resolve_sheet_index_on_spreadsheet(book, sheet_name)?;
                     let sheet = book
-                        .get_sheet_by_name_mut(sheet_name).ok()
+                        .sheet_by_name_mut(sheet_name).ok()
                         .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
                     sheet
-                        .get_defined_names_mut()
-                        .retain(|defined| defined.get_name() != name);
+                        .defined_names_mut()
+                        .retain(|defined| defined.name() != name);
                     sheet
                         .add_defined_name(name.to_string(), new_addr.to_string())
                         .map_err(|error| anyhow!("failed to replace defined name: {error}"))?;
-                    if let Some(replacement) = sheet.get_defined_names_mut().last_mut() {
+                    if let Some(replacement) = sheet.defined_names_mut().last_mut() {
                         replacement.set_local_sheet_id(sheet_index);
                     }
                 }
@@ -345,9 +345,9 @@ impl WorkbookSession {
 
         // Workbook-level.
         if scope_kind.is_none() || scope_kind == Some(NamedRangeScope::Workbook) {
-            let names = book.get_defined_names_mut();
+            let names = book.defined_names_mut();
             let before_len = names.len();
-            names.retain(|d| d.get_name() != name);
+            names.retain(|d| d.name() != name);
             if names.len() < before_len {
                 deleted = true;
             }
@@ -356,9 +356,9 @@ impl WorkbookSession {
         // Sheet-level.
         if !deleted && (scope_kind.is_none() || scope_kind == Some(NamedRangeScope::Sheet)) {
             let sheet_names: Vec<String> = book
-                .get_sheet_collection()
+                .sheet_collection()
                 .iter()
-                .map(|s| s.get_name().to_string())
+                .map(|s| s.name().to_string())
                 .collect();
             for sn in &sheet_names {
                 if let Some(filter) = scope_sheet_name
@@ -366,10 +366,10 @@ impl WorkbookSession {
                 {
                     continue;
                 }
-                if let Some(sheet) = book.get_sheet_by_name_mut(sn).ok() {
-                    let names = sheet.get_defined_names_mut();
+                if let Some(sheet) = book.sheet_by_name_mut(sn).ok() {
+                    let names = sheet.defined_names_mut();
                     let before_len = names.len();
-                    names.retain(|d| d.get_name() != name);
+                    names.retain(|d| d.name() != name);
                     if names.len() < before_len {
                         deleted = true;
                         break;
@@ -479,12 +479,12 @@ impl WorkbookSession {
 
         'outer: for sheet_name in sheet_names {
             let sheet = self.sheet_by_name_required(&sheet_name)?;
-            let max_row = sheet.get_highest_row().max(1);
-            let max_col = sheet.get_highest_column().max(1);
+            let max_row = sheet.highest_row().max(1);
+            let max_col = sheet.highest_column().max(1);
 
             for row in 1..=max_row {
                 for col in 1..=max_col {
-                    let Some(cell) = sheet.get_cell((col, row)) else {
+                    let Some(cell) = sheet.cell((col, row)) else {
                         continue;
                     };
                     let Some(value) = cell_to_value(cell) else {
@@ -550,8 +550,8 @@ impl WorkbookSession {
             RangeBounds {
                 min_col: 1,
                 min_row: 1,
-                max_col: sheet.get_highest_column().max(1),
-                max_row: sheet.get_highest_row().max(1),
+                max_col: sheet.highest_column().max(1),
+                max_row: sheet.highest_row().max(1),
             }
         };
 
@@ -580,7 +580,7 @@ impl WorkbookSession {
             .map(|col| {
                 if include_headers {
                     sheet
-                        .get_cell((*col, header_row_idx))
+                        .cell((*col, header_row_idx))
                         .and_then(cell_to_value)
                         .map(cell_value_to_string)
                         .filter(|s| !s.trim().is_empty())
@@ -619,7 +619,7 @@ impl WorkbookSession {
             let mut types_row = Vec::new();
 
             for (idx, col) in column_indices.iter().enumerate() {
-                let value = sheet.get_cell((*col, row_idx)).and_then(cell_to_value);
+                let value = sheet.cell((*col, row_idx)).and_then(cell_to_value);
                 json_row.insert(headers[idx].clone(), value.clone());
                 raw_row.push(value.clone());
                 values_row.push(value.as_ref().and_then(cell_value_to_primitive));
@@ -697,7 +697,7 @@ impl WorkbookSession {
             for row in bounds.min_row..=bounds.max_row {
                 let mut row_values = Vec::new();
                 for col in bounds.min_col..=bounds.max_col {
-                    let value = sheet.get_cell((col, row)).and_then(cell_to_value);
+                    let value = sheet.cell((col, row)).and_then(cell_to_value);
                     row_values.push(value);
                 }
                 rows.push(row_values);
@@ -727,7 +727,7 @@ impl WorkbookSession {
         let sheet = self.sheet_by_name_required(&params.sheet_name)?;
         let start_row = params.start_row.max(1);
         let page_size = params.page_size.min(500);
-        let max_row = sheet.get_highest_row();
+        let max_row = sheet.highest_row();
 
         let page = build_sheet_page(
             sheet,
@@ -769,8 +769,8 @@ impl WorkbookSession {
 
         let mut columns = Vec::new();
         for col_idx in bounds.min_col..=bounds.max_col {
-            if let Some(dim) = sheet.get_column_dimension_by_number(&col_idx) {
-                let width = dim.get_width();
+            if let Some(dim) = sheet.column_dimension_by_number(col_idx) {
+                let width = dim.width();
                 if width > 0.0 {
                     columns.push(GridColumnHint {
                         offset: col_idx - bounds.min_col,
@@ -781,8 +781,8 @@ impl WorkbookSession {
         }
 
         let mut merges = Vec::new();
-        for merge_cell in sheet.get_merge_cells() {
-            let merge_range = merge_cell.get_range();
+        for merge_cell in sheet.merge_cells() {
+            let merge_range = merge_cell.range();
             if let Ok(merge_bounds) = parse_range_bounds(&merge_range)
                 && merge_bounds.min_col <= bounds.max_col
                 && merge_bounds.max_col >= bounds.min_col
@@ -797,17 +797,17 @@ impl WorkbookSession {
         for row in bounds.min_row..=bounds.max_row {
             let mut cells = Vec::new();
             for col in bounds.min_col..=bounds.max_col {
-                let Some(cell) = sheet.get_cell((col, row)) else {
+                let Some(cell) = sheet.cell((col, row)) else {
                     continue;
                 };
 
                 let (value, formula) = if cell.is_formula() {
-                    (None, Some(format!("={}", cell.get_formula())))
+                    (None, Some(format!("={}", cell.formula())))
                 } else {
                     (cell_to_json_value(cell_to_value(cell)), None)
                 };
 
-                let descriptor = descriptor_from_style(cell.get_style());
+                let descriptor = descriptor_from_style(cell.style());
                 let number_format = descriptor.number_format.clone();
                 let style_patch = style_descriptor_to_patch(descriptor);
 
@@ -869,7 +869,7 @@ impl WorkbookSession {
                                 continue;
                             };
                             let col_idx = anchor_col + col_offset as u32;
-                            let cell = sheet.get_cell_mut((col_idx, row_idx));
+                            let cell = sheet.cell_mut((col_idx, row_idx));
                             summary.cells_touched += 1;
 
                             if cell.is_formula() {
@@ -933,7 +933,7 @@ impl WorkbookSession {
         // `&mut self` held, these invariants cannot change between the passes.
         for update in updates {
             let sheet = self.sheet_by_name_required(&update.sheet)?;
-            let cell = sheet.get_cell((update.col, update.row)).ok_or_else(|| {
+            let cell = sheet.cell((update.col, update.row)).ok_or_else(|| {
                 anyhow!(
                     "formula cache target {}!{}{} does not exist",
                     update.sheet,
@@ -954,9 +954,9 @@ impl WorkbookSession {
         for update in updates {
             let sheet = self
                 .spreadsheet
-                .get_sheet_by_name_mut(&update.sheet).ok()
+                .sheet_by_name_mut(&update.sheet).ok()
                 .expect("cache target sheet was preflighted");
-            let cell = sheet.get_cell_mut((update.col, update.row));
+            let cell = sheet.cell_mut((update.col, update.row));
             match &update.value {
                 LiteralValue::Empty => {
                     cell.set_formula_result_default("");
@@ -1056,7 +1056,7 @@ impl WorkbookSession {
     pub(crate) fn cell_is_formula(&self, sheet_name: &str, col: u32, row: u32) -> Result<bool> {
         Ok(self
             .sheet_by_name_required(sheet_name)?
-            .get_cell((col, row))
+            .cell((col, row))
             .is_some_and(|cell| cell.is_formula()))
     }
 
@@ -1074,19 +1074,19 @@ impl WorkbookSession {
 
         let Some(cell) = self
             .sheet_by_name_required(sheet_name)?
-            .get_cell((col, row))
+            .cell((col, row))
         else {
             return Ok(SessionEvaluatorCell::Value(LiteralValue::Empty));
         };
         if cell.is_formula() {
             return Ok(SessionEvaluatorCell::Formula(format!(
                 "={}",
-                cell.get_formula()
+                cell.formula()
             )));
         }
-        let raw = cell.get_raw_value();
+        let raw = cell.raw_value();
         let value = if raw.is_error() {
-            let kind = match cell.get_value().as_ref() {
+            let kind = match cell.value().as_ref() {
                 "#DIV/0!" => ExcelErrorKind::Div,
                 "#N/A" => ExcelErrorKind::Na,
                 "#NAME?" => ExcelErrorKind::Name,
@@ -1102,7 +1102,7 @@ impl WorkbookSession {
                 CellRawValue::Numeric(value) => LiteralValue::Number(*value),
                 CellRawValue::Bool(value) => LiteralValue::Boolean(*value),
                 CellRawValue::String(value) => LiteralValue::Text(value.to_string()),
-                CellRawValue::RichText(value) => LiteralValue::Text(value.get_text().to_string()),
+                CellRawValue::RichText(value) => LiteralValue::Text(value.text().to_string()),
                 CellRawValue::Lazy(value) => {
                     let value = value.as_ref();
                     if let Ok(number) = value.parse::<f64>() {
@@ -1124,18 +1124,18 @@ impl WorkbookSession {
 
     /// Look up a sheet by name, returning `Some` if found.
     pub fn sheet_by_name(&self, sheet_name: &str) -> Option<&Worksheet> {
-        self.spreadsheet.get_sheet_by_name(sheet_name).ok()
+        self.spreadsheet.sheet_by_name(sheet_name).ok()
     }
 
     fn sheet_by_name_required(&self, sheet_name: &str) -> Result<&Worksheet> {
         self.spreadsheet
-            .get_sheet_by_name(sheet_name).ok()
+            .sheet_by_name(sheet_name).ok()
             .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))
     }
 
     fn sheet_by_name_mut(&mut self, sheet_name: &str) -> Result<&mut Worksheet> {
         self.spreadsheet
-            .get_sheet_by_name_mut(sheet_name).ok()
+            .sheet_by_name_mut(sheet_name).ok()
             .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))
     }
 
@@ -1418,8 +1418,8 @@ fn resolve_sheet_index_on_spreadsheet(
     book: &umya_spreadsheet::Workbook,
     sheet_name: &str,
 ) -> Result<u32> {
-    for (idx, sheet) in book.get_sheet_collection().iter().enumerate() {
-        if sheet.get_name() == sheet_name {
+    for (idx, sheet) in book.sheet_collection().iter().enumerate() {
+        if sheet.name() == sheet_name {
             return Ok(idx as u32);
         }
     }
@@ -1604,10 +1604,10 @@ fn build_sheet_page(
     include_styles: bool,
     include_header: bool,
 ) -> Result<PageBuildResult> {
-    let max_col = sheet.get_highest_column();
+    let max_col = sheet.highest_column();
     let end_row = start_row
         .saturating_add(page_size.saturating_sub(1))
-        .min(sheet.get_highest_row());
+        .min(sheet.highest_row());
     let column_indices = resolve_columns_with_headers(sheet, columns, columns_by_header, max_col)?;
 
     let header = if include_header {
@@ -1645,7 +1645,7 @@ fn build_row_snapshot(
 ) -> RowSnapshot {
     let mut cells = Vec::new();
     for &col in columns {
-        if let Some(cell) = sheet.get_cell((col, row_index)) {
+        if let Some(cell) = sheet.cell((col, row_index)) {
             cells.push(build_cell_snapshot(cell, include_formulas, include_styles));
         } else {
             let address = crate::utils::cell_address(col, row_index);
@@ -1669,10 +1669,10 @@ fn build_cell_snapshot(
     include_formulas: bool,
     include_styles: bool,
 ) -> CellSnapshot {
-    let address = cell.get_coordinate().get_coordinate();
+    let address = cell.coordinate().get_coordinate();
     let value = crate::workbook::cell_to_value(cell);
     let formula = if include_formulas && cell.is_formula() {
-        Some(cell.get_formula().to_string())
+        Some(cell.formula().to_string())
     } else {
         None
     };
@@ -1682,9 +1682,9 @@ fn build_cell_snapshot(
         None
     };
     let number_format = if include_styles {
-        cell.get_style()
-            .get_number_format()
-            .map(|fmt| fmt.get_format_code().to_string())
+        cell.style()
+            .number_format()
+            .map(|fmt| fmt.format_code().to_string())
     } else {
         None
     };
@@ -1785,7 +1785,7 @@ fn resolve_columns_with_headers(
         .collect();
 
     for col_idx in 1..=max_column.max(1) {
-        let header_cell = sheet.get_cell((col_idx, 1u32));
+        let header_cell = sheet.cell((col_idx, 1u32));
         let header_value = header_cell
             .and_then(cell_to_value)
             .map(cell_value_to_string_lower);
@@ -2054,14 +2054,14 @@ mod tests {
     #[test]
     fn bytes_roundtrip_and_multi_range_reads() -> Result<()> {
         let bytes = workbook_bytes(|book| {
-            book.get_sheet_by_name_mut("Sheet1").ok()
+            book.sheet_by_name_mut("Sheet1").ok()
                 .expect("sheet")
-                .get_cell_mut("A1")
+                .cell_mut("A1")
                 .set_value("hello");
             let _ = book.new_sheet("Data");
-            book.get_sheet_by_name_mut("Data").ok()
+            book.sheet_by_name_mut("Data").ok()
                 .expect("data sheet")
-                .get_cell_mut("B2")
+                .cell_mut("B2")
                 .set_value_number(42.0);
         });
 
@@ -2091,9 +2091,9 @@ mod tests {
     #[test]
     fn apply_write_matrix_updates_in_session_and_roundtrips() -> Result<()> {
         let bytes = workbook_bytes(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().expect("sheet");
-            sheet.get_cell_mut("A1").set_value("before");
-            sheet.get_cell_mut("B1").set_formula("1+1");
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().expect("sheet");
+            sheet.cell_mut("A1").set_value("before");
+            sheet.cell_mut("B1").set_formula("1+1");
         });
 
         let mut session = WorkbookSession::from_bytes(bytes)?;
@@ -2162,8 +2162,8 @@ mod tests {
     #[test]
     fn apply_ops_is_atomic_on_validation_failure() -> Result<()> {
         let bytes = workbook_bytes(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().expect("sheet");
-            sheet.get_cell_mut("A1").set_value("before");
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().expect("sheet");
+            sheet.cell_mut("A1").set_value("before");
         });
 
         let mut session = WorkbookSession::from_bytes(bytes)?;
@@ -2203,13 +2203,13 @@ mod tests {
     #[test]
     fn sheet_page_full_supports_paging_and_formulas() -> Result<()> {
         let bytes = workbook_bytes(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().expect("sheet");
-            sheet.get_cell_mut("A1").set_value("Name");
-            sheet.get_cell_mut("B1").set_value("Calc");
-            sheet.get_cell_mut("A2").set_value("alpha");
-            sheet.get_cell_mut("B2").set_formula("1+1");
-            sheet.get_cell_mut("A3").set_value("beta");
-            sheet.get_cell_mut("B3").set_value_number(7.0);
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().expect("sheet");
+            sheet.cell_mut("A1").set_value("Name");
+            sheet.cell_mut("B1").set_value("Calc");
+            sheet.cell_mut("A2").set_value("alpha");
+            sheet.cell_mut("B2").set_formula("1+1");
+            sheet.cell_mut("A3").set_value("beta");
+            sheet.cell_mut("B3").set_value_number(7.0);
         });
 
         let session = WorkbookSession::from_bytes(bytes)?;
@@ -2237,13 +2237,13 @@ mod tests {
     #[test]
     fn sheet_page_compact_respects_columns_by_header() -> Result<()> {
         let bytes = workbook_bytes(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().expect("sheet");
-            sheet.get_cell_mut("A1").set_value("Name");
-            sheet.get_cell_mut("B1").set_value("Score");
-            sheet.get_cell_mut("C1").set_value("Ignore");
-            sheet.get_cell_mut("A2").set_value("alpha");
-            sheet.get_cell_mut("B2").set_value_number(99.0);
-            sheet.get_cell_mut("C2").set_value("x");
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().expect("sheet");
+            sheet.cell_mut("A1").set_value("Name");
+            sheet.cell_mut("B1").set_value("Score");
+            sheet.cell_mut("C1").set_value("Ignore");
+            sheet.cell_mut("A2").set_value("alpha");
+            sheet.cell_mut("B2").set_value_number(99.0);
+            sheet.cell_mut("C2").set_value("x");
         });
 
         let session = WorkbookSession::from_bytes(bytes)?;
@@ -2272,9 +2272,9 @@ mod tests {
     #[test]
     fn sheet_page_rejects_invalid_column_specs() -> Result<()> {
         let bytes = workbook_bytes(|book| {
-            book.get_sheet_by_name_mut("Sheet1").ok()
+            book.sheet_by_name_mut("Sheet1").ok()
                 .expect("sheet")
-                .get_cell_mut("A1")
+                .cell_mut("A1")
                 .set_value("x");
         });
 
@@ -2294,9 +2294,9 @@ mod tests {
     #[test]
     fn sheet_page_handles_large_start_rows_without_overflow() -> Result<()> {
         let bytes = workbook_bytes(|book| {
-            book.get_sheet_by_name_mut("Sheet1").ok()
+            book.sheet_by_name_mut("Sheet1").ok()
                 .expect("sheet")
-                .get_cell_mut("A1")
+                .cell_mut("A1")
                 .set_value("x");
         });
 
@@ -2317,9 +2317,9 @@ mod tests {
     #[test]
     fn describe_and_named_ranges_return_session_metadata() -> Result<()> {
         let bytes = workbook_bytes(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().expect("sheet");
-            sheet.get_cell_mut("A1").set_value("Revenue");
-            sheet.get_cell_mut("A2").set_value_number(100.0);
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().expect("sheet");
+            sheet.cell_mut("A1").set_value("Revenue");
+            sheet.cell_mut("A2").set_value_number(100.0);
             sheet
                 .add_defined_name("TotalRevenue", "Sheet1!$A$2")
                 .expect("defined name");
@@ -2340,15 +2340,15 @@ mod tests {
     #[test]
     fn sheet_overview_applies_region_and_header_limits() -> Result<()> {
         let bytes = workbook_bytes(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().expect("sheet");
-            sheet.get_cell_mut("A1").set_value("Name");
-            sheet.get_cell_mut("B1").set_value("Score");
-            sheet.get_cell_mut("A2").set_value("alpha");
-            sheet.get_cell_mut("B2").set_value_number(10.0);
-            sheet.get_cell_mut("A10").set_value("Name");
-            sheet.get_cell_mut("B10").set_value("Score");
-            sheet.get_cell_mut("A11").set_value("beta");
-            sheet.get_cell_mut("B11").set_value_number(20.0);
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().expect("sheet");
+            sheet.cell_mut("A1").set_value("Name");
+            sheet.cell_mut("B1").set_value("Score");
+            sheet.cell_mut("A2").set_value("alpha");
+            sheet.cell_mut("B2").set_value_number(10.0);
+            sheet.cell_mut("A10").set_value("Name");
+            sheet.cell_mut("B10").set_value("Score");
+            sheet.cell_mut("A11").set_value("beta");
+            sheet.cell_mut("B11").set_value_number(20.0);
         });
 
         let session = WorkbookSession::from_bytes(bytes)?;
@@ -2369,10 +2369,10 @@ mod tests {
     #[test]
     fn find_value_returns_matches_with_pagination() -> Result<()> {
         let bytes = workbook_bytes(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().expect("sheet");
-            sheet.get_cell_mut("A1").set_value("alpha");
-            sheet.get_cell_mut("A2").set_value("alpha");
-            sheet.get_cell_mut("A3").set_value("beta");
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().expect("sheet");
+            sheet.cell_mut("A1").set_value("alpha");
+            sheet.cell_mut("A2").set_value("alpha");
+            sheet.cell_mut("A3").set_value("beta");
         });
 
         let session = WorkbookSession::from_bytes(bytes)?;
@@ -2392,11 +2392,11 @@ mod tests {
     #[test]
     fn read_table_values_mode_returns_values_and_types() -> Result<()> {
         let bytes = workbook_bytes(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().expect("sheet");
-            sheet.get_cell_mut("A1").set_value("Name");
-            sheet.get_cell_mut("B1").set_value("Score");
-            sheet.get_cell_mut("A2").set_value("alpha");
-            sheet.get_cell_mut("B2").set_value_number(42.0);
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().expect("sheet");
+            sheet.cell_mut("A1").set_value("Name");
+            sheet.cell_mut("B1").set_value("Score");
+            sheet.cell_mut("A2").set_value("alpha");
+            sheet.cell_mut("B2").set_value_number(42.0);
         });
 
         let session = WorkbookSession::from_bytes(bytes)?;
@@ -2421,15 +2421,15 @@ mod tests {
     #[test]
     fn read_table_csv_preserves_date_and_text_values() -> Result<()> {
         let bytes = workbook_bytes(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().expect("sheet");
-            sheet.get_cell_mut("A1").set_value("Date");
-            sheet.get_cell_mut("B1").set_value("Note");
-            sheet.get_cell_mut("A2").set_value_number(45292.0);
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().expect("sheet");
+            sheet.cell_mut("A1").set_value("Date");
+            sheet.cell_mut("B1").set_value("Note");
+            sheet.cell_mut("A2").set_value_number(45292.0);
             sheet
-                .get_style_mut("A2")
-                .get_number_format_mut()
+                .style_mut("A2")
+                .number_format_mut()
                 .set_format_code("yyyy-mm-dd");
-            sheet.get_cell_mut("B2").set_value("ok");
+            sheet.cell_mut("B2").set_value("ok");
         });
 
         let session = WorkbookSession::from_bytes(bytes)?;
@@ -2451,11 +2451,11 @@ mod tests {
     #[test]
     fn read_table_dedupes_duplicate_headers() -> Result<()> {
         let bytes = workbook_bytes(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().expect("sheet");
-            sheet.get_cell_mut("A1").set_value("Dup");
-            sheet.get_cell_mut("B1").set_value("Dup");
-            sheet.get_cell_mut("A2").set_value("v1");
-            sheet.get_cell_mut("B2").set_value("v2");
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().expect("sheet");
+            sheet.cell_mut("A1").set_value("Dup");
+            sheet.cell_mut("B1").set_value("Dup");
+            sheet.cell_mut("A2").set_value("v1");
+            sheet.cell_mut("B2").set_value("v2");
         });
 
         let session = WorkbookSession::from_bytes(bytes)?;
@@ -2480,9 +2480,9 @@ mod tests {
         let path = dir.path().join("session-path.xlsx");
 
         let bytes = workbook_bytes(|book| {
-            book.get_sheet_by_name_mut("Sheet1").ok()
+            book.sheet_by_name_mut("Sheet1").ok()
                 .expect("sheet")
-                .get_cell_mut("C3")
+                .cell_mut("C3")
                 .set_value("path-load");
         });
         fs::write(&path, bytes)?;
@@ -2501,9 +2501,9 @@ mod tests {
     #[test]
     fn define_name_workbook_scope_roundtrips() -> Result<()> {
         let bytes = workbook_bytes(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().expect("sheet");
-            sheet.get_cell_mut("A1").set_value("Revenue");
-            sheet.get_cell_mut("A2").set_value_number(100.0);
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().expect("sheet");
+            sheet.cell_mut("A1").set_value("Revenue");
+            sheet.cell_mut("A2").set_value_number(100.0);
         });
         let mut session = WorkbookSession::from_bytes(bytes)?;
 
@@ -2527,8 +2527,8 @@ mod tests {
     #[test]
     fn define_name_sheet_scope_roundtrips() -> Result<()> {
         let bytes = workbook_bytes(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().expect("sheet");
-            sheet.get_cell_mut("A1").set_value("Revenue");
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().expect("sheet");
+            sheet.cell_mut("A1").set_value("Revenue");
         });
         let mut session = WorkbookSession::from_bytes(bytes)?;
 
@@ -2544,8 +2544,8 @@ mod tests {
     #[test]
     fn update_name_changes_refers_to() -> Result<()> {
         let bytes = workbook_bytes(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().expect("sheet");
-            sheet.get_cell_mut("A1").set_value("Revenue");
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().expect("sheet");
+            sheet.cell_mut("A1").set_value("Revenue");
             sheet
                 .add_defined_name("MyName", "Sheet1!$A$1")
                 .expect("defined name");
@@ -2562,8 +2562,8 @@ mod tests {
     #[test]
     fn delete_name_removes_defined_name() -> Result<()> {
         let bytes = workbook_bytes(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().expect("sheet");
-            sheet.get_cell_mut("A1").set_value("Revenue");
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().expect("sheet");
+            sheet.cell_mut("A1").set_value("Revenue");
             sheet
                 .add_defined_name("ToDelete", "Sheet1!$A$1")
                 .expect("defined name");
@@ -2597,8 +2597,8 @@ mod tests {
     #[test]
     fn named_ranges_scope_metadata_populated() -> Result<()> {
         let bytes = workbook_bytes(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().expect("sheet");
-            sheet.get_cell_mut("A1").set_value("Revenue");
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().expect("sheet");
+            sheet.cell_mut("A1").set_value("Revenue");
             sheet
                 .add_defined_name("SheetLocal", "Sheet1!$A$1")
                 .expect("defined name");

@@ -903,9 +903,9 @@ fn canonical_cli_bound_screenshot_succeeds_without_precreated_output_directory()
 
     let workspace = support::TestWorkspace::new();
     let workbook = workspace.create_workbook("bound-screenshot.xlsx", |book| {
-        book.get_sheet_by_name_mut("Sheet1").ok()
+        book.sheet_by_name_mut("Sheet1").ok()
             .unwrap()
-            .get_cell_mut("A1")
+            .cell_mut("A1")
             .set_value("canonical screenshot");
     });
     assert!(!workspace.path("screenshots").exists());

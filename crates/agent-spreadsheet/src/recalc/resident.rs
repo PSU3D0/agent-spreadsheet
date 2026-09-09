@@ -204,9 +204,9 @@ impl ResidentWorkbook {
         let sheet = self
             .document
             .spreadsheet()
-            .get_sheet_by_name(sheet_name).ok()
+            .sheet_by_name(sheet_name).ok()
             .ok_or_else(|| anyhow!("sheet '{sheet_name}' not found"))?;
-        Ok(sheet.get_cell((column, row)).map(materialize_umya_cell))
+        Ok(sheet.cell((column, row)).map(materialize_umya_cell))
     }
 
     pub(crate) fn publish_prepared_cells(
@@ -247,10 +247,10 @@ impl ResidentWorkbook {
             let sheet = self
                 .document
                 .spreadsheet_mut()
-                .get_sheet_by_name_mut(&effect.sheet_name).ok()
+                .sheet_by_name_mut(&effect.sheet_name).ok()
                 .ok_or_else(|| anyhow!("sheet '{}' not found", effect.sheet_name))?;
             assign_materialized_cell(
-                sheet.get_cell_mut((effect.column, effect.row)),
+                sheet.cell_mut((effect.column, effect.row)),
                 &effect.after,
             )?;
         }
@@ -349,18 +349,18 @@ impl ResidentWorkbook {
             .map_err(|error| anyhow!("failed to read external calculation: {error}"))?;
         let mut updates = Vec::new();
         let mut errors = 0;
-        for sheet in self.document.spreadsheet().get_sheet_collection() {
-            let values = evaluated.read_sheet(sheet.get_name())
+        for sheet in self.document.spreadsheet().sheet_collection() {
+            let values = evaluated.read_sheet(sheet.name())
                 .map_err(|error| anyhow!("external calculation sheet missing: {error}"))?;
             for cell in sheet.cells().into_iter().filter(|cell| cell.is_formula()) {
-                let coordinate = cell.get_coordinate();
-                let row = coordinate.get_row_num();
-                let col = coordinate.get_col_num();
+                let coordinate = cell.coordinate();
+                let row = coordinate.row_num();
+                let col = coordinate.col_num();
                 let value = values.cells.get(&(row, col)).and_then(|cell| cell.value.clone())
-                    .ok_or_else(|| anyhow!("external calculation omitted cache {}!R{row}C{col}", sheet.get_name()))?;
+                    .ok_or_else(|| anyhow!("external calculation omitted cache {}!R{row}C{col}", sheet.name()))?;
                 errors += u64::from(matches!(value, formualizer::workbook::LiteralValue::Error(_)));
                 updates.push(formualizer::workbook::FormulaCacheUpdate {
-                    sheet: sheet.get_name().to_owned(), row, col, value,
+                    sheet: sheet.name().to_owned(), row, col, value,
                 });
             }
         }
@@ -699,18 +699,18 @@ fn synchronize_matrix(
 
 pub(crate) fn materialize_umya_cell(cell: &umya_spreadsheet::Cell) -> ResidentMaterializedCell {
     use umya_spreadsheet::CellRawValue;
-    let value = match cell.get_cell_value().get_raw_value() {
+    let value = match cell.cell_value().raw_value() {
         CellRawValue::Empty => ResidentMaterializedValue::Empty,
         CellRawValue::String(value) => ResidentMaterializedValue::String(value.to_string()),
         CellRawValue::RichText(value) => {
-            ResidentMaterializedValue::RichText(value.get_text().to_string())
+            ResidentMaterializedValue::RichText(value.text().to_string())
         }
         CellRawValue::Lazy(value) => ResidentMaterializedValue::Lazy(value.to_string()),
         CellRawValue::Numeric(value) => ResidentMaterializedValue::Number(*value),
         CellRawValue::Bool(value) => ResidentMaterializedValue::Bool(*value),
         CellRawValue::Error(value) => ResidentMaterializedValue::Error(value.to_string()),
     };
-    let formula = cell.get_formula();
+    let formula = cell.formula();
     ResidentMaterializedCell {
         value,
         formula: (!formula.is_empty()).then(|| formula.to_string()),
@@ -806,9 +806,9 @@ mod tests {
 
     fn formula_fixture() -> Vec<u8> {
         let mut book = umya_spreadsheet::new_file();
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value_number(1.0);
-        sheet.get_cell_mut("B1").set_formula("A1*2");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(1.0);
+        sheet.cell_mut("B1").set_formula("A1*2");
         let mut bytes = Vec::new();
         crate::xlsx_export::write_writer(&book, &mut bytes).unwrap();
         bytes
@@ -818,11 +818,11 @@ mod tests {
         let bytes = resident.document.to_bytes().unwrap();
         let book =
             crate::xlsx_import::read_reader(std::io::Cursor::new(bytes), true).unwrap();
-        book.get_sheet_by_name("Sheet1").ok()
+        book.sheet_by_name("Sheet1").ok()
             .unwrap()
-            .get_cell("B1")
+            .cell("B1")
             .unwrap()
-            .get_value()
+            .value()
             .to_string()
     }
 

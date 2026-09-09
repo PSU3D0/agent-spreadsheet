@@ -47,27 +47,27 @@ fn write_fixture(path: &Path) {
     let mut workbook = umya_spreadsheet::new_file();
     {
         let sheet = workbook
-            .get_sheet_by_name_mut("Sheet1").ok()
+            .sheet_by_name_mut("Sheet1").ok()
             .expect("default sheet");
-        sheet.get_cell_mut("A1").set_value("Name");
-        sheet.get_cell_mut("B1").set_value("Amount");
-        sheet.get_cell_mut("C1").set_value("Total");
-        sheet.get_cell_mut("A2").set_value("Alice");
-        sheet.get_cell_mut("B2").set_value_number(10.0);
-        sheet.get_cell_mut("C2").set_formula("B2*2");
-        sheet.get_cell_mut("A3").set_value("Bob");
-        sheet.get_cell_mut("B3").set_value_number(20.0);
-        sheet.get_cell_mut("C3").set_formula("B3*2");
-        sheet.get_cell_mut("A4").set_value("Carol");
-        sheet.get_cell_mut("B4").set_value_number(30.0);
-        sheet.get_cell_mut("C4").set_formula("B4*2");
+        sheet.cell_mut("A1").set_value("Name");
+        sheet.cell_mut("B1").set_value("Amount");
+        sheet.cell_mut("C1").set_value("Total");
+        sheet.cell_mut("A2").set_value("Alice");
+        sheet.cell_mut("B2").set_value_number(10.0);
+        sheet.cell_mut("C2").set_formula("B2*2");
+        sheet.cell_mut("A3").set_value("Bob");
+        sheet.cell_mut("B3").set_value_number(20.0);
+        sheet.cell_mut("C3").set_formula("B3*2");
+        sheet.cell_mut("A4").set_value("Carol");
+        sheet.cell_mut("B4").set_value_number(30.0);
+        sheet.cell_mut("C4").set_formula("B4*2");
     }
     workbook.new_sheet("Summary").expect("add summary sheet");
     {
-        let s = workbook.get_sheet_by_name_mut("Summary").ok().expect("summary");
-        s.get_cell_mut("A1").set_value("Flag");
-        s.get_cell_mut("B1").set_value("Ready");
-        s.get_cell_mut("A2").set_value_number(42.0);
+        let s = workbook.sheet_by_name_mut("Summary").ok().expect("summary");
+        s.cell_mut("A1").set_value("Flag");
+        s.cell_mut("B1").set_value("Ready");
+        s.cell_mut("A2").set_value_number(42.0);
     }
     umya_spreadsheet::writer::xlsx::write(&workbook, path).expect("write fixture");
 }
@@ -77,27 +77,27 @@ fn write_modified_fixture(path: &Path) {
     let mut workbook = umya_spreadsheet::new_file();
     {
         let sheet = workbook
-            .get_sheet_by_name_mut("Sheet1").ok()
+            .sheet_by_name_mut("Sheet1").ok()
             .expect("default sheet");
-        sheet.get_cell_mut("A1").set_value("Name");
-        sheet.get_cell_mut("B1").set_value("Amount");
-        sheet.get_cell_mut("C1").set_value("Total");
-        sheet.get_cell_mut("A2").set_value("Eve"); // changed
-        sheet.get_cell_mut("B2").set_value_number(99.0); // changed
-        sheet.get_cell_mut("C2").set_formula("B2*2");
-        sheet.get_cell_mut("A3").set_value("Bob");
-        sheet.get_cell_mut("B3").set_value_number(20.0);
-        sheet.get_cell_mut("C3").set_formula("B3*2");
-        sheet.get_cell_mut("A4").set_value("Carol");
-        sheet.get_cell_mut("B4").set_value_number(30.0);
-        sheet.get_cell_mut("C4").set_formula("B4*2");
+        sheet.cell_mut("A1").set_value("Name");
+        sheet.cell_mut("B1").set_value("Amount");
+        sheet.cell_mut("C1").set_value("Total");
+        sheet.cell_mut("A2").set_value("Eve"); // changed
+        sheet.cell_mut("B2").set_value_number(99.0); // changed
+        sheet.cell_mut("C2").set_formula("B2*2");
+        sheet.cell_mut("A3").set_value("Bob");
+        sheet.cell_mut("B3").set_value_number(20.0);
+        sheet.cell_mut("C3").set_formula("B3*2");
+        sheet.cell_mut("A4").set_value("Carol");
+        sheet.cell_mut("B4").set_value_number(30.0);
+        sheet.cell_mut("C4").set_formula("B4*2");
     }
     workbook.new_sheet("Summary").expect("add summary sheet");
     {
-        let s = workbook.get_sheet_by_name_mut("Summary").ok().expect("summary");
-        s.get_cell_mut("A1").set_value("Flag");
-        s.get_cell_mut("B1").set_value("Done"); // changed
-        s.get_cell_mut("A2").set_value_number(42.0);
+        let s = workbook.sheet_by_name_mut("Summary").ok().expect("summary");
+        s.cell_mut("A1").set_value("Flag");
+        s.cell_mut("B1").set_value("Done"); // changed
+        s.cell_mut("A2").set_value_number(42.0);
     }
     umya_spreadsheet::writer::xlsx::write(&workbook, path).expect("write modified fixture");
 }
@@ -107,23 +107,23 @@ fn write_formula_fixture(path: &Path) {
     let mut workbook = umya_spreadsheet::new_file();
     {
         let sheet = workbook
-            .get_sheet_by_name_mut("Sheet1").ok()
+            .sheet_by_name_mut("Sheet1").ok()
             .expect("default sheet");
-        sheet.get_cell_mut("A1").set_value("Item");
-        sheet.get_cell_mut("B1").set_value("Value");
+        sheet.cell_mut("A1").set_value("Item");
+        sheet.cell_mut("B1").set_value("Value");
         for row in 2..=10u32 {
             sheet
-                .get_cell_mut(format!("A{}", row))
+                .cell_mut(format!("A{}", row))
                 .set_value(format!("Item{}", row - 1));
             sheet
-                .get_cell_mut(format!("B{}", row))
+                .cell_mut(format!("B{}", row))
                 .set_value_number((row as f64) * 10.0);
         }
         // SUM formula at B11
-        sheet.get_cell_mut("B11").set_formula("SUM(B2:B10)");
+        sheet.cell_mut("B11").set_formula("SUM(B2:B10)");
         // Reference formula
-        sheet.get_cell_mut("C2").set_formula("B2+B3");
-        sheet.get_cell_mut("C3").set_formula("$B$2+B3");
+        sheet.cell_mut("C2").set_formula("B2+B3");
+        sheet.cell_mut("C3").set_formula("$B$2+B3");
     }
     umya_spreadsheet::writer::xlsx::write(&workbook, path).expect("write formula fixture");
 }
@@ -174,10 +174,10 @@ fn range_values_format_rows_omits_empty_cells() {
     // Create a sparse workbook
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("X");
+        let sheet = workbook.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("X");
         // B1 intentionally empty
-        sheet.get_cell_mut("C1").set_value("Y");
+        sheet.cell_mut("C1").set_value("Y");
     }
     umya_spreadsheet::writer::xlsx::write(&workbook, &path).unwrap();
 
@@ -236,11 +236,11 @@ fn inspect_cells_budget_raises_limit() {
     // Create workbook with 50 cells of data
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+        let sheet = workbook.sheet_by_name_mut("Sheet1").ok().unwrap();
         for row in 1..=10u32 {
             for col in 1..=5u32 {
                 sheet
-                    .get_cell_mut((col, row))
+                    .cell_mut((col, row))
                     .set_value(format!("R{}C{}", row, col));
             }
         }
@@ -320,11 +320,11 @@ fn inspect_cells_budget_200_accepts_large_range() {
     // Create workbook with 200 cells
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+        let sheet = workbook.sheet_by_name_mut("Sheet1").ok().unwrap();
         for row in 1..=20u32 {
             for col in 1..=10u32 {
                 sheet
-                    .get_cell_mut((col, row))
+                    .cell_mut((col, row))
                     .set_value(format!("R{}C{}", row, col));
             }
         }
@@ -361,10 +361,10 @@ fn recalculate_changed_cells_shows_summary() {
     // will "change" formula cells from empty-cache to computed values.
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value_number(10.0);
-        sheet.get_cell_mut("A2").set_value_number(20.0);
-        sheet.get_cell_mut("A3").set_formula("A1+A2");
+        let sheet = workbook.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(10.0);
+        sheet.cell_mut("A2").set_value_number(20.0);
+        sheet.cell_mut("A3").set_formula("A1+A2");
     }
     umya_spreadsheet::writer::xlsx::write(&workbook, &path).unwrap();
 
@@ -423,15 +423,15 @@ fn recalculate_ignore_sheets_excludes_from_summary() {
     // Workbook with formulas on both sheets
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value_number(5.0);
-        sheet.get_cell_mut("A2").set_formula("A1*2");
+        let sheet = workbook.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(5.0);
+        sheet.cell_mut("A2").set_formula("A1*2");
     }
     workbook.new_sheet("Ignored").unwrap();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Ignored").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value_number(99.0);
-        sheet.get_cell_mut("A2").set_formula("A1+1");
+        let sheet = workbook.sheet_by_name_mut("Ignored").ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(99.0);
+        sheet.cell_mut("A2").set_formula("A1+1");
     }
     umya_spreadsheet::writer::xlsx::write(&workbook, &path).unwrap();
 

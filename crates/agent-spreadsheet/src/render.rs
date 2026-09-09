@@ -101,7 +101,7 @@ pub fn render_sheet_with_styles(
     };
     let scene = workbook.with_spreadsheet(|book| {
         let sheet = book
-            .get_sheet_by_name(sheet_name).ok()
+            .sheet_by_name(sheet_name).ok()
             .ok_or_else(|| anyhow!("sheet {sheet_name} not found"))?;
         agent_spreadsheet_render::extract_scene(sheet, book, &range, &options)
             .map_err(|error| anyhow!("{error}"))

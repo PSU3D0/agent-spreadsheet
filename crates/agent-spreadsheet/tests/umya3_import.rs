@@ -50,7 +50,7 @@ fn resident_and_file_documents_export_repaired_colours_without_hot_serialization
                 .argb_str(),
             "FFC00000"
         );
-        assert_eq!(cell.get_formula(), "A1*2");
+        assert_eq!(cell.formula(), "A1*2");
     }
     let reopened = formualizer_workbook::backends::umya3::read_document(&exported).unwrap();
     assert_eq!(
@@ -59,7 +59,7 @@ fn resident_and_file_documents_export_repaired_colours_without_hot_serialization
             .unwrap()
             .cell("B1")
             .unwrap()
-            .get_value_number(),
+            .value_number(),
         Some(42.0)
     );
     assert_eq!(resident.serialization_count(), 1);

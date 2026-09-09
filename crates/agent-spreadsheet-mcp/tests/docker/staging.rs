@@ -9,10 +9,10 @@ use crate::support::mcp::{McpTestClient, call_tool, extract_json};
 async fn test_checkpoint_restore_roundtrip() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("checkpoint.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Data");
-        sheet.get_cell_mut("A1").set_value_number(1);
-        let out = sheet.get_cell_mut("A2");
+        sheet.cell_mut("A1").set_value_number(1);
+        let out = sheet.cell_mut("A2");
         out.set_formula("A1*10");
         out.set_formula_result_default("0");
     });

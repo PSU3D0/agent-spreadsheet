@@ -243,7 +243,7 @@ fn restore_inline_error_text_types<R: Read + Seek>(
         let Some(worksheet_xml) = zip_text(archive, worksheet_path) else {
             continue;
         };
-        let Some(sheet) = spreadsheet.get_sheet_collection_mut().get_mut(sheet_index) else {
+        let Some(sheet) = spreadsheet.sheet_collection_mut().get_mut(sheet_index) else {
             continue;
         };
         for captures in OOXML_CELL_RE.captures_iter(&worksheet_xml) {
@@ -272,7 +272,7 @@ fn restore_inline_error_text_types<R: Read + Seek>(
                 .and_then(|capture| capture.get(1))
                 .map(|value| value.as_str())
             {
-                sheet.get_cell_mut(coordinate).set_value_string(text);
+                sheet.cell_mut(coordinate).set_value_string(text);
             }
         }
     }
@@ -385,9 +385,9 @@ mod borrowed_view_tests {
     fn borrowed_context_projects_the_exact_authority_without_copying() {
         let mut document = umya_spreadsheet::new_file();
         document
-            .get_sheet_by_name_mut("Sheet1").ok()
+            .sheet_by_name_mut("Sheet1").ok()
             .unwrap()
-            .get_cell_mut("A1")
+            .cell_mut("A1")
             .set_value_number(7.0);
         let view = WorkbookContext::borrowed(
             &document,
@@ -409,9 +409,9 @@ mod borrowed_view_tests {
         );
         assert_eq!(
             view.with_sheet("Sheet1", |sheet| sheet
-                .get_cell("A1")
+                .cell("A1")
                 .unwrap()
-                .get_value()
+                .value()
                 .to_string())
                 .unwrap(),
             "7"
@@ -452,9 +452,9 @@ impl<S: WorkbookReadSource> WorkbookContext<S> {
 
     pub fn sheet_names(&self) -> Vec<String> {
         let book = self.spreadsheet.read();
-        book.get_sheet_collection()
+        book.sheet_collection()
             .iter()
-            .map(|sheet| sheet.get_name().to_string())
+            .map(|sheet| sheet.name().to_string())
             .collect()
     }
 
@@ -474,13 +474,13 @@ impl<S: WorkbookReadSource> WorkbookContext<S> {
                 let mut cached_formula_cells = 0u64;
                 let mut error_formula_cells = 0u64;
 
-                for sheet in book.get_sheet_collection() {
+                for sheet in book.sheet_collection() {
                     for cell in sheet.cells() {
                         if !cell.is_formula() {
                             continue;
                         }
                         formula_cells += 1;
-                        let value = cell.get_value();
+                        let value = cell.value();
                         if !value.is_empty() {
                             cached_formula_cells += 1;
                         }
@@ -526,11 +526,11 @@ impl<S: WorkbookReadSource> WorkbookContext<S> {
 
     pub fn describe(&self) -> WorkbookDescription {
         let book = self.spreadsheet.read();
-        let defined_names_count = book.get_defined_names().len();
+        let defined_names_count = book.defined_names().len();
         let table_count: usize = book
-            .get_sheet_collection()
+            .sheet_collection()
             .iter()
-            .map(|sheet| sheet.get_tables().len())
+            .map(|sheet| sheet.tables().len())
             .sum();
         let macros_present = false;
 
@@ -541,7 +541,7 @@ impl<S: WorkbookReadSource> WorkbookContext<S> {
             path: path_to_forward_slashes(&self.path),
             client_path: None,
             bytes: self.spreadsheet.artifact_bytes(self.bytes),
-            sheet_count: book.get_sheet_collection().len(),
+            sheet_count: book.sheet_collection().len(),
             defined_names: defined_names_count,
             tables: table_count,
             macros_present,
@@ -565,10 +565,10 @@ impl<S: WorkbookReadSource> WorkbookContext<S> {
 
         let book = self.spreadsheet.read();
         let sheet = book
-            .get_sheet_by_name(sheet_name).ok()
+            .sheet_by_name(sheet_name).ok()
             .ok_or_else(|| anyhow!("sheet {} not found", sheet_name))?;
         let (metrics, style_tags) = compute_sheet_metrics(sheet);
-        let named_ranges = gather_named_ranges(sheet, book.get_defined_names());
+        let named_ranges = gather_named_ranges(sheet, book.defined_names());
 
         let entry = Arc::new(SheetCacheEntry {
             metrics,
@@ -590,7 +590,7 @@ impl<S: WorkbookReadSource> WorkbookContext<S> {
 
         let book = self.spreadsheet.read();
         let sheet = book
-            .get_sheet_by_name(sheet_name).ok()
+            .sheet_by_name(sheet_name).ok()
             .ok_or_else(|| anyhow!("sheet {} not found", sheet_name))?;
         let detected = detect_regions(sheet, &entry.metrics);
         entry.set_detected_regions(detected.regions);
@@ -601,12 +601,12 @@ impl<S: WorkbookReadSource> WorkbookContext<S> {
     pub fn list_summaries(&self, include_bounds: bool) -> Result<Vec<SheetSummary>> {
         let book = self.spreadsheet.read();
         let mut summaries = Vec::new();
-        for sheet in book.get_sheet_collection() {
-            let name = sheet.get_name().to_string();
+        for sheet in book.sheet_collection() {
+            let name = sheet.name().to_string();
             let entry = self.get_sheet_metrics_fast(&name)?;
             summaries.push(SheetSummary {
                 name: name.clone(),
-                visible: sheet.get_sheet_state() != "hidden",
+                visible: sheet.sheet_state() != "hidden",
                 row_count: include_bounds.then_some(entry.metrics.row_count),
                 column_count: include_bounds.then_some(entry.metrics.column_count),
                 non_empty_cells: include_bounds.then_some(entry.metrics.non_empty_cells),
@@ -629,7 +629,7 @@ impl<S: WorkbookReadSource> WorkbookContext<S> {
     {
         let book = self.spreadsheet.read();
         let sheet = book
-            .get_sheet_by_name(sheet_name).ok()
+            .sheet_by_name(sheet_name).ok()
             .ok_or_else(|| anyhow!("sheet {} not found", sheet_name))?;
         Ok(func(sheet))
     }
@@ -674,15 +674,15 @@ impl<S: WorkbookReadSource> WorkbookContext<S> {
     pub fn named_items(&self) -> Result<Vec<NamedRangeDescriptor>> {
         let book = self.spreadsheet.read();
         let sheet_names: Vec<String> = book
-            .get_sheet_collection()
+            .sheet_collection()
             .iter()
-            .map(|sheet| sheet.get_name().to_string())
+            .map(|sheet| sheet.name().to_string())
             .collect();
         let mut items = Vec::new();
-        for defined in book.get_defined_names() {
-            let refers_to = defined.get_address();
+        for defined in book.defined_names() {
+            let refers_to = defined.address();
             let scope = if defined.has_local_sheet_id() {
-                let idx = defined.get_local_sheet_id() as usize;
+                let idx = defined.local_sheet_id() as usize;
                 sheet_names.get(idx).cloned()
             } else {
                 None
@@ -694,14 +694,14 @@ impl<S: WorkbookReadSource> WorkbookContext<S> {
             };
 
             let (scope_kind, scope_sheet_name) = if defined.has_local_sheet_id() {
-                let idx = defined.get_local_sheet_id() as usize;
+                let idx = defined.local_sheet_id() as usize;
                 (Some(NamedRangeScope::Sheet), sheet_names.get(idx).cloned())
             } else {
                 (Some(NamedRangeScope::Workbook), None)
             };
 
             items.push(NamedRangeDescriptor {
-                name: defined.get_name().to_string(),
+                name: defined.name().to_string(),
                 scope: scope.clone(),
                 scope_kind,
                 scope_sheet_name: scope_sheet_name.clone(),
@@ -713,18 +713,18 @@ impl<S: WorkbookReadSource> WorkbookContext<S> {
         }
 
         // Also collect sheet-level defined names
-        for sheet in book.get_sheet_collection() {
-            for defined in sheet.get_defined_names() {
-                let refers_to = defined.get_address();
+        for sheet in book.sheet_collection() {
+            for defined in sheet.defined_names() {
+                let refers_to = defined.address();
                 let kind = if refers_to.starts_with('=') {
                     NamedItemKind::Formula
                 } else {
                     NamedItemKind::NamedRange
                 };
-                let sheet_name_str = sheet.get_name().to_string();
+                let sheet_name_str = sheet.name().to_string();
                 // Avoid duplicates: skip if already present from workbook-level
                 let already_present = items.iter().any(|item| {
-                    item.name == defined.get_name()
+                    item.name == defined.name()
                         && item.refers_to == refers_to
                         && (item.scope_kind == Some(NamedRangeScope::Workbook)
                             || item.scope_sheet_name.as_deref() == Some(sheet_name_str.as_str()))
@@ -734,7 +734,7 @@ impl<S: WorkbookReadSource> WorkbookContext<S> {
                 }
                 let is_sheet_scoped = defined.has_local_sheet_id();
                 items.push(NamedRangeDescriptor {
-                    name: defined.get_name().to_string(),
+                    name: defined.name().to_string(),
                     scope: is_sheet_scoped.then(|| sheet_name_str.clone()),
                     scope_kind: Some(if is_sheet_scoped {
                         NamedRangeScope::Sheet
@@ -749,17 +749,17 @@ impl<S: WorkbookReadSource> WorkbookContext<S> {
                 });
             }
 
-            for table in sheet.get_tables() {
-                let start = table.get_area().0.get_coordinate();
-                let end = table.get_area().1.get_coordinate();
+            for table in sheet.tables() {
+                let start = table.area().0.get_coordinate();
+                let end = table.area().1.get_coordinate();
                 items.push(NamedRangeDescriptor {
-                    name: table.get_name().to_string(),
-                    scope: Some(sheet.get_name().to_string()),
+                    name: table.name().to_string(),
+                    scope: Some(sheet.name().to_string()),
                     scope_kind: Some(NamedRangeScope::Sheet),
-                    scope_sheet_name: Some(sheet.get_name().to_string()),
+                    scope_sheet_name: Some(sheet.name().to_string()),
                     refers_to: format!("{}:{}", start, end),
                     kind: NamedItemKind::Table,
-                    sheet_name: Some(sheet.get_name().to_string()),
+                    sheet_name: Some(sheet.name().to_string()),
                     comment: None,
                 });
             }
@@ -855,16 +855,16 @@ const DATE_FORMAT_IDS: &[u32] = &[
 const EXCEL_LEAP_YEAR_BUG_SERIAL: i64 = 60;
 
 fn is_date_formatted(cell: &umya_spreadsheet::Cell) -> bool {
-    let Some(nf) = cell.get_style().get_number_format() else {
+    let Some(nf) = cell.style().number_format() else {
         return false;
     };
 
-    let format_id = nf.get_number_format_id();
+    let format_id = nf.number_format_id();
     if DATE_FORMAT_IDS.contains(&format_id) {
         return true;
     }
 
-    let code = nf.get_format_code();
+    let code = nf.format_code();
     if code == "General" || code == "@" || code == "0" || code == "0.00" {
         return false;
     }
@@ -913,11 +913,11 @@ pub fn cell_to_value_with_date_system(
     cell: &umya_spreadsheet::Cell,
     use_1904_system: bool,
 ) -> Option<crate::model::CellValue> {
-    let raw = cell.get_value();
+    let raw = cell.value();
     if raw.is_empty() {
         return None;
     }
-    if cell.get_data_type() == "e" || (cell.is_formula() && is_spreadsheet_error(&raw)) {
+    if cell.data_type() == "e" || (cell.is_formula() && is_spreadsheet_error(&raw)) {
         return Some(crate::model::CellValue::Error(raw.to_string()));
     }
     if let Ok(number) = raw.parse::<f64>() {
@@ -968,11 +968,11 @@ pub fn compute_sheet_metrics(sheet: &Worksheet) -> (SheetMetrics, Vec<String>) {
     let mut non_empty = 0u32;
     let mut formulas = 0u32;
     let mut cached = 0u32;
-    let comments = sheet.get_comments().len() as u32;
+    let comments = sheet.comments().len() as u32;
     let mut style_usage: StdHashMap<String, StyleUsage> = StdHashMap::new();
 
     for cell in sheet.cells() {
-        let value = cell.get_value();
+        let value = cell.value();
         let is_formula = cell.is_formula();
         if is_formula || !value.is_empty() {
             non_empty += 1;
@@ -997,7 +997,7 @@ pub fn compute_sheet_metrics(sheet: &Worksheet) -> (SheetMetrics, Vec<String>) {
         }
     }
 
-    let (max_col, max_row) = sheet.get_highest_column_and_row();
+    let (max_col, max_row) = sheet.highest_column_and_row();
 
     let classification = classification::classify(
         non_empty,
@@ -1414,9 +1414,9 @@ fn build_occupancy(sheet: &Worksheet) -> Occupancy {
     let mut max_col = 0u32;
 
     for cell in sheet.cells() {
-        let coord = cell.get_coordinate();
-        let row = coord.get_row_num();
-        let col = coord.get_col_num();
+        let coord = cell.coordinate();
+        let row = coord.row_num();
+        let col = coord.col_num();
         let value = cell_to_value(cell);
         let is_formula = cell.is_formula();
         cells.insert((row, col), CellInfo { value, is_formula });
@@ -2020,10 +2020,10 @@ fn gather_named_ranges(
     sheet: &Worksheet,
     defined_names: &[DefinedName],
 ) -> Vec<NamedRangeDescriptor> {
-    let name_str = sheet.get_name();
+    let name_str = sheet.name();
     defined_names
         .iter()
-        .filter(|name| name.get_address().contains(name_str))
+        .filter(|name| name.address().contains(name_str))
         .map(|name| {
             let (scope_kind, scope_sheet_name) = if name.has_local_sheet_id() {
                 (Some(NamedRangeScope::Sheet), Some(name_str.to_string()))
@@ -2031,7 +2031,7 @@ fn gather_named_ranges(
                 (Some(NamedRangeScope::Workbook), None)
             };
             NamedRangeDescriptor {
-                name: name.get_name().to_string(),
+                name: name.name().to_string(),
                 scope: if name.has_local_sheet_id() {
                     Some(name_str.to_string())
                 } else {
@@ -2039,7 +2039,7 @@ fn gather_named_ranges(
                 },
                 scope_kind,
                 scope_sheet_name,
-                refers_to: name.get_address(),
+                refers_to: name.address(),
                 kind: NamedItemKind::NamedRange,
                 sheet_name: Some(name_str.to_string()),
                 comment: None,

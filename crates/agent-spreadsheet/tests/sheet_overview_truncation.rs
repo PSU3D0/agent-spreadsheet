@@ -104,7 +104,7 @@ async fn sheet_overview_truncates_headers_and_sets_flags() -> Result<()> {
 }
 
 fn build_multi_region_workbook(book: &mut Spreadsheet) {
-    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
 
     let headers = ["A", "B"];
     let rows = vec![
@@ -127,7 +127,7 @@ fn build_multi_region_workbook(book: &mut Spreadsheet) {
 }
 
 fn build_wide_header_workbook(book: &mut Spreadsheet) {
-    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
 
     let headers: Vec<String> = (1..=8).map(|i| format!("Col{}", i)).collect();
     let header_refs: Vec<&str> = headers.iter().map(|s| s.as_str()).collect();

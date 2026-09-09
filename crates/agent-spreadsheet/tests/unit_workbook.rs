@@ -31,15 +31,15 @@ fn build_workbook_list_respects_filters() {
 fn workbook_context_caches_sheet_metrics() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("metrics.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         for row in 1..=3 {
             for col in 1..=3 {
                 sheet
-                    .get_cell_mut((col, row))
+                    .cell_mut((col, row))
                     .set_value_number((row * 10 + col) as i32);
             }
         }
-        sheet.get_cell_mut("A4").set_formula("SUM(A1:A3)");
+        sheet.cell_mut("A4").set_formula("SUM(A1:A3)");
     });
 
     let config = Arc::new(workspace.config());
@@ -91,42 +91,42 @@ fn date_cells_return_iso_format() {
 
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("dates.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        let cell = sheet.get_cell_mut("A1");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        let cell = sheet.cell_mut("A1");
         cell.set_value_number(45597.0);
-        cell.get_style_mut()
-            .get_number_format_mut()
+        cell.style_mut()
+            .number_format_mut()
             .set_format_code("yyyy-mm-dd");
 
-        let cell2 = sheet.get_cell_mut("B1");
+        let cell2 = sheet.cell_mut("B1");
         cell2.set_value_number(44986.0);
         cell2
-            .get_style_mut()
-            .get_number_format_mut()
+            .style_mut()
+            .number_format_mut()
             .set_format_code("mm/dd/yyyy");
 
-        let cell3 = sheet.get_cell_mut("C1");
+        let cell3 = sheet.cell_mut("C1");
         cell3.set_value_number(12345.0);
     });
 
     let book = umya_spreadsheet::reader::xlsx::read(&path).expect("read");
-    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
+    let sheet = book.sheet_by_name("Sheet1").ok().unwrap();
 
-    let val_a1 = cell_to_value(sheet.get_cell("A1").unwrap());
+    let val_a1 = cell_to_value(sheet.cell("A1").unwrap());
     assert!(
         matches!(&val_a1, Some(agent_spreadsheet_mcp::model::CellValue::Date(d)) if d == "2024-11-01"),
         "expected Date(2024-11-01), got {:?}",
         val_a1
     );
 
-    let val_b1 = cell_to_value(sheet.get_cell("B1").unwrap());
+    let val_b1 = cell_to_value(sheet.cell("B1").unwrap());
     assert!(
         matches!(&val_b1, Some(agent_spreadsheet_mcp::model::CellValue::Date(d)) if d == "2023-03-01"),
         "expected Date(2023-03-01), got {:?}",
         val_b1
     );
 
-    let val_c1 = cell_to_value(sheet.get_cell("C1").unwrap());
+    let val_c1 = cell_to_value(sheet.cell("C1").unwrap());
     assert!(
         matches!(val_c1, Some(agent_spreadsheet_mcp::model::CellValue::Number(_))),
         "expected Number, got {:?}",
@@ -140,40 +140,40 @@ fn excel_serial_date_conversion_edge_cases() {
 
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("edge_dates.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
 
-        let cell = sheet.get_cell_mut("A1");
+        let cell = sheet.cell_mut("A1");
         cell.set_value_number(1.0);
-        cell.get_style_mut()
-            .get_number_format_mut()
+        cell.style_mut()
+            .number_format_mut()
             .set_format_code("yyyy-mm-dd");
 
-        let cell2 = sheet.get_cell_mut("B1");
+        let cell2 = sheet.cell_mut("B1");
         cell2.set_value_number(60.0);
         cell2
-            .get_style_mut()
-            .get_number_format_mut()
+            .style_mut()
+            .number_format_mut()
             .set_format_code("yyyy-mm-dd");
 
-        let cell3 = sheet.get_cell_mut("C1");
+        let cell3 = sheet.cell_mut("C1");
         cell3.set_value_number(61.0);
         cell3
-            .get_style_mut()
-            .get_number_format_mut()
+            .style_mut()
+            .number_format_mut()
             .set_format_code("yyyy-mm-dd");
     });
 
     let book = umya_spreadsheet::reader::xlsx::read(&path).expect("read");
-    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
+    let sheet = book.sheet_by_name("Sheet1").ok().unwrap();
 
-    let val_a1 = cell_to_value(sheet.get_cell("A1").unwrap());
+    let val_a1 = cell_to_value(sheet.cell("A1").unwrap());
     assert!(
         matches!(&val_a1, Some(agent_spreadsheet_mcp::model::CellValue::Date(d)) if d == "1900-01-01"),
         "serial 1 should be 1900-01-01, got {:?}",
         val_a1
     );
 
-    let val_c1 = cell_to_value(sheet.get_cell("C1").unwrap());
+    let val_c1 = cell_to_value(sheet.cell("C1").unwrap());
     assert!(
         matches!(&val_c1, Some(agent_spreadsheet_mcp::model::CellValue::Date(d)) if d == "1900-03-01"),
         "serial 61 should be 1900-03-01, got {:?}",
@@ -187,11 +187,11 @@ fn formula_graph_extracts_precedents() {
 
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("formulas.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value_number(10.0);
-        sheet.get_cell_mut("A2").set_value_number(20.0);
-        sheet.get_cell_mut("B1").set_formula("A1+A2");
-        sheet.get_cell_mut("C1").set_formula("SUM(A1:A2)");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(10.0);
+        sheet.cell_mut("A2").set_value_number(20.0);
+        sheet.cell_mut("B1").set_formula("A1+A2");
+        sheet.cell_mut("C1").set_formula("SUM(A1:A2)");
     });
 
     let ctx = WorkbookContext::load(&workspace.config().into(), &path).unwrap();
@@ -248,11 +248,11 @@ fn large_range_dependents_found_via_containment() {
 
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("large_range.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         for row in 1..=600 {
-            sheet.get_cell_mut((1, row)).set_value_number(row as f64);
+            sheet.cell_mut((1, row)).set_value_number(row as f64);
         }
-        sheet.get_cell_mut("B1").set_formula("SUM(A1:A600)");
+        sheet.cell_mut("B1").set_formula("SUM(A1:A600)");
     });
 
     let ctx = WorkbookContext::load(&workspace.config().into(), &path).unwrap();
@@ -301,12 +301,12 @@ fn cross_sheet_dependents_traced() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("cross_sheet.xlsx", |book| {
         let data_sheet = book.new_sheet("Data").unwrap();
-        data_sheet.get_cell_mut("A1").set_value_number(100.0);
-        data_sheet.get_cell_mut("A2").set_value_number(200.0);
+        data_sheet.cell_mut("A1").set_value_number(100.0);
+        data_sheet.cell_mut("A2").set_value_number(200.0);
 
         let calc_sheet = book.new_sheet("Calc").unwrap();
-        calc_sheet.get_cell_mut("B1").set_formula("Data!A1+Data!A2");
-        calc_sheet.get_cell_mut("B2").set_formula("SUM(Data!A1:A2)");
+        calc_sheet.cell_mut("B1").set_formula("Data!A1+Data!A2");
+        calc_sheet.cell_mut("B2").set_formula("SUM(Data!A1:A2)");
     });
 
     let ctx = WorkbookContext::load(&workspace.config().into(), &path).unwrap();
@@ -349,13 +349,13 @@ fn dependents_are_deduplicated() {
 
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("dedup.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         for row in 1..=10 {
-            sheet.get_cell_mut((1, row)).set_value_number(row as f64);
+            sheet.cell_mut((1, row)).set_value_number(row as f64);
         }
         // Formula references A1:A10 THREE times - should only appear once in dependents
         sheet
-            .get_cell_mut("B1")
+            .cell_mut("B1")
             .set_formula("SUM(A1:A10)+SUM(A1:A10)+SUM(A1:A10)");
     });
 

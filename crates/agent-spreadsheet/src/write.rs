@@ -109,14 +109,14 @@ pub fn apply_edits_to_file(path: &Path, sheet_name: &str, edits: &[CellEdit]) ->
         .with_context(|| format!("failed to open workbook '{}'", path.display()))?;
 
     let sheet = book
-        .get_sheet_by_name_mut(sheet_name).ok()
+        .sheet_by_name_mut(sheet_name).ok()
         .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
 
     for edit in edits {
-        let cell = sheet.get_cell_mut(edit.address.as_str());
+        let cell = sheet.cell_mut(edit.address.as_str());
         if edit.is_formula {
             cell.set_formula(edit.value.clone());
-            cell.get_cell_value_mut()
+            cell.cell_value_mut()
                 .set_formula_result_default(String::new());
         } else {
             cell.set_value(edit.value.clone());

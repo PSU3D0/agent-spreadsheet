@@ -52,12 +52,12 @@ impl IdentifiedToolCall for rmcp::Peer<rmcp::RoleClient> {
 async fn live_json_rpc_projects_every_available_canonical_descriptor() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("canonical.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut((1, 1)).set_value("Name".to_string());
-        sheet.get_cell_mut((2, 1)).set_value("Amount".to_string());
-        sheet.get_cell_mut((1, 2)).set_value("Alpha".to_string());
-        sheet.get_cell_mut((2, 2)).set_value_number(42_f64);
-        sheet.get_cell_mut((3, 2)).set_formula("B2*2");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut((1, 1)).set_value("Name".to_string());
+        sheet.cell_mut((2, 1)).set_value("Amount".to_string());
+        sheet.cell_mut((1, 2)).set_value("Alpha".to_string());
+        sheet.cell_mut((2, 2)).set_value_number(42_f64);
+        sheet.cell_mut((3, 2)).set_formula("B2*2");
     });
 
     let native_parent = tempfile::tempdir()?;

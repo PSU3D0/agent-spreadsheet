@@ -22,9 +22,9 @@ use support::mcp::{
 async fn test_mcp_stdio_basic_connectivity() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("test.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("Hello");
-        sheet.get_cell_mut("B1").set_value_number(42);
+        let sheet = book.sheet_mut(0).ok().unwrap();
+        sheet.cell_mut("A1").set_value("Hello");
+        sheet.cell_mut("B1").set_value_number(42);
     });
 
     let client = test.connect().await?;
@@ -52,11 +52,11 @@ async fn test_mcp_stdio_basic_connectivity() -> Result<()> {
 async fn test_recalc_sum_formula() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("sum_test.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Data");
-        sheet.get_cell_mut("A1").set_value_number(100);
-        sheet.get_cell_mut("A2").set_value_number(20);
-        let sum_cell = sheet.get_cell_mut("A3");
+        sheet.cell_mut("A1").set_value_number(100);
+        sheet.cell_mut("A2").set_value_number(20);
+        let sum_cell = sheet.cell_mut("A3");
         sum_cell.set_formula("SUM(A1:A2)");
         sum_cell.set_formula_result_default("0");
     });
@@ -121,12 +121,12 @@ async fn test_recalc_cross_sheet_reference() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("cross_sheet.xlsx", |book| {
-            let sheet1 = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet1 = book.sheet_mut(0).ok().unwrap();
             sheet1.set_name("Input");
-            sheet1.get_cell_mut("A1").set_value_number(50);
+            sheet1.cell_mut("A1").set_value_number(50);
 
             let sheet2 = book.new_sheet("Output").unwrap();
-            let ref_cell = sheet2.get_cell_mut("A1");
+            let ref_cell = sheet2.cell_mut("A1");
             ref_cell.set_formula("Input!A1*2");
             ref_cell.set_formula_result_default("0");
         });
@@ -184,26 +184,26 @@ async fn test_recalc_cross_sheet_reference() -> Result<()> {
 async fn test_recalc_complex_formulas() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("complex.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Sheet1");
 
-        sheet.get_cell_mut("A1").set_value_number(10);
-        sheet.get_cell_mut("A2").set_value_number(20);
-        sheet.get_cell_mut("A3").set_value_number(30);
+        sheet.cell_mut("A1").set_value_number(10);
+        sheet.cell_mut("A2").set_value_number(20);
+        sheet.cell_mut("A3").set_value_number(30);
 
-        let avg = sheet.get_cell_mut("B1");
+        let avg = sheet.cell_mut("B1");
         avg.set_formula("AVERAGE(A1:A3)");
         avg.set_formula_result_default("0");
 
-        let max = sheet.get_cell_mut("B2");
+        let max = sheet.cell_mut("B2");
         max.set_formula("MAX(A1:A3)");
         max.set_formula_result_default("0");
 
-        let min = sheet.get_cell_mut("B3");
+        let min = sheet.cell_mut("B3");
         min.set_formula("MIN(A1:A3)");
         min.set_formula_result_default("0");
 
-        let nested = sheet.get_cell_mut("B4");
+        let nested = sheet.cell_mut("B4");
         nested.set_formula("IF(B1>15,\"High\",\"Low\")");
         nested.set_formula_result_default("");
     });
@@ -276,20 +276,20 @@ async fn test_recalc_complex_formulas() -> Result<()> {
 async fn test_recalc_chain_dependencies() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("chain.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Chain");
 
-        sheet.get_cell_mut("A1").set_value_number(5);
+        sheet.cell_mut("A1").set_value_number(5);
 
-        let b1 = sheet.get_cell_mut("B1");
+        let b1 = sheet.cell_mut("B1");
         b1.set_formula("A1*2");
         b1.set_formula_result_default("0");
 
-        let c1 = sheet.get_cell_mut("C1");
+        let c1 = sheet.cell_mut("C1");
         c1.set_formula("B1*2");
         c1.set_formula_result_default("0");
 
-        let d1 = sheet.get_cell_mut("D1");
+        let d1 = sheet.cell_mut("D1");
         d1.set_formula("C1*2");
         d1.set_formula_result_default("0");
     });
@@ -361,11 +361,11 @@ async fn test_recalc_chain_dependencies() -> Result<()> {
 async fn test_edit_and_recalc_workflow() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("edit_test.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Data");
-        sheet.get_cell_mut("A1").set_value_number(100);
-        sheet.get_cell_mut("A2").set_value_number(20);
-        let sum_cell = sheet.get_cell_mut("A3");
+        sheet.cell_mut("A1").set_value_number(100);
+        sheet.cell_mut("A2").set_value_number(20);
+        let sum_cell = sheet.cell_mut("A3");
         sum_cell.set_formula("SUM(A1:A2)");
         sum_cell.set_formula_result_default("0");
     });
@@ -459,11 +459,11 @@ async fn test_edit_formula_and_recalc() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("formula_edit.xlsx", |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             sheet.set_name("Data");
-            sheet.get_cell_mut("A1").set_value_number(10);
-            sheet.get_cell_mut("A2").set_value_number(20);
-            let sum_cell = sheet.get_cell_mut("A3");
+            sheet.cell_mut("A1").set_value_number(10);
+            sheet.cell_mut("A2").set_value_number(20);
+            let sum_cell = sheet.cell_mut("A3");
             sum_cell.set_formula("SUM(A1:A2)");
             sum_cell.set_formula_result_default("0");
         });
@@ -538,8 +538,8 @@ async fn test_edit_formula_and_recalc() -> Result<()> {
 async fn test_list_and_discard_forks() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("fork_test.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
-        sheet.get_cell_mut("A1").set_value_number(1);
+        let sheet = book.sheet_mut(0).ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(1);
     });
 
     let client = test.connect().await?;
@@ -599,10 +599,10 @@ async fn test_list_and_discard_forks() -> Result<()> {
 async fn test_get_edits_returns_applied_changes() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("edits_test.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Data");
-        sheet.get_cell_mut("A1").set_value_number(1);
-        sheet.get_cell_mut("A2").set_value_number(2);
+        sheet.cell_mut("A1").set_value_number(1);
+        sheet.cell_mut("A2").set_value_number(2);
     });
 
     let client = test.connect().await?;
@@ -783,11 +783,11 @@ async fn test_vlookup_recalc_with_real_workbook() -> Result<()> {
 async fn test_recalc_division_by_zero_error() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("div_zero.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Data");
-        sheet.get_cell_mut("A1").set_value_number(100);
-        sheet.get_cell_mut("A2").set_value_number(0);
-        let div = sheet.get_cell_mut("A3");
+        sheet.cell_mut("A1").set_value_number(100);
+        sheet.cell_mut("A2").set_value_number(0);
+        let div = sheet.cell_mut("A3");
         div.set_formula("A1/A2");
         div.set_formula_result_default("0");
     });
@@ -850,20 +850,20 @@ async fn test_recalc_division_by_zero_error() -> Result<()> {
 async fn test_recalc_error_propagation() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("error_prop.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Data");
-        sheet.get_cell_mut("A1").set_value_number(10);
-        sheet.get_cell_mut("A2").set_value_number(0);
+        sheet.cell_mut("A1").set_value_number(10);
+        sheet.cell_mut("A2").set_value_number(0);
 
-        let div = sheet.get_cell_mut("B1");
+        let div = sheet.cell_mut("B1");
         div.set_formula("A1/A2");
         div.set_formula_result_default("0");
 
-        let dep = sheet.get_cell_mut("C1");
+        let dep = sheet.cell_mut("C1");
         dep.set_formula("B1+100");
         dep.set_formula_result_default("0");
 
-        let dep2 = sheet.get_cell_mut("D1");
+        let dep2 = sheet.cell_mut("D1");
         dep2.set_formula("C1*2");
         dep2.set_formula_result_default("0");
     });
@@ -927,26 +927,26 @@ async fn test_recalc_error_propagation() -> Result<()> {
 async fn test_recalc_date_arithmetic() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("dates.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Data");
 
-        let date_cell = sheet.get_cell_mut("A1");
+        let date_cell = sheet.cell_mut("A1");
         date_cell.set_formula("DATE(2025,1,15)");
         date_cell.set_formula_result_default("0");
 
-        let add_days = sheet.get_cell_mut("A2");
+        let add_days = sheet.cell_mut("A2");
         add_days.set_formula("A1+30");
         add_days.set_formula_result_default("0");
 
-        let diff = sheet.get_cell_mut("A3");
+        let diff = sheet.cell_mut("A3");
         diff.set_formula("A2-A1");
         diff.set_formula_result_default("0");
 
-        let year = sheet.get_cell_mut("B1");
+        let year = sheet.cell_mut("B1");
         year.set_formula("YEAR(A1)");
         year.set_formula_result_default("0");
 
-        let month = sheet.get_cell_mut("B2");
+        let month = sheet.cell_mut("B2");
         month.set_formula("MONTH(A2)");
         month.set_formula_result_default("0");
     });
@@ -1018,7 +1018,7 @@ async fn test_recalc_date_arithmetic() -> Result<()> {
 async fn test_recalc_large_dataset_sumif() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("large.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Data");
 
         for i in 1..=500 {
@@ -1029,25 +1029,25 @@ async fn test_recalc_large_dataset_sumif() -> Result<()> {
             } else {
                 "C"
             };
-            sheet.get_cell_mut(format!("A{}", i)).set_value(category);
+            sheet.cell_mut(format!("A{}", i)).set_value(category);
             sheet
-                .get_cell_mut(format!("B{}", i))
+                .cell_mut(format!("B{}", i))
                 .set_value_number(i as f64);
         }
 
-        let sumif_a = sheet.get_cell_mut("D1");
+        let sumif_a = sheet.cell_mut("D1");
         sumif_a.set_formula("SUMIF(A1:A500,\"A\",B1:B500)");
         sumif_a.set_formula_result_default("0");
 
-        let sumif_b = sheet.get_cell_mut("D2");
+        let sumif_b = sheet.cell_mut("D2");
         sumif_b.set_formula("SUMIF(A1:A500,\"B\",B1:B500)");
         sumif_b.set_formula_result_default("0");
 
-        let countif_a = sheet.get_cell_mut("E1");
+        let countif_a = sheet.cell_mut("E1");
         countif_a.set_formula("COUNTIF(A1:A500,\"A\")");
         countif_a.set_formula_result_default("0");
 
-        let avg = sheet.get_cell_mut("F1");
+        let avg = sheet.cell_mut("F1");
         avg.set_formula("AVERAGE(B1:B500)");
         avg.set_formula_result_default("0");
     });
@@ -1126,24 +1126,24 @@ async fn test_recalc_large_dataset_sumif() -> Result<()> {
 async fn test_recalc_multiple_batch_edits() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("multi_edit.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Data");
 
         for i in 1..=5 {
             sheet
-                .get_cell_mut(format!("A{}", i))
+                .cell_mut(format!("A{}", i))
                 .set_value_number(i as f64);
         }
 
-        let sum = sheet.get_cell_mut("B1");
+        let sum = sheet.cell_mut("B1");
         sum.set_formula("SUM(A1:A5)");
         sum.set_formula_result_default("0");
 
-        let product = sheet.get_cell_mut("B2");
+        let product = sheet.cell_mut("B2");
         product.set_formula("PRODUCT(A1:A5)");
         product.set_formula_result_default("0");
 
-        let avg = sheet.get_cell_mut("B3");
+        let avg = sheet.cell_mut("B3");
         avg.set_formula("AVERAGE(A1:A5)");
         avg.set_formula_result_default("0");
     });
@@ -1250,10 +1250,10 @@ async fn test_recalc_multiple_batch_edits() -> Result<()> {
 async fn test_concurrent_forks_isolation() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("isolation.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Data");
-        sheet.get_cell_mut("A1").set_value_number(100);
-        let formula = sheet.get_cell_mut("A2");
+        sheet.cell_mut("A1").set_value_number(100);
+        let formula = sheet.cell_mut("A2");
         formula.set_formula("A1*2");
         formula.set_formula_result_default("0");
     });
@@ -1402,26 +1402,26 @@ async fn test_concurrent_forks_isolation() -> Result<()> {
 async fn test_recalc_empty_cells_in_range() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("blanks.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Data");
 
-        sheet.get_cell_mut("A1").set_value_number(10);
-        sheet.get_cell_mut("A3").set_value_number(30);
-        sheet.get_cell_mut("A5").set_value_number(50);
+        sheet.cell_mut("A1").set_value_number(10);
+        sheet.cell_mut("A3").set_value_number(30);
+        sheet.cell_mut("A5").set_value_number(50);
 
-        let sum = sheet.get_cell_mut("B1");
+        let sum = sheet.cell_mut("B1");
         sum.set_formula("SUM(A1:A5)");
         sum.set_formula_result_default("0");
 
-        let count = sheet.get_cell_mut("B2");
+        let count = sheet.cell_mut("B2");
         count.set_formula("COUNT(A1:A5)");
         count.set_formula_result_default("0");
 
-        let counta = sheet.get_cell_mut("B3");
+        let counta = sheet.cell_mut("B3");
         counta.set_formula("COUNTA(A1:A5)");
         counta.set_formula_result_default("0");
 
-        let countblank = sheet.get_cell_mut("B4");
+        let countblank = sheet.cell_mut("B4");
         countblank.set_formula("COUNTBLANK(A1:A5)");
         countblank.set_formula_result_default("0");
     });
@@ -1498,32 +1498,32 @@ async fn test_recalc_empty_cells_in_range() -> Result<()> {
 async fn test_recalc_text_and_boolean_handling() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("types.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Data");
 
-        sheet.get_cell_mut("A1").set_value("Hello");
-        sheet.get_cell_mut("A2").set_value("World");
-        sheet.get_cell_mut("A3").set_value_bool(true);
-        sheet.get_cell_mut("A4").set_value_bool(false);
-        sheet.get_cell_mut("A5").set_value_number(42);
+        sheet.cell_mut("A1").set_value("Hello");
+        sheet.cell_mut("A2").set_value("World");
+        sheet.cell_mut("A3").set_value_bool(true);
+        sheet.cell_mut("A4").set_value_bool(false);
+        sheet.cell_mut("A5").set_value_number(42);
 
-        let concat = sheet.get_cell_mut("B1");
+        let concat = sheet.cell_mut("B1");
         concat.set_formula("CONCATENATE(A1,\" \",A2)");
         concat.set_formula_result_default("");
 
-        let len = sheet.get_cell_mut("B2");
+        let len = sheet.cell_mut("B2");
         len.set_formula("LEN(A1)");
         len.set_formula_result_default("0");
 
-        let and_result = sheet.get_cell_mut("B3");
+        let and_result = sheet.cell_mut("B3");
         and_result.set_formula("AND(A3,A4)");
         and_result.set_formula_result_default("");
 
-        let or_result = sheet.get_cell_mut("B4");
+        let or_result = sheet.cell_mut("B4");
         or_result.set_formula("OR(A3,A4)");
         or_result.set_formula_result_default("");
 
-        let istext = sheet.get_cell_mut("B5");
+        let istext = sheet.cell_mut("B5");
         istext.set_formula("ISTEXT(A1)");
         istext.set_formula_result_default("");
     });
@@ -1604,10 +1604,10 @@ async fn test_recalc_text_and_boolean_handling() -> Result<()> {
 async fn test_save_fork_to_new_path() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("original.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Data");
-        sheet.get_cell_mut("A1").set_value_number(100);
-        let formula = sheet.get_cell_mut("A2");
+        sheet.cell_mut("A1").set_value_number(100);
+        let formula = sheet.cell_mut("A2");
         formula.set_formula("A1*2");
         formula.set_formula_result_default("0");
     });
@@ -1668,15 +1668,15 @@ async fn test_save_fork_to_new_path() -> Result<()> {
     assert!(saved_path.exists(), "saved file should exist");
 
     let book = umya_spreadsheet::reader::xlsx::read(&saved_path)?;
-    let sheet = book.get_sheet_by_name("Data").ok().unwrap();
-    assert_eq!(sheet.get_cell("A1").unwrap().get_value(), "500");
-    assert_eq!(sheet.get_cell("A2").unwrap().get_value(), "1000");
+    let sheet = book.sheet_by_name("Data").ok().unwrap();
+    assert_eq!(sheet.cell("A1").unwrap().value(), "500");
+    assert_eq!(sheet.cell("A2").unwrap().value(), "1000");
 
     let original_path = test.workspace().path("original.xlsx");
     let original_book = umya_spreadsheet::reader::xlsx::read(&original_path)?;
-    let original_sheet = original_book.get_sheet_by_name("Data").ok().unwrap();
+    let original_sheet = original_book.sheet_by_name("Data").ok().unwrap();
     assert_eq!(
-        original_sheet.get_cell("A1").unwrap().get_value(),
+        original_sheet.cell("A1").unwrap().value(),
         "100",
         "original should be unchanged"
     );
@@ -1690,8 +1690,8 @@ async fn test_save_fork_overwrite_blocked_by_default() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("no_overwrite.xlsx", |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
-            sheet.get_cell_mut("A1").set_value_number(1);
+            let sheet = book.sheet_mut(0).ok().unwrap();
+            sheet.cell_mut("A1").set_value_number(1);
         });
 
     let client = test.connect().await?;
@@ -1742,9 +1742,9 @@ async fn test_save_fork_overwrite_with_flag() -> Result<()> {
     let test = McpTestClient::new().with_allow_overwrite();
     test.workspace()
         .create_workbook("overwritable.xlsx", |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             sheet.set_name("Data");
-            sheet.get_cell_mut("A1").set_value_number(100);
+            sheet.cell_mut("A1").set_value_number(100);
         });
 
     let client = test.connect().await?;
@@ -1792,9 +1792,9 @@ async fn test_save_fork_overwrite_with_flag() -> Result<()> {
 
     let path = test.workspace().path("overwritable.xlsx");
     let book = umya_spreadsheet::reader::xlsx::read(&path)?;
-    let sheet = book.get_sheet_by_name("Data").ok().unwrap();
+    let sheet = book.sheet_by_name("Data").ok().unwrap();
     assert_eq!(
-        sheet.get_cell("A1").unwrap().get_value(),
+        sheet.cell("A1").unwrap().value(),
         "999",
         "original should be overwritten"
     );
@@ -1807,9 +1807,9 @@ async fn test_save_fork_overwrite_with_flag() -> Result<()> {
 async fn test_save_fork_drop_fork_false_keeps_fork() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("keep_fork.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Data");
-        sheet.get_cell_mut("A1").set_value_number(1);
+        sheet.cell_mut("A1").set_value_number(1);
     });
 
     let client = test.connect().await?;
@@ -1887,19 +1887,19 @@ async fn test_save_fork_drop_fork_false_keeps_fork() -> Result<()> {
     let v2 = umya_spreadsheet::reader::xlsx::read(test.workspace().path("v2.xlsx"))?;
 
     assert_eq!(
-        v1.get_sheet_by_name("Data").ok()
+        v1.sheet_by_name("Data").ok()
             .unwrap()
-            .get_cell("A1")
+            .cell("A1")
             .unwrap()
-            .get_value(),
+            .value(),
         "100"
     );
     assert_eq!(
-        v2.get_sheet_by_name("Data").ok()
+        v2.sheet_by_name("Data").ok()
             .unwrap()
-            .get_cell("A1")
+            .cell("A1")
             .unwrap()
-            .get_value(),
+            .value(),
         "200"
     );
 
@@ -1929,8 +1929,8 @@ async fn test_save_fork_drop_fork_false_keeps_fork() -> Result<()> {
 async fn test_save_fork_reject_outside_workspace() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("test.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
-        sheet.get_cell_mut("A1").set_value_number(1);
+        let sheet = book.sheet_mut(0).ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(1);
     });
 
     let client = test.connect().await?;
@@ -1978,8 +1978,8 @@ async fn test_save_fork_reject_outside_workspace() -> Result<()> {
 async fn test_save_fork_reject_non_xlsx() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("test.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
-        sheet.get_cell_mut("A1").set_value_number(1);
+        let sheet = book.sheet_mut(0).ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(1);
     });
 
     let client = test.connect().await?;
@@ -2027,10 +2027,10 @@ async fn test_save_fork_reject_non_xlsx() -> Result<()> {
 async fn test_save_then_load_as_new_original() -> Result<()> {
     let test = McpTestClient::new().with_allow_overwrite();
     test.workspace().create_workbook("evolving.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Data");
-        sheet.get_cell_mut("A1").set_value_number(1);
-        let sum = sheet.get_cell_mut("A2");
+        sheet.cell_mut("A1").set_value_number(1);
+        let sum = sheet.cell_mut("A2");
         sum.set_formula("A1*10");
         sum.set_formula_result_default("0");
     });

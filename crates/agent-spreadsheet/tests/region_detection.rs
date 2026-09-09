@@ -9,19 +9,19 @@ mod support;
 fn single_table_no_gutters() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("single.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut((1u32, 1u32)).set_value("Name");
-        sheet.get_cell_mut((2u32, 1u32)).set_value("Dept");
-        sheet.get_cell_mut((3u32, 1u32)).set_value("Score");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut((1u32, 1u32)).set_value("Name");
+        sheet.cell_mut((2u32, 1u32)).set_value("Dept");
+        sheet.cell_mut((3u32, 1u32)).set_value("Score");
         for row in 2..=4 {
             sheet
-                .get_cell_mut((1u32, row))
+                .cell_mut((1u32, row))
                 .set_value(format!("User{}", row));
             sheet
-                .get_cell_mut((2u32, row))
+                .cell_mut((2u32, row))
                 .set_value(format!("Team{}", row));
             sheet
-                .get_cell_mut((3u32, row))
+                .cell_mut((3u32, row))
                 .set_value_number(80 + row as i32);
         }
     });
@@ -45,21 +45,21 @@ fn single_table_no_gutters() {
 fn two_tables_vertical_gutter() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("vertical.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut((1u32, 1u32)).set_value("A");
-        sheet.get_cell_mut((2u32, 1u32)).set_value("B");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut((1u32, 1u32)).set_value("A");
+        sheet.cell_mut((2u32, 1u32)).set_value("B");
         for row in 2..=3 {
-            sheet.get_cell_mut((1u32, row)).set_value_number(row as i32);
+            sheet.cell_mut((1u32, row)).set_value_number(row as i32);
             sheet
-                .get_cell_mut((2u32, row))
+                .cell_mut((2u32, row))
                 .set_value_number(row as i32 * 2);
         }
         for row in 6..=8 {
             sheet
-                .get_cell_mut((1u32, row))
+                .cell_mut((1u32, row))
                 .set_value(format!("R{}", row));
             sheet
-                .get_cell_mut((2u32, row))
+                .cell_mut((2u32, row))
                 .set_value_number(row as i32 + 10);
         }
     });
@@ -79,21 +79,21 @@ fn two_tables_vertical_gutter() {
 fn two_tables_horizontal_gutter() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("horizontal.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut((1u32, 1u32)).set_value("L1");
-        sheet.get_cell_mut((2u32, 1u32)).set_value("L2");
-        sheet.get_cell_mut((5u32, 1u32)).set_value("R1");
-        sheet.get_cell_mut((6u32, 1u32)).set_value("R2");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut((1u32, 1u32)).set_value("L1");
+        sheet.cell_mut((2u32, 1u32)).set_value("L2");
+        sheet.cell_mut((5u32, 1u32)).set_value("R1");
+        sheet.cell_mut((6u32, 1u32)).set_value("R2");
         for row in 2..=4 {
-            sheet.get_cell_mut((1u32, row)).set_value_number(row as i32);
+            sheet.cell_mut((1u32, row)).set_value_number(row as i32);
             sheet
-                .get_cell_mut((2u32, row))
+                .cell_mut((2u32, row))
                 .set_value_number(row as i32 * 3);
             sheet
-                .get_cell_mut((5u32, row))
+                .cell_mut((5u32, row))
                 .set_value(format!("X{}", row));
             sheet
-                .get_cell_mut((6u32, row))
+                .cell_mut((6u32, row))
                 .set_value_number(row as i32 + 20);
         }
     });
@@ -113,13 +113,13 @@ fn two_tables_horizontal_gutter() {
 fn parameters_block_classified() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("params.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         for row in 1..=5 {
             sheet
-                .get_cell_mut((1u32, row))
+                .cell_mut((1u32, row))
                 .set_value(format!("Param{}", row));
             sheet
-                .get_cell_mut((2u32, row))
+                .cell_mut((2u32, row))
                 .set_value_number((row * 10) as i32);
         }
     });
@@ -142,13 +142,13 @@ fn parameters_block_classified() {
 fn calculator_region_detected() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("calc.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut((1u32, 1u32)).set_value_number(10);
-        sheet.get_cell_mut((2u32, 1u32)).set_formula("A1*2");
-        sheet.get_cell_mut((3u32, 1u32)).set_formula("B1+5");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut((1u32, 1u32)).set_value_number(10);
+        sheet.cell_mut((2u32, 1u32)).set_formula("A1*2");
+        sheet.cell_mut((3u32, 1u32)).set_formula("B1+5");
         for row in 2..=4 {
             for col in 1..=3 {
-                sheet.get_cell_mut((col, row)).set_formula("A1*2");
+                sheet.cell_mut((col, row)).set_formula("A1*2");
             }
         }
     });
@@ -170,16 +170,16 @@ fn calculator_region_detected() {
 fn metadata_footer_split() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("footer.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut((1u32, 1u32)).set_value("H1");
-        sheet.get_cell_mut((2u32, 1u32)).set_value("H2");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut((1u32, 1u32)).set_value("H1");
+        sheet.cell_mut((2u32, 1u32)).set_value("H2");
         for row in 2..=3 {
-            sheet.get_cell_mut((1u32, row)).set_value_number(1);
-            sheet.get_cell_mut((2u32, row)).set_value_number(2);
+            sheet.cell_mut((1u32, row)).set_value_number(1);
+            sheet.cell_mut((2u32, row)).set_value_number(2);
         }
-        sheet.get_cell_mut((1u32, 9u32)).set_value("Notes");
+        sheet.cell_mut((1u32, 9u32)).set_value("Notes");
         sheet
-            .get_cell_mut((2u32, 9u32))
+            .cell_mut((2u32, 9u32))
             .set_value("Confidential footer");
     });
 
@@ -202,17 +202,17 @@ fn metadata_footer_split() {
 fn multi_row_headers_detected() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("headers.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut((1u32, 1u32)).set_value("FY");
-        sheet.get_cell_mut((2u32, 1u32)).set_value("FY");
-        sheet.get_cell_mut((1u32, 2u32)).set_value("'2023");
-        sheet.get_cell_mut((2u32, 2u32)).set_value("'2024");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut((1u32, 1u32)).set_value("FY");
+        sheet.cell_mut((2u32, 1u32)).set_value("FY");
+        sheet.cell_mut((1u32, 2u32)).set_value("'2023");
+        sheet.cell_mut((2u32, 2u32)).set_value("'2024");
         for row in 3..=5 {
             sheet
-                .get_cell_mut((1u32, row))
+                .cell_mut((1u32, row))
                 .set_value_number(10 + row as i32);
             sheet
-                .get_cell_mut((2u32, row))
+                .cell_mut((2u32, row))
                 .set_value_number(20 + row as i32);
         }
     });
@@ -234,13 +234,13 @@ fn multi_row_headers_detected() {
 fn region_ids_stable_across_reads() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("stable.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut((1u32, 1u32)).set_value("A");
-        sheet.get_cell_mut((2u32, 1u32)).set_value("B");
-        sheet.get_cell_mut((1u32, 2u32)).set_value_number(1);
-        sheet.get_cell_mut((2u32, 2u32)).set_value_number(2);
-        sheet.get_cell_mut((1u32, 6u32)).set_value("X");
-        sheet.get_cell_mut((2u32, 6u32)).set_value_number(9);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut((1u32, 1u32)).set_value("A");
+        sheet.cell_mut((2u32, 1u32)).set_value("B");
+        sheet.cell_mut((1u32, 2u32)).set_value_number(1);
+        sheet.cell_mut((2u32, 2u32)).set_value_number(2);
+        sheet.cell_mut((1u32, 6u32)).set_value("X");
+        sheet.cell_mut((2u32, 6u32)).set_value_number(9);
     });
 
     let config = Arc::new(workspace.config());
@@ -256,15 +256,15 @@ fn region_ids_stable_across_reads() {
 fn stacked_and_side_by_side_quadrants() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("quadrants.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("Q1");
-        sheet.get_cell_mut("B1").set_value_number(1);
-        sheet.get_cell_mut("A6").set_value("Q3");
-        sheet.get_cell_mut("B6").set_value_number(3);
-        sheet.get_cell_mut("E1").set_value("Q2");
-        sheet.get_cell_mut("F1").set_value_number(2);
-        sheet.get_cell_mut("E6").set_value("Q4");
-        sheet.get_cell_mut("F6").set_value_number(4);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("Q1");
+        sheet.cell_mut("B1").set_value_number(1);
+        sheet.cell_mut("A6").set_value("Q3");
+        sheet.cell_mut("B6").set_value_number(3);
+        sheet.cell_mut("E1").set_value("Q2");
+        sheet.cell_mut("F1").set_value_number(2);
+        sheet.cell_mut("E6").set_value("Q4");
+        sheet.cell_mut("F6").set_value_number(4);
     });
     let ctx = WorkbookContext::load(&workspace.config().into(), &path).expect("load");
     let regions = ctx
@@ -282,19 +282,19 @@ fn stacked_and_side_by_side_quadrants() {
 fn outputs_band_detected() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("outputs.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("Input");
-        sheet.get_cell_mut("B1").set_value("Rate");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("Input");
+        sheet.cell_mut("B1").set_value("Rate");
         for row in 2..=15 {
-            sheet.get_cell_mut((1u32, row)).set_value_number(row as f64);
+            sheet.cell_mut((1u32, row)).set_value_number(row as f64);
             sheet
-                .get_cell_mut((2u32, row))
+                .cell_mut((2u32, row))
                 .set_formula("A1*0.1")
                 .set_value_number(0.1);
         }
-        sheet.get_cell_mut("A18").set_value("Totals");
+        sheet.cell_mut("A18").set_value("Totals");
         for col in 2..=4 {
-            sheet.get_cell_mut((col, 18u32)).set_formula("SUM(A2:A15)");
+            sheet.cell_mut((col, 18u32)).set_formula("SUM(A2:A15)");
         }
     });
     let ctx = WorkbookContext::load(&workspace.config().into(), &path).expect("load");
@@ -321,10 +321,10 @@ fn outputs_band_detected() {
 fn noisy_sparse_sheet_stays_single_region_low_confidence() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("noisy.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("X");
-        sheet.get_cell_mut("D10").set_value_number(5);
-        sheet.get_cell_mut("H3").set_value("Note");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("X");
+        sheet.cell_mut("D10").set_value_number(5);
+        sheet.cell_mut("H3").set_value("Note");
     });
     let ctx = WorkbookContext::load(&workspace.config().into(), &path).expect("load");
     let regions = ctx
@@ -340,11 +340,11 @@ fn noisy_sparse_sheet_stays_single_region_low_confidence() {
 fn edge_gutter_bias_trims_leading_blank_area() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("offset.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("E10").set_value("Data");
-        sheet.get_cell_mut("F10").set_value_number(1);
-        sheet.get_cell_mut("E11").set_value("Data2");
-        sheet.get_cell_mut("F11").set_value_number(2);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("E10").set_value("Data");
+        sheet.cell_mut("F10").set_value_number(1);
+        sheet.cell_mut("E11").set_value("Data2");
+        sheet.cell_mut("F11").set_value_number(2);
     });
     let ctx = WorkbookContext::load(&workspace.config().into(), &path).expect("load");
     let regions = ctx
@@ -359,8 +359,8 @@ fn edge_gutter_bias_trims_leading_blank_area() {
 fn small_min_size_guard_keeps_tiny_block() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("tiny.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("B2").set_value("x");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("B2").set_value("x");
     });
     let ctx = WorkbookContext::load(&workspace.config().into(), &path).expect("load");
     let regions = ctx
@@ -375,13 +375,13 @@ fn small_min_size_guard_keeps_tiny_block() {
 fn formula_mixed_with_values_classifies_mixed() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("mixed.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value_number(1);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(1);
         sheet
-            .get_cell_mut("B1")
+            .cell_mut("B1")
             .set_formula("A1*2")
             .set_value_number(2);
-        sheet.get_cell_mut("A2").set_value("text");
+        sheet.cell_mut("A2").set_value("text");
     });
     let ctx = WorkbookContext::load(&workspace.config().into(), &path).expect("load");
     let regions = ctx
@@ -396,13 +396,13 @@ fn formula_mixed_with_values_classifies_mixed() {
 fn header_false_positive_guard_uses_text_row() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("header_guard.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value_number(1);
-        sheet.get_cell_mut("B1").set_value_number(2);
-        sheet.get_cell_mut("A2").set_value("Name");
-        sheet.get_cell_mut("B2").set_value("Val");
-        sheet.get_cell_mut("A3").set_value("Row1");
-        sheet.get_cell_mut("B3").set_value_number(10);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(1);
+        sheet.cell_mut("B1").set_value_number(2);
+        sheet.cell_mut("A2").set_value("Name");
+        sheet.cell_mut("B2").set_value("Val");
+        sheet.cell_mut("A3").set_value("Row1");
+        sheet.cell_mut("B3").set_value_number(10);
     });
     let ctx = WorkbookContext::load(&workspace.config().into(), &path).expect("load");
     let regions = ctx
@@ -417,17 +417,17 @@ fn header_false_positive_guard_uses_text_row() {
 fn key_value_layout_detected_as_parameters() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("kv_layout.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("Item");
-        sheet.get_cell_mut("B1").set_value("Widget");
-        sheet.get_cell_mut("A2").set_value("Quantity");
-        sheet.get_cell_mut("B2").set_value_number(150);
-        sheet.get_cell_mut("A3").set_value("Price");
-        sheet.get_cell_mut("B3").set_value_number(44.99);
-        sheet.get_cell_mut("A4").set_value("Category");
-        sheet.get_cell_mut("B4").set_value("Electronics");
-        sheet.get_cell_mut("A5").set_value("Available");
-        sheet.get_cell_mut("B5").set_value("Yes");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("Item");
+        sheet.cell_mut("B1").set_value("Widget");
+        sheet.cell_mut("A2").set_value("Quantity");
+        sheet.cell_mut("B2").set_value_number(150);
+        sheet.cell_mut("A3").set_value("Price");
+        sheet.cell_mut("B3").set_value_number(44.99);
+        sheet.cell_mut("A4").set_value("Category");
+        sheet.cell_mut("B4").set_value("Electronics");
+        sheet.cell_mut("A5").set_value("Available");
+        sheet.cell_mut("B5").set_value("Yes");
     });
 
     let config = Arc::new(workspace.config());
@@ -460,16 +460,16 @@ fn key_value_layout_detected_as_parameters() {
 fn proper_noun_penalized_in_header_scoring() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("proper_noun.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("Acme Corp");
-        sheet.get_cell_mut("B1").set_value("Globex Inc");
-        sheet.get_cell_mut("C1").set_value("Initech LLC");
-        sheet.get_cell_mut("A2").set_value("Name");
-        sheet.get_cell_mut("B2").set_value("Dept");
-        sheet.get_cell_mut("C2").set_value("Status");
-        sheet.get_cell_mut("A3").set_value("Widget");
-        sheet.get_cell_mut("B3").set_value("Sales");
-        sheet.get_cell_mut("C3").set_value("Active");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("Acme Corp");
+        sheet.cell_mut("B1").set_value("Globex Inc");
+        sheet.cell_mut("C1").set_value("Initech LLC");
+        sheet.cell_mut("A2").set_value("Name");
+        sheet.cell_mut("B2").set_value("Dept");
+        sheet.cell_mut("C2").set_value("Status");
+        sheet.cell_mut("A3").set_value("Widget");
+        sheet.cell_mut("B3").set_value("Sales");
+        sheet.cell_mut("C3").set_value("Active");
     });
 
     let config = Arc::new(workspace.config());

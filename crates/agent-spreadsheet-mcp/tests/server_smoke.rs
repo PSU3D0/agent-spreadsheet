@@ -26,13 +26,13 @@ fn startup_scan_discovers_workspace_workbooks() {
 async fn server_tool_handlers_return_json() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("simple.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut((1, 1)).set_value("Name".to_string());
-        sheet.get_cell_mut((2, 1)).set_value("Value".to_string());
-        sheet.get_cell_mut((1, 2)).set_value("Alpha".to_string());
-        sheet.get_cell_mut((2, 2)).set_value_number(10_f64);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut((1, 1)).set_value("Name".to_string());
+        sheet.cell_mut((2, 1)).set_value("Value".to_string());
+        sheet.cell_mut((1, 2)).set_value("Alpha".to_string());
+        sheet.cell_mut((2, 2)).set_value_number(10_f64);
         sheet
-            .get_cell_mut((2, 3))
+            .cell_mut((2, 3))
             .set_formula("B2*2")
             .set_formula_result_default("20");
     });
@@ -106,12 +106,12 @@ async fn server_tool_handlers_return_json() -> Result<()> {
 async fn response_size_guard_rejects_large_payloads() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("oversize.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         for row in 1..=25u32 {
             sheet
-                .get_cell_mut((1u32, row))
+                .cell_mut((1u32, row))
                 .set_value(format!("Row{}", row));
-            sheet.get_cell_mut((2u32, row)).set_value_number(row as i32);
+            sheet.cell_mut((2u32, row)).set_value_number(row as i32);
         }
     });
 

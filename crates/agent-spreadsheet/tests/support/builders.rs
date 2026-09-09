@@ -53,20 +53,20 @@ fn parse_cell_ref(cell_ref: &str) -> (u32, u32) {
 pub fn set_cell(sheet: &mut Worksheet, col: u32, row: u32, val: &CellVal) {
     match val {
         CellVal::Text(s) => {
-            sheet.get_cell_mut((col, row)).set_value(s.clone());
+            sheet.cell_mut((col, row)).set_value(s.clone());
         }
         CellVal::Num(n) => {
-            sheet.get_cell_mut((col, row)).set_value_number(*n);
+            sheet.cell_mut((col, row)).set_value_number(*n);
         }
         CellVal::Date(serial) => {
-            sheet.get_cell_mut((col, row)).set_value_number(*serial);
+            sheet.cell_mut((col, row)).set_value_number(*serial);
             sheet
-                .get_style_mut((col, row))
-                .get_number_format_mut()
+                .style_mut((col, row))
+                .number_format_mut()
                 .set_format_code(NumberingFormat::FORMAT_DATE_YYYYMMDD2);
         }
         CellVal::Formula(f) => {
-            sheet.get_cell_mut((col, row)).set_formula(f.clone());
+            sheet.cell_mut((col, row)).set_formula(f.clone());
         }
         CellVal::Empty => {}
     }
@@ -83,10 +83,10 @@ where
     for (i, header) in headers.iter().enumerate() {
         let col = start_col + i as u32;
         sheet
-            .get_cell_mut((col, start_row))
+            .cell_mut((col, start_row))
             .set_value(header.as_ref().to_string());
-        let style = sheet.get_style_mut((col, start_row));
-        style.get_font_mut().set_bold(true);
+        let style = sheet.style_mut((col, start_row));
+        style.font_mut().set_bold(true);
     }
 
     for (row_idx, row_data) in rows.iter().enumerate() {
@@ -109,7 +109,7 @@ where
     for (i, (key, val)) in pairs.iter().enumerate() {
         let row = start_row + i as u32;
         sheet
-            .get_cell_mut((start_col, row))
+            .cell_mut((start_col, row))
             .set_value(key.as_ref().to_string());
         let cell_val: CellVal = val.clone().into();
         set_cell(sheet, start_col + 1, row, &cell_val);
@@ -126,7 +126,7 @@ where
     for (i, (key, val)) in pairs.iter().enumerate() {
         let col = start_col + i as u32;
         sheet
-            .get_cell_mut((col, start_row))
+            .cell_mut((col, start_row))
             .set_value(key.as_ref().to_string());
         let cell_val: CellVal = val.clone().into();
         set_cell(sheet, col, start_row + 1, &cell_val);
@@ -154,7 +154,7 @@ pub fn fill_formula_grid(
             let row = start_row + r;
             let col = start_col + c;
             let formula = formula_fn(row, col);
-            sheet.get_cell_mut((col, row)).set_formula(formula);
+            sheet.cell_mut((col, row)).set_formula(formula);
         }
     }
 }
@@ -170,8 +170,8 @@ pub fn set_header_style(sheet: &mut Worksheet, range: &str) {
 
     for row in start_row..=end_row {
         for col in start_col..=end_col {
-            let style = sheet.get_style_mut((col, row));
-            style.get_font_mut().set_bold(true);
+            let style = sheet.style_mut((col, row));
+            style.font_mut().set_bold(true);
         }
     }
 }
@@ -188,8 +188,8 @@ pub fn apply_date_format(sheet: &mut Worksheet, range: &str) {
     for row in start_row..=end_row {
         for col in start_col..=end_col {
             sheet
-                .get_style_mut((col, row))
-                .get_number_format_mut()
+                .style_mut((col, row))
+                .number_format_mut()
                 .set_format_code(NumberingFormat::FORMAT_DATE_YYYYMMDD2);
         }
     }

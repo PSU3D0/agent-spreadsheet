@@ -58,14 +58,14 @@ fn snapshot_cell_values(
     })?;
     let mut cells = BTreeMap::new();
 
-    for sheet in book.get_sheet_collection() {
-        let sheet_name = sheet.get_name().to_string();
+    for sheet in book.sheet_collection() {
+        let sheet_name = sheet.name().to_string();
         if ignore.iter().any(|s| s == &sheet_name) {
             continue;
         }
         for cell in sheet.cells() {
-            let address = cell.get_coordinate().get_coordinate().to_string();
-            let value = cell.get_value().to_string();
+            let address = cell.coordinate().get_coordinate().to_string();
+            let value = cell.value().to_string();
             cells.insert((sheet_name.clone(), address), value);
         }
     }

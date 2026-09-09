@@ -60,13 +60,13 @@ async fn workbook_summary_reports_regions_and_entry_points() -> Result<()> {
 }
 
 fn build_summary_workbook(book: &mut Spreadsheet) {
-    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-    sheet.get_cell_mut("A1").set_value("Name");
-    sheet.get_cell_mut("B1").set_value("Value");
-    sheet.get_cell_mut("A2").set_value("Alpha");
-    sheet.get_cell_mut("B2").set_value_number(10);
-    sheet.get_cell_mut("C4").set_formula("SUM(B2:B2)");
-    sheet.get_cell_mut("B3").set_formula("B2*2");
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+    sheet.cell_mut("A1").set_value("Name");
+    sheet.cell_mut("B1").set_value("Value");
+    sheet.cell_mut("A2").set_value("Alpha");
+    sheet.cell_mut("B2").set_value_number(10);
+    sheet.cell_mut("C4").set_formula("SUM(B2:B2)");
+    sheet.cell_mut("B3").set_formula("B2*2");
     sheet
         .add_defined_name("KeyValue", "Sheet1!$B$2")
         .expect("define name");

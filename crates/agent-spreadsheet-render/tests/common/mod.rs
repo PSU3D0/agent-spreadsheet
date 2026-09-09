@@ -113,7 +113,7 @@ pub fn render_fixture(name: &str) -> (Scene, RenderOutput) {
         styles_xml: styles.as_deref(),
         ..RenderOptions::default()
     };
-    let sheet = book.get_sheet(&0).ok().expect("fixture has a first sheet");
+    let sheet = book.sheet(0).ok().expect("fixture has a first sheet");
     let scene = extract_scene(sheet, &book, &GOLDEN_RANGE, &options)
         .unwrap_or_else(|error| panic!("extracting {name}: {error}"));
     let output = rasterize(&scene, &RasterOptions::default())

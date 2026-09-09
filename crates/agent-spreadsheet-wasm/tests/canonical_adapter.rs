@@ -12,9 +12,9 @@ use serde_json::{Value, json};
 
 fn workbook_bytes() -> Vec<u8> {
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().expect("sheet");
-    sheet.get_cell_mut("A1").set_value("Name");
-    sheet.get_cell_mut("A2").set_value("Ada");
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().expect("sheet");
+    sheet.cell_mut("A1").set_value("Name");
+    sheet.cell_mut("A2").set_value("Ada");
     let mut bytes = Vec::new();
     umya_spreadsheet::writer::xlsx::write_writer(&book, &mut bytes).expect("write workbook");
     bytes

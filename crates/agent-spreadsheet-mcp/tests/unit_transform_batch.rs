@@ -26,9 +26,9 @@ fn recalc_state(
 async fn transform_batch_clear_range_clears_values_keeps_formulas_by_default() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("transform_clear.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("x");
-        sheet.get_cell_mut("B1").set_formula("A1".to_string());
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("x");
+        sheet.cell_mut("B1").set_formula("A1".to_string());
     });
 
     let state = recalc_state(&workspace);
@@ -79,11 +79,11 @@ async fn transform_batch_clear_range_clears_values_keeps_formulas_by_default() -
         .await?;
     let (a1, b1_formula) = fork_wb.with_sheet("Sheet1", |sheet| {
         let a1 = sheet
-            .get_cell("A1")
-            .map(|c| c.get_value().to_string())
+            .cell("A1")
+            .map(|c| c.value().to_string())
             .unwrap_or_default();
-        let b1 = sheet.get_cell("B1").expect("B1");
-        (a1, b1.get_formula().to_string())
+        let b1 = sheet.cell("B1").expect("B1");
+        (a1, b1.formula().to_string())
     })?;
 
     assert_eq!(a1, "");
@@ -96,9 +96,9 @@ async fn transform_batch_clear_range_clears_values_keeps_formulas_by_default() -
 async fn transform_batch_preview_stages_and_apply() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("transform_preview.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("x");
-        sheet.get_cell_mut("B1").set_formula("A1".to_string());
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("x");
+        sheet.cell_mut("B1").set_formula("A1".to_string());
     });
 
     let state = recalc_state(&workspace);
@@ -150,8 +150,8 @@ async fn transform_batch_preview_stages_and_apply() -> Result<()> {
         .await?;
     let a1_before = fork_wb.with_sheet("Sheet1", |sheet| {
         sheet
-            .get_cell("A1")
-            .map(|c| c.get_value().to_string())
+            .cell("A1")
+            .map(|c| c.value().to_string())
             .unwrap_or_default()
     })?;
     assert_eq!(a1_before, "x");
@@ -170,10 +170,10 @@ async fn transform_batch_preview_stages_and_apply() -> Result<()> {
         .await?;
     let (a1_after, b1_formula) = fork_wb.with_sheet("Sheet1", |sheet| {
         let a1 = sheet
-            .get_cell("A1")
-            .map(|c| c.get_value().to_string())
+            .cell("A1")
+            .map(|c| c.value().to_string())
             .unwrap_or_default();
-        let b1_formula = sheet.get_cell("B1").expect("B1").get_formula().to_string();
+        let b1_formula = sheet.cell("B1").expect("B1").formula().to_string();
         (a1, b1_formula)
     })?;
 
@@ -187,9 +187,9 @@ async fn transform_batch_preview_stages_and_apply() -> Result<()> {
 async fn transform_batch_region_target_resolves() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("transform_region.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("x");
-        sheet.get_cell_mut("B2").set_value("y");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("x");
+        sheet.cell_mut("B2").set_value("y");
     });
 
     let state = recalc_state(&workspace);
@@ -257,12 +257,12 @@ async fn transform_batch_region_target_resolves() -> Result<()> {
         .await?;
     let (a1, b2) = fork_wb.with_sheet("Sheet1", |sheet| {
         let a1 = sheet
-            .get_cell("A1")
-            .map(|c| c.get_value().to_string())
+            .cell("A1")
+            .map(|c| c.value().to_string())
             .unwrap_or_default();
         let b2 = sheet
-            .get_cell("B2")
-            .map(|c| c.get_value().to_string())
+            .cell("B2")
+            .map(|c| c.value().to_string())
             .unwrap_or_default();
         (a1, b2)
     })?;
@@ -277,9 +277,9 @@ async fn transform_batch_region_target_resolves() -> Result<()> {
 async fn transform_batch_cells_target_skips_missing_and_handles_duplicates() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("transform_cells.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("x");
-        sheet.get_cell_mut("C3").set_value("keep");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("x");
+        sheet.cell_mut("C3").set_value("keep");
     });
 
     let state = recalc_state(&workspace);
@@ -335,14 +335,14 @@ async fn transform_batch_cells_target_skips_missing_and_handles_duplicates() -> 
         .await?;
     let (a1, c3, z99_exists) = fork_wb.with_sheet("Sheet1", |sheet| {
         let a1 = sheet
-            .get_cell("A1")
-            .map(|c| c.get_value().to_string())
+            .cell("A1")
+            .map(|c| c.value().to_string())
             .unwrap_or_default();
         let c3 = sheet
-            .get_cell("C3")
-            .map(|c| c.get_value().to_string())
+            .cell("C3")
+            .map(|c| c.value().to_string())
             .unwrap_or_default();
-        let z99_exists = sheet.get_cell("Z99").is_some();
+        let z99_exists = sheet.cell("Z99").is_some();
         (a1, c3, z99_exists)
     })?;
 
@@ -357,9 +357,9 @@ async fn transform_batch_cells_target_skips_missing_and_handles_duplicates() -> 
 async fn transform_batch_accepts_reversed_range() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("transform_reversed.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("x");
-        sheet.get_cell_mut("C3").set_value("z");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("x");
+        sheet.cell_mut("C3").set_value("z");
     });
 
     let state = recalc_state(&workspace);
@@ -410,12 +410,12 @@ async fn transform_batch_accepts_reversed_range() -> Result<()> {
         .await?;
     let (a1, c3) = fork_wb.with_sheet("Sheet1", |sheet| {
         let a1 = sheet
-            .get_cell("A1")
-            .map(|c| c.get_value().to_string())
+            .cell("A1")
+            .map(|c| c.value().to_string())
             .unwrap_or_default();
         let c3 = sheet
-            .get_cell("C3")
-            .map(|c| c.get_value().to_string())
+            .cell("C3")
+            .map(|c| c.value().to_string())
             .unwrap_or_default();
         (a1, c3)
     })?;
@@ -430,9 +430,9 @@ async fn transform_batch_accepts_reversed_range() -> Result<()> {
 async fn transform_batch_noop_flags_do_not_change_cells() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("transform_noop.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("x");
-        sheet.get_cell_mut("B1").set_formula("A1".to_string());
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("x");
+        sheet.cell_mut("B1").set_formula("A1".to_string());
     });
 
     let state = recalc_state(&workspace);
@@ -492,10 +492,10 @@ async fn transform_batch_noop_flags_do_not_change_cells() -> Result<()> {
         .await?;
     let (a1, b1_formula) = fork_wb.with_sheet("Sheet1", |sheet| {
         let a1 = sheet
-            .get_cell("A1")
-            .map(|c| c.get_value().to_string())
+            .cell("A1")
+            .map(|c| c.value().to_string())
             .unwrap_or_default();
-        let b1_formula = sheet.get_cell("B1").expect("B1").get_formula().to_string();
+        let b1_formula = sheet.cell("B1").expect("B1").formula().to_string();
         (a1, b1_formula)
     })?;
 
@@ -509,9 +509,9 @@ async fn transform_batch_noop_flags_do_not_change_cells() -> Result<()> {
 async fn transform_batch_counts_mixed_range() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("transform_counts.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("x");
-        sheet.get_cell_mut("B1").set_formula("A1".to_string());
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("x");
+        sheet.cell_mut("B1").set_formula("A1".to_string());
     });
 
     let state = recalc_state(&workspace);
@@ -581,9 +581,9 @@ async fn transform_batch_counts_mixed_range() -> Result<()> {
 async fn transform_batch_clear_formulas_only_removes_formula_keeps_literal_values() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("transform_clear_formulas.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("x");
-        sheet.get_cell_mut("B1").set_formula("A1".to_string());
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("x");
+        sheet.cell_mut("B1").set_formula("A1".to_string());
     });
 
     let state = recalc_state(&workspace);
@@ -643,10 +643,10 @@ async fn transform_batch_clear_formulas_only_removes_formula_keeps_literal_value
         .await?;
     let (a1, b1_formula) = fork_wb.with_sheet("Sheet1", |sheet| {
         let a1 = sheet
-            .get_cell("A1")
-            .map(|c| c.get_value().to_string())
+            .cell("A1")
+            .map(|c| c.value().to_string())
             .unwrap_or_default();
-        let b1_formula = sheet.get_cell("B1").expect("B1").get_formula().to_string();
+        let b1_formula = sheet.cell("B1").expect("B1").formula().to_string();
         (a1, b1_formula)
     })?;
 
@@ -660,8 +660,8 @@ async fn transform_batch_clear_formulas_only_removes_formula_keeps_literal_value
 async fn transform_batch_fill_range_creates_cells_and_skips_formulas_by_default() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("transform_fill.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_formula("1+1".to_string());
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_formula("1+1".to_string());
     });
 
     let state = recalc_state(&workspace);
@@ -721,9 +721,9 @@ async fn transform_batch_fill_range_creates_cells_and_skips_formulas_by_default(
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     let (a1_formula, b2_value) = fork_wb.with_sheet("Sheet1", |sheet| {
-        let a1 = sheet.get_cell("A1").expect("A1");
-        let b2 = sheet.get_cell("B2").expect("B2");
-        (a1.get_formula().to_string(), b2.get_value().to_string())
+        let a1 = sheet.cell("A1").expect("A1");
+        let b2 = sheet.cell("B2").expect("B2");
+        (a1.formula().to_string(), b2.value().to_string())
     })?;
 
     assert_eq!(a1_formula, "1+1");
@@ -736,9 +736,9 @@ async fn transform_batch_fill_range_creates_cells_and_skips_formulas_by_default(
 async fn transform_batch_replace_in_range_replaces_values_exact() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("transform_replace_values.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("Foo");
-        sheet.get_cell_mut("B1").set_value("FooBar");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("Foo");
+        sheet.cell_mut("B1").set_value("FooBar");
     });
 
     let state = recalc_state(&workspace);
@@ -796,8 +796,8 @@ async fn transform_batch_replace_in_range_replaces_values_exact() -> Result<()> 
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     let (a1, b1) = fork_wb.with_sheet("Sheet1", |sheet| {
-        let a1 = sheet.get_cell("A1").expect("A1").get_value().to_string();
-        let b1 = sheet.get_cell("B1").expect("B1").get_value().to_string();
+        let a1 = sheet.cell("A1").expect("A1").value().to_string();
+        let b1 = sheet.cell("B1").expect("B1").value().to_string();
         (a1, b1)
     })?;
 
@@ -811,8 +811,8 @@ async fn transform_batch_replace_in_range_replaces_values_exact() -> Result<()> 
 async fn transform_batch_replace_in_range_contains_case_sensitive() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("transform_replace_contains.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("FooBarFoo");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("FooBarFoo");
     });
 
     let state = recalc_state(&workspace);
@@ -870,7 +870,7 @@ async fn transform_batch_replace_in_range_contains_case_sensitive() -> Result<()
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     let a1 = fork_wb.with_sheet("Sheet1", |sheet| {
-        sheet.get_cell("A1").expect("A1").get_value().to_string()
+        sheet.cell("A1").expect("A1").value().to_string()
     })?;
 
     assert_eq!(a1, "ZBarZ");
@@ -882,8 +882,8 @@ async fn transform_batch_replace_in_range_contains_case_sensitive() -> Result<()
 async fn transform_batch_replace_in_range_skips_formulas_by_default() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("transform_replace_formula_skip.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("B1").set_formula("A1".to_string());
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("B1").set_formula("A1".to_string());
     });
 
     let state = recalc_state(&workspace);
@@ -944,7 +944,7 @@ async fn transform_batch_replace_in_range_skips_formulas_by_default() -> Result<
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     let b1_formula = fork_wb.with_sheet("Sheet1", |sheet| {
-        sheet.get_cell("B1").expect("B1").get_formula().to_string()
+        sheet.cell("B1").expect("B1").formula().to_string()
     })?;
 
     assert_eq!(b1_formula, "A1");
@@ -956,8 +956,8 @@ async fn transform_batch_replace_in_range_skips_formulas_by_default() -> Result<
 async fn transform_batch_replace_in_range_can_mutate_formulas_when_enabled() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("transform_replace_formula.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("B1").set_formula("A1".to_string());
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("B1").set_formula("A1".to_string());
     });
 
     let state = recalc_state(&workspace);
@@ -1015,7 +1015,7 @@ async fn transform_batch_replace_in_range_can_mutate_formulas_when_enabled() -> 
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     let b1_formula = fork_wb.with_sheet("Sheet1", |sheet| {
-        sheet.get_cell("B1").expect("B1").get_formula().to_string()
+        sheet.cell("B1").expect("B1").formula().to_string()
     })?;
 
     assert_eq!(b1_formula, "A2");
@@ -1027,8 +1027,8 @@ async fn transform_batch_replace_in_range_can_mutate_formulas_when_enabled() -> 
 async fn transform_batch_fill_range_preview_stages_and_apply() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("transform_fill_preview.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("x");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("x");
     });
 
     let state = recalc_state(&workspace);
@@ -1080,7 +1080,7 @@ async fn transform_batch_fill_range_preview_stages_and_apply() -> Result<()> {
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     let a1_before = fork_wb.with_sheet("Sheet1", |sheet| {
-        sheet.get_cell("A1").expect("A1").get_value().to_string()
+        sheet.cell("A1").expect("A1").value().to_string()
     })?;
     assert_eq!(a1_before, "x");
 
@@ -1097,8 +1097,8 @@ async fn transform_batch_fill_range_preview_stages_and_apply() -> Result<()> {
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     let (a1_after, b1_after) = fork_wb.with_sheet("Sheet1", |sheet| {
-        let a1 = sheet.get_cell("A1").expect("A1").get_value().to_string();
-        let b1 = sheet.get_cell("B1").expect("B1").get_value().to_string();
+        let a1 = sheet.cell("A1").expect("A1").value().to_string();
+        let b1 = sheet.cell("B1").expect("B1").value().to_string();
         (a1, b1)
     })?;
 
@@ -1112,8 +1112,8 @@ async fn transform_batch_fill_range_preview_stages_and_apply() -> Result<()> {
 async fn transform_batch_replace_in_range_preview_stages_and_apply() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("transform_replace_preview.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("Foo");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("Foo");
     });
 
     let state = recalc_state(&workspace);
@@ -1167,7 +1167,7 @@ async fn transform_batch_replace_in_range_preview_stages_and_apply() -> Result<(
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     let a1_before = fork_wb.with_sheet("Sheet1", |sheet| {
-        sheet.get_cell("A1").expect("A1").get_value().to_string()
+        sheet.cell("A1").expect("A1").value().to_string()
     })?;
     assert_eq!(a1_before, "Foo");
 
@@ -1184,7 +1184,7 @@ async fn transform_batch_replace_in_range_preview_stages_and_apply() -> Result<(
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     let a1_after = fork_wb.with_sheet("Sheet1", |sheet| {
-        sheet.get_cell("A1").expect("A1").get_value().to_string()
+        sheet.cell("A1").expect("A1").value().to_string()
     })?;
 
     assert_eq!(a1_after, "Bar");
@@ -1196,9 +1196,9 @@ async fn transform_batch_replace_in_range_preview_stages_and_apply() -> Result<(
 async fn transform_batch_replace_in_range_exact_case_insensitive() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("transform_replace_ci.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("FOO");
-        sheet.get_cell_mut("A2").set_value("foo");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("FOO");
+        sheet.cell_mut("A2").set_value("foo");
     });
 
     let state = recalc_state(&workspace);
@@ -1251,8 +1251,8 @@ async fn transform_batch_replace_in_range_exact_case_insensitive() -> Result<()>
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     let (a1, a2) = fork_wb.with_sheet("Sheet1", |sheet| {
-        let a1 = sheet.get_cell("A1").expect("A1").get_value().to_string();
-        let a2 = sheet.get_cell("A2").expect("A2").get_value().to_string();
+        let a1 = sheet.cell("A1").expect("A1").value().to_string();
+        let a2 = sheet.cell("A2").expect("A2").value().to_string();
         (a1, a2)
     })?;
 
@@ -1266,8 +1266,8 @@ async fn transform_batch_replace_in_range_exact_case_insensitive() -> Result<()>
 async fn transform_batch_replace_in_range_contains_replaces_all_occurrences() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("transform_replace_all.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("aaaa");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("aaaa");
     });
 
     let state = recalc_state(&workspace);
@@ -1320,7 +1320,7 @@ async fn transform_batch_replace_in_range_contains_replaces_all_occurrences() ->
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     let a1 = fork_wb.with_sheet("Sheet1", |sheet| {
-        sheet.get_cell("A1").expect("A1").get_value().to_string()
+        sheet.cell("A1").expect("A1").value().to_string()
     })?;
 
     assert_eq!(a1, "bb");
@@ -1332,8 +1332,8 @@ async fn transform_batch_replace_in_range_contains_replaces_all_occurrences() ->
 async fn transform_batch_multiple_ops_last_wins() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("transform_order.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("x");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("x");
     });
 
     let state = recalc_state(&workspace);
@@ -1395,7 +1395,7 @@ async fn transform_batch_multiple_ops_last_wins() -> Result<()> {
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     let a1 = fork_wb.with_sheet("Sheet1", |sheet| {
-        sheet.get_cell("A1").expect("A1").get_value().to_string()
+        sheet.cell("A1").expect("A1").value().to_string()
     })?;
 
     assert_eq!(a1, "z");
@@ -1407,8 +1407,8 @@ async fn transform_batch_multiple_ops_last_wins() -> Result<()> {
 async fn transform_batch_replace_in_range_contains_rejects_case_insensitive() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("transform_replace_contains_ci.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("Foo");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("Foo");
     });
 
     let state = recalc_state(&workspace);
@@ -1467,8 +1467,8 @@ async fn transform_batch_replace_in_range_contains_rejects_case_insensitive() ->
 async fn transform_batch_fill_range_overwrite_formulas_removes_formula() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("transform_fill_overwrite.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_formula("1+1".to_string());
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_formula("1+1".to_string());
     });
 
     let state = recalc_state(&workspace);
@@ -1519,8 +1519,8 @@ async fn transform_batch_fill_range_overwrite_formulas_removes_formula() -> Resu
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     let (a1_formula, a1_value) = fork_wb.with_sheet("Sheet1", |sheet| {
-        let a1 = sheet.get_cell("A1").expect("A1");
-        (a1.get_formula().to_string(), a1.get_value().to_string())
+        let a1 = sheet.cell("A1").expect("A1");
+        (a1.formula().to_string(), a1.value().to_string())
     })?;
 
     assert!(a1_formula.is_empty());

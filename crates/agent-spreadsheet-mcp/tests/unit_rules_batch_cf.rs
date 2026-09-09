@@ -27,9 +27,9 @@ fn recalc_state(
 async fn rules_batch_add_conditional_format_persists_and_is_idempotent() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("cf.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value_number(1);
-        sheet.get_cell_mut("A2").set_value_number(-1);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(1);
+        sheet.cell_mut("A2").set_value_number(-1);
     });
 
     let state = recalc_state(&workspace);
@@ -115,22 +115,22 @@ async fn rules_batch_add_conditional_format_persists_and_is_idempotent() -> Resu
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     fork_wb.with_sheet("Sheet1", |sheet| {
-        let cfs = sheet.get_conditional_formatting_collection();
+        let cfs = sheet.conditional_formatting_collection();
         assert_eq!(cfs.len(), 1);
-        assert_eq!(cfs[0].get_sequence_of_references().get_sqref(), "A1:A3");
-        assert_eq!(cfs[0].get_conditional_collection().len(), 1);
+        assert_eq!(cfs[0].sequence_of_references().get_sqref(), "A1:A3");
+        assert_eq!(cfs[0].conditional_collection().len(), 1);
 
-        let rule = &cfs[0].get_conditional_collection()[0];
+        let rule = &cfs[0].conditional_collection()[0];
         assert_eq!(
             rule.get_type(),
             &umya_spreadsheet::ConditionalFormatValues::CellIs
         );
         assert_eq!(
-            rule.get_operator(),
+            rule.operator(),
             &umya_spreadsheet::ConditionalFormattingOperatorValues::LessThan
         );
 
-        let st = rule.get_style().expect("expected dxf-backed style");
+        let st = rule.style().expect("expected dxf-backed style");
         let desc = agent_spreadsheet_mcp::styles::descriptor_from_style(st);
         assert_eq!(desc.font.as_ref().and_then(|f| f.bold), Some(true));
         assert_eq!(
@@ -152,8 +152,8 @@ async fn rules_batch_add_conditional_format_persists_and_is_idempotent() -> Resu
 async fn rules_batch_conditional_format_preview_then_apply_staged_change() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("cf_preview.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value_number(1);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(1);
     });
 
     let state = recalc_state(&workspace);
@@ -209,7 +209,7 @@ async fn rules_batch_conditional_format_preview_then_apply_staged_change() -> Re
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     fork_wb.with_sheet("Sheet1", |sheet| {
-        assert!(sheet.get_conditional_formatting_collection().is_empty());
+        assert!(sheet.conditional_formatting_collection().is_empty());
     })?;
 
     apply_staged_change(
@@ -225,9 +225,9 @@ async fn rules_batch_conditional_format_preview_then_apply_staged_change() -> Re
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     fork_wb.with_sheet("Sheet1", |sheet| {
-        let cfs = sheet.get_conditional_formatting_collection();
+        let cfs = sheet.conditional_formatting_collection();
         assert_eq!(cfs.len(), 1);
-        assert_eq!(cfs[0].get_sequence_of_references().get_sqref(), "A1:A3");
+        assert_eq!(cfs[0].sequence_of_references().get_sqref(), "A1:A3");
     })?;
 
     Ok(())
@@ -237,9 +237,9 @@ async fn rules_batch_conditional_format_preview_then_apply_staged_change() -> Re
 async fn rules_batch_set_and_clear_conditional_formats() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("cf_set_clear.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value_number(1);
-        sheet.get_cell_mut("A2").set_value_number(-1);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(1);
+        sheet.cell_mut("A2").set_value_number(-1);
     });
 
     let state = recalc_state(&workspace);
@@ -296,9 +296,9 @@ async fn rules_batch_set_and_clear_conditional_formats() -> Result<()> {
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     fork_wb.with_sheet("Sheet1", |sheet| {
-        let cfs = sheet.get_conditional_formatting_collection();
+        let cfs = sheet.conditional_formatting_collection();
         assert_eq!(cfs.len(), 1);
-        assert_eq!(cfs[0].get_sequence_of_references().get_sqref(), "A1:A3");
+        assert_eq!(cfs[0].sequence_of_references().get_sqref(), "A1:A3");
     })?;
 
     // Replace the rule (set ensures only one rule for the range).
@@ -372,18 +372,18 @@ async fn rules_batch_set_and_clear_conditional_formats() -> Result<()> {
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     fork_wb.with_sheet("Sheet1", |sheet| {
-        let cfs = sheet.get_conditional_formatting_collection();
+        let cfs = sheet.conditional_formatting_collection();
         assert_eq!(cfs.len(), 1);
-        assert_eq!(cfs[0].get_sequence_of_references().get_sqref(), "A1:A3");
-        assert_eq!(cfs[0].get_conditional_collection().len(), 1);
+        assert_eq!(cfs[0].sequence_of_references().get_sqref(), "A1:A3");
+        assert_eq!(cfs[0].conditional_collection().len(), 1);
 
-        let rule = &cfs[0].get_conditional_collection()[0];
+        let rule = &cfs[0].conditional_collection()[0];
         assert_eq!(
             rule.get_type(),
             &umya_spreadsheet::ConditionalFormatValues::Expression
         );
 
-        let st = rule.get_style().expect("expected dxf-backed style");
+        let st = rule.style().expect("expected dxf-backed style");
         let desc = agent_spreadsheet_mcp::styles::descriptor_from_style(st);
         assert!(!desc.font.as_ref().and_then(|f| f.bold).unwrap_or(false));
         assert_eq!(
@@ -426,7 +426,7 @@ async fn rules_batch_set_and_clear_conditional_formats() -> Result<()> {
         .open_workbook(&WorkbookId(fork.fork_id.clone()))
         .await?;
     fork_wb.with_sheet("Sheet1", |sheet| {
-        assert!(sheet.get_conditional_formatting_collection().is_empty());
+        assert!(sheet.conditional_formatting_collection().is_empty());
     })?;
 
     Ok(())

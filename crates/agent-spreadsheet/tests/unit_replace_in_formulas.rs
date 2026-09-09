@@ -12,28 +12,28 @@ mod support;
 
 fn create_formula_workbook(workspace: &support::TestWorkspace, name: &str) -> PathBuf {
     workspace.create_workbook(name, |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         // Row 1: headers
-        sheet.get_cell_mut("A1").set_value("Label");
-        sheet.get_cell_mut("B1").set_value("Value");
+        sheet.cell_mut("A1").set_value("Label");
+        sheet.cell_mut("B1").set_value("Value");
         // Row 2: formula cells
-        sheet.get_cell_mut("A2").set_value("Sum");
+        sheet.cell_mut("A2").set_value("Sum");
         sheet
-            .get_cell_mut("B2")
+            .cell_mut("B2")
             .set_formula("SUM(C2:C10)".to_string());
         // Row 3: another formula cell
-        sheet.get_cell_mut("A3").set_value("Avg");
+        sheet.cell_mut("A3").set_value("Avg");
         sheet
-            .get_cell_mut("B3")
+            .cell_mut("B3")
             .set_formula("AVERAGE(C2:C10)".to_string());
         // Row 4: formula referencing Sheet1
-        sheet.get_cell_mut("A4").set_value("Ref");
+        sheet.cell_mut("A4").set_value("Ref");
         sheet
-            .get_cell_mut("B4")
+            .cell_mut("B4")
             .set_formula("Sheet1!D5+Sheet1!D6".to_string());
         // Row 5: literal value (should NOT be touched)
-        sheet.get_cell_mut("A5").set_value("Literal");
-        sheet.get_cell_mut("B5").set_value("SUM(C2:C10)");
+        sheet.cell_mut("A5").set_value("Literal");
+        sheet.cell_mut("B5").set_value("SUM(C2:C10)");
     })
 }
 
@@ -71,17 +71,17 @@ fn replace_plain_text_in_formula_body() {
 
     // Verify the formulas were updated
     let book = umya_spreadsheet::reader::xlsx::read(&work).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
+    let sheet = book.sheet_by_name("Sheet1").ok().unwrap();
 
-    let b2 = sheet.get_cell("B2").unwrap();
-    assert_eq!(b2.get_formula(), "SUM(D2:D20)");
+    let b2 = sheet.cell("B2").unwrap();
+    assert_eq!(b2.formula(), "SUM(D2:D20)");
 
-    let b3 = sheet.get_cell("B3").unwrap();
-    assert_eq!(b3.get_formula(), "AVERAGE(D2:D20)");
+    let b3 = sheet.cell("B3").unwrap();
+    assert_eq!(b3.formula(), "AVERAGE(D2:D20)");
 
     // B5 is a literal value, should NOT be changed
-    let b5 = sheet.get_cell("B5").unwrap();
-    assert_eq!(b5.get_value(), "SUM(C2:C10)");
+    let b5 = sheet.cell("B5").unwrap();
+    assert_eq!(b5.value(), "SUM(C2:C10)");
 }
 
 #[test]
@@ -109,9 +109,9 @@ fn replace_regex_mode() {
     assert_eq!(result.formulas_changed, 1, "only B4 references Sheet1!D");
 
     let book = umya_spreadsheet::reader::xlsx::read(&work).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
-    let b4 = sheet.get_cell("B4").unwrap();
-    assert_eq!(b4.get_formula(), "Sheet2!E5+Sheet2!E6");
+    let sheet = book.sheet_by_name("Sheet1").ok().unwrap();
+    let b4 = sheet.cell("B4").unwrap();
+    assert_eq!(b4.formula(), "Sheet2!E5+Sheet2!E6");
 }
 
 #[test]
@@ -171,13 +171,13 @@ fn range_scoped_replace_touches_only_target_area() {
     assert_eq!(result.formulas_changed, 1, "only B2 is in the range");
 
     let book = umya_spreadsheet::reader::xlsx::read(&work).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
+    let sheet = book.sheet_by_name("Sheet1").ok().unwrap();
 
     // B2 changed
-    assert_eq!(sheet.get_cell("B2").unwrap().get_formula(), "SUM(X1:X5)");
+    assert_eq!(sheet.cell("B2").unwrap().formula(), "SUM(X1:X5)");
     // B3 unchanged (outside range)
     assert_eq!(
-        sheet.get_cell("B3").unwrap().get_formula(),
+        sheet.cell("B3").unwrap().formula(),
         "AVERAGE(C2:C10)"
     );
 }
@@ -210,9 +210,9 @@ fn case_insensitive_plain_text_replace() {
     );
 
     let book = umya_spreadsheet::reader::xlsx::read(&work).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
+    let sheet = book.sheet_by_name("Sheet1").ok().unwrap();
     assert_eq!(
-        sheet.get_cell("B2").unwrap().get_formula(),
+        sheet.cell("B2").unwrap().formula(),
         "SUMPRODUCT(C2:C10)"
     );
 }
@@ -223,10 +223,10 @@ fn parse_policy_fail_validates_all_replacements_not_just_samples() {
 
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("fail-all.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         for row in 1..=30 {
             sheet
-                .get_cell_mut((2, row))
+                .cell_mut((2, row))
                 .set_formula("SUM(C2:C10)".to_string());
         }
     });
@@ -258,10 +258,10 @@ fn parse_policy_warn_skips_invalid_replacements_and_reports_diagnostics() {
 
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("warn-invalid.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         for row in 1..=30 {
             sheet
-                .get_cell_mut((2, row))
+                .cell_mut((2, row))
                 .set_formula("SUM(C2:C10)".to_string());
         }
     });
@@ -325,8 +325,8 @@ async fn cli_dry_run_preview_shows_expected_changes() -> Result<()> {
 
     // Verify original file is NOT modified (dry run)
     let book = umya_spreadsheet::reader::xlsx::read(&path).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
-    assert_eq!(sheet.get_cell("B2").unwrap().get_formula(), "SUM(C2:C10)");
+    let sheet = book.sheet_by_name("Sheet1").ok().unwrap();
+    assert_eq!(sheet.cell("B2").unwrap().formula(), "SUM(C2:C10)");
 
     Ok(())
 }
@@ -358,10 +358,10 @@ async fn cli_in_place_writes_expected_formulas() -> Result<()> {
 
     // Verify source file IS modified
     let book = umya_spreadsheet::reader::xlsx::read(&path).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
-    assert_eq!(sheet.get_cell("B2").unwrap().get_formula(), "SUM(D2:D20)");
+    let sheet = book.sheet_by_name("Sheet1").ok().unwrap();
+    assert_eq!(sheet.cell("B2").unwrap().formula(), "SUM(D2:D20)");
     assert_eq!(
-        sheet.get_cell("B3").unwrap().get_formula(),
+        sheet.cell("B3").unwrap().formula(),
         "AVERAGE(D2:D20)"
     );
 
@@ -372,10 +372,10 @@ async fn cli_in_place_writes_expected_formulas() -> Result<()> {
 async fn cli_in_place_fail_policy_rejects_without_mutating_source() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("inplace-fail-policy.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         for row in 1..=30 {
             sheet
-                .get_cell_mut((2, row))
+                .cell_mut((2, row))
                 .set_formula("SUM(C2:C10)".to_string());
         }
     });
@@ -440,17 +440,17 @@ async fn cli_output_mode_writes_to_target() -> Result<()> {
 
     // Source unchanged
     let book = umya_spreadsheet::reader::xlsx::read(&path).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
+    let sheet = book.sheet_by_name("Sheet1").ok().unwrap();
     assert_eq!(
-        sheet.get_cell("B4").unwrap().get_formula(),
+        sheet.cell("B4").unwrap().formula(),
         "Sheet1!D5+Sheet1!D6"
     );
 
     // Target has the change
     let book = umya_spreadsheet::reader::xlsx::read(&target).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
+    let sheet = book.sheet_by_name("Sheet1").ok().unwrap();
     assert_eq!(
-        sheet.get_cell("B4").unwrap().get_formula(),
+        sheet.cell("B4").unwrap().formula(),
         "Sheet2!D5+Sheet2!D6"
     );
 
@@ -482,10 +482,10 @@ async fn cli_range_scoped_replace_only_modifies_target_area() -> Result<()> {
     assert_eq!(obj.get("formulas_changed").and_then(Value::as_u64), Some(1));
 
     let book = umya_spreadsheet::reader::xlsx::read(&path).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
-    assert_eq!(sheet.get_cell("B2").unwrap().get_formula(), "SUM(X1:X5)");
+    let sheet = book.sheet_by_name("Sheet1").ok().unwrap();
+    assert_eq!(sheet.cell("B2").unwrap().formula(), "SUM(X1:X5)");
     assert_eq!(
-        sheet.get_cell("B3").unwrap().get_formula(),
+        sheet.cell("B3").unwrap().formula(),
         "AVERAGE(C2:C10)"
     );
 

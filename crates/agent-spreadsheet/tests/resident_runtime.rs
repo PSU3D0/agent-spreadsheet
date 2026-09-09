@@ -6,13 +6,13 @@ use serde_json::json;
 
 fn fixture() -> Vec<u8> {
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-    sheet.get_cell_mut("A1").set_value_number(1.0);
-    sheet.get_cell_mut("B1").set_formula("A1*2");
-    sheet.get_cell_mut("C1").set_formula("B1+1");
-    sheet.get_cell_mut("D1").set_value("fidelity");
-    sheet.get_style_mut("D1").get_font_mut().set_bold(true);
-    sheet.get_column_dimension_mut("D").set_width(24.0);
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+    sheet.cell_mut("A1").set_value_number(1.0);
+    sheet.cell_mut("B1").set_formula("A1*2");
+    sheet.cell_mut("C1").set_formula("B1+1");
+    sheet.cell_mut("D1").set_value("fidelity");
+    sheet.style_mut("D1").font_mut().set_bold(true);
+    sheet.column_dimension_mut("D").set_width(24.0);
     sheet.add_merge_cells("D1:E1");
     sheet.add_defined_name("InputCell", "Sheet1!$A$1").unwrap();
     let mut bytes = Vec::new();
@@ -89,9 +89,9 @@ fn retained_engine_recalculates_dependencies_without_reingest() {
     let exported = resident.export_bytes().unwrap();
     let book =
         umya_spreadsheet::reader::xlsx::read_reader(std::io::Cursor::new(exported), true).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
-    assert_eq!(sheet.get_cell("B1").unwrap().get_value(), "10");
-    assert_eq!(sheet.get_cell("C1").unwrap().get_value(), "11");
+    let sheet = book.sheet_by_name("Sheet1").ok().unwrap();
+    assert_eq!(sheet.cell("B1").unwrap().value(), "10");
+    assert_eq!(sheet.cell("C1").unwrap().value(), "11");
 }
 
 #[test]
@@ -114,21 +114,21 @@ fn formula_update_stays_retained_and_export_uses_umya_document() {
 
     let book =
         umya_spreadsheet::reader::xlsx::read_reader(std::io::Cursor::new(exported), true).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
-    assert_eq!(sheet.get_cell("B1").unwrap().get_value(), "3");
-    assert!(sheet.get_style("D1").get_font().unwrap().get_bold());
-    assert_eq!(sheet.get_column_dimension("D").unwrap().get_width(), 24.0);
+    let sheet = book.sheet_by_name("Sheet1").ok().unwrap();
+    assert_eq!(sheet.cell("B1").unwrap().value(), "3");
+    assert!(sheet.style("D1").font().unwrap().bold());
+    assert_eq!(sheet.column_dimension("D").unwrap().width(), 24.0);
     assert!(
         sheet
-            .get_merge_cells()
+            .merge_cells()
             .iter()
-            .any(|merge| merge.get_range() == "D1:E1")
+            .any(|merge| merge.range() == "D1:E1")
     );
     assert!(
         sheet
-            .get_defined_names()
+            .defined_names()
             .iter()
-            .any(|name| name.get_name() == "InputCell")
+            .any(|name| name.name() == "InputCell")
     );
 }
 
@@ -160,15 +160,15 @@ fn unsupported_change_rebuilds_before_publishing_coverage() {
 
 fn type_fixture() -> Vec<u8> {
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-    sheet.get_cell_mut("A1").set_value_number(1.0);
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+    sheet.cell_mut("A1").set_value_number(1.0);
     for (cell, formula) in [
         ("B1", "ISNUMBER(A1)"),
         ("C1", "ISLOGICAL(A1)"),
         ("D1", "ISERROR(A1)"),
         ("E1", "ISBLANK(A1)"),
     ] {
-        sheet.get_cell_mut(cell).set_formula(formula);
+        sheet.cell_mut(cell).set_formula(formula);
     }
     let mut bytes = Vec::new();
     umya_spreadsheet::writer::xlsx::write_writer(&book, &mut bytes).unwrap();
@@ -179,16 +179,16 @@ fn typed_snapshot(resident: &mut ResidentWorkbook, cells: &[&str]) -> Vec<(Strin
     let bytes = resident.export_bytes().unwrap();
     let book =
         umya_spreadsheet::reader::xlsx::read_reader(std::io::Cursor::new(bytes), true).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
+    let sheet = book.sheet_by_name("Sheet1").ok().unwrap();
     cells
         .iter()
         .map(|address| {
-            sheet.get_cell(*address).map_or_else(
+            sheet.cell(*address).map_or_else(
                 || (String::new(), String::new()),
                 |cell| {
                     (
-                        cell.get_value().to_string(),
-                        cell.get_data_type().to_string(),
+                        cell.value().to_string(),
+                        cell.data_type().to_string(),
                     )
                 },
             )

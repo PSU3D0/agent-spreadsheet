@@ -66,9 +66,9 @@ async fn discover_workbook(state: Arc<AppState>) -> Result<WorkbookId> {
 async fn test_create_fork_basic() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("source.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
-        sheet.get_cell_mut("A1").set_value_number(100);
-        sheet.get_cell_mut("B1").set_formula("A1*2");
+        let sheet = book.sheet_mut(0).ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(100);
+        sheet.cell_mut("B1").set_formula("A1*2");
     });
 
     let config = Arc::new(workspace.config_with(|cfg| {
@@ -139,10 +139,10 @@ async fn test_create_fork_rejects_non_xlsx() -> Result<()> {
 async fn test_edit_batch_applies_values() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("editable.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Data");
-        sheet.get_cell_mut("A1").set_value_number(10);
-        sheet.get_cell_mut("A2").set_value_number(20);
+        sheet.cell_mut("A1").set_value_number(10);
+        sheet.cell_mut("A2").set_value_number(20);
     });
 
     let state = app_state_with_recalc(&workspace);
@@ -192,9 +192,9 @@ async fn test_edit_batch_applies_values() -> Result<()> {
 async fn test_edit_batch_clears_cached_value_on_formula() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("formula_cache.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Data");
-        sheet.get_cell_mut("A1").set_value("stale");
+        sheet.cell_mut("A1").set_value("stale");
     });
 
     let state = app_state_with_recalc(&workspace);
@@ -229,14 +229,14 @@ async fn test_edit_batch_clears_cached_value_on_formula() -> Result<()> {
         .expect("fork path");
     let book = umya_spreadsheet::reader::xlsx::read(&fork_path)?;
     let sheet = book
-        .get_sheet_by_name("Data").ok()
+        .sheet_by_name("Data").ok()
         .expect("Data sheet should exist");
-    let cell = sheet.get_cell("A1").expect("A1 should exist");
+    let cell = sheet.cell("A1").expect("A1 should exist");
 
     assert!(cell.is_formula());
-    assert_eq!(cell.get_formula(), "A1*2");
-    assert!(cell.get_cell_value().get_raw_value().is_empty());
-    assert_eq!(cell.get_value(), "");
+    assert_eq!(cell.formula(), "A1*2");
+    assert!(cell.cell_value().raw_value().is_empty());
+    assert_eq!(cell.value(), "");
 
     Ok(())
 }
@@ -245,9 +245,9 @@ async fn test_edit_batch_clears_cached_value_on_formula() -> Result<()> {
 async fn test_get_edits_returns_history() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("history.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Sheet1");
-        sheet.get_cell_mut("A1").set_value_number(1);
+        sheet.cell_mut("A1").set_value_number(1);
     });
 
     let state = app_state_with_recalc(&workspace);
@@ -315,10 +315,10 @@ async fn test_get_edits_returns_history() -> Result<()> {
 async fn test_get_changeset_detects_modifications() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("changeset.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Sheet1");
-        sheet.get_cell_mut("A1").set_value_number(100);
-        sheet.get_cell_mut("A2").set_value("original");
+        sheet.cell_mut("A1").set_value_number(100);
+        sheet.cell_mut("A2").set_value("original");
     });
 
     let state = app_state_with_recalc(&workspace);
@@ -394,12 +394,12 @@ async fn test_get_changeset_detects_modifications() -> Result<()> {
 async fn test_get_changeset_with_sheet_filter() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("multi_sheet.xlsx", |book| {
-        let sheet1 = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet1 = book.sheet_mut(0).ok().unwrap();
         sheet1.set_name("Sheet1");
-        sheet1.get_cell_mut("A1").set_value_number(1);
+        sheet1.cell_mut("A1").set_value_number(1);
 
         let sheet2 = book.new_sheet("Sheet2").unwrap();
-        sheet2.get_cell_mut("A1").set_value_number(2);
+        sheet2.cell_mut("A1").set_value_number(2);
     });
 
     let state = app_state_with_recalc(&workspace);
@@ -466,8 +466,8 @@ async fn test_get_changeset_with_sheet_filter() -> Result<()> {
 async fn test_list_forks() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("listable.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
-        sheet.get_cell_mut("A1").set_value_number(1);
+        let sheet = book.sheet_mut(0).ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(1);
     });
 
     let state = app_state_with_recalc(&workspace);
@@ -506,8 +506,8 @@ async fn test_list_forks() -> Result<()> {
 async fn test_discard_fork() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("discardable.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
-        sheet.get_cell_mut("A1").set_value_number(1);
+        let sheet = book.sheet_mut(0).ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(1);
     });
 
     let state = app_state_with_recalc(&workspace);
@@ -548,9 +548,9 @@ async fn test_discard_fork() -> Result<()> {
 async fn test_save_fork_overwrites_original() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("saveable.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Data");
-        sheet.get_cell_mut("A1").set_value_number(1);
+        sheet.cell_mut("A1").set_value_number(1);
     });
 
     let config = Arc::new(workspace.config_with(|cfg| {
@@ -595,8 +595,8 @@ async fn test_save_fork_overwrites_original() -> Result<()> {
 
     // Verify the original file was updated
     let book = umya_spreadsheet::reader::xlsx::read(&path)?;
-    let sheet = book.get_sheet_by_name("Data").ok().unwrap();
-    let value = sheet.get_cell("A1").unwrap().get_value();
+    let sheet = book.sheet_by_name("Data").ok().unwrap();
+    let value = sheet.cell("A1").unwrap().value();
     assert_eq!(value, "999");
 
     // Fork should be removed after save
@@ -610,9 +610,9 @@ async fn test_save_fork_overwrites_original() -> Result<()> {
 async fn test_save_fork_to_new_path() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _original = workspace.create_workbook("original.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Data");
-        sheet.get_cell_mut("A1").set_value_number(1);
+        sheet.cell_mut("A1").set_value_number(1);
     });
 
     let state = app_state_with_recalc(&workspace);
@@ -654,21 +654,21 @@ async fn test_save_fork_to_new_path() -> Result<()> {
     // Verify original is unchanged
     let original_book = umya_spreadsheet::reader::xlsx::read(workspace.path("original.xlsx"))?;
     let original_value = original_book
-        .get_sheet_by_name("Data").ok()
+        .sheet_by_name("Data").ok()
         .unwrap()
-        .get_cell("A1")
+        .cell("A1")
         .unwrap()
-        .get_value();
+        .value();
     assert_eq!(original_value, "1");
 
     // Verify copy has changes
     let copy_book = umya_spreadsheet::reader::xlsx::read(workspace.path("copy.xlsx"))?;
     let copy_value = copy_book
-        .get_sheet_by_name("Data").ok()
+        .sheet_by_name("Data").ok()
         .unwrap()
-        .get_cell("A1")
+        .cell("A1")
         .unwrap()
-        .get_value();
+        .value();
     assert_eq!(copy_value, "modified");
 
     Ok(())
@@ -678,16 +678,16 @@ async fn test_save_fork_to_new_path() -> Result<()> {
 async fn test_full_workflow_without_recalc() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("workflow.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Budget");
-        sheet.get_cell_mut("A1").set_value("Item");
-        sheet.get_cell_mut("B1").set_value("Amount");
-        sheet.get_cell_mut("A2").set_value("Rent");
-        sheet.get_cell_mut("B2").set_value_number(1000);
-        sheet.get_cell_mut("A3").set_value("Food");
-        sheet.get_cell_mut("B3").set_value_number(500);
-        sheet.get_cell_mut("A4").set_value("Total");
-        let cell = sheet.get_cell_mut("B4");
+        sheet.cell_mut("A1").set_value("Item");
+        sheet.cell_mut("B1").set_value("Amount");
+        sheet.cell_mut("A2").set_value("Rent");
+        sheet.cell_mut("B2").set_value_number(1000);
+        sheet.cell_mut("A3").set_value("Food");
+        sheet.cell_mut("B3").set_value_number(500);
+        sheet.cell_mut("A4").set_value("Total");
+        let cell = sheet.cell_mut("B4");
         cell.set_formula("SUM(B2:B3)");
         cell.set_formula_result_default("1500");
     });
@@ -758,11 +758,11 @@ async fn test_full_workflow_without_recalc() -> Result<()> {
     // Verify the saved file
     let saved_book = umya_spreadsheet::reader::xlsx::read(workspace.path("workflow_updated.xlsx"))?;
     let saved_value = saved_book
-        .get_sheet_by_name("Budget").ok()
+        .sheet_by_name("Budget").ok()
         .unwrap()
-        .get_cell("B2")
+        .cell("B2")
         .unwrap()
-        .get_value();
+        .value();
     assert_eq!(saved_value, "1200");
 
     Ok(())
@@ -772,8 +772,8 @@ async fn test_full_workflow_without_recalc() -> Result<()> {
 async fn test_fork_not_found_error() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("dummy.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
-        sheet.get_cell_mut("A1").set_value_number(1);
+        let sheet = book.sheet_mut(0).ok().unwrap();
+        sheet.cell_mut("A1").set_value_number(1);
     });
 
     let state = app_state_with_recalc(&workspace);
@@ -801,9 +801,9 @@ async fn test_fork_not_found_error() -> Result<()> {
 async fn test_edit_nonexistent_sheet_error() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("single_sheet.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("RealSheet");
-        sheet.get_cell_mut("A1").set_value_number(1);
+        sheet.cell_mut("A1").set_value_number(1);
     });
 
     let state = app_state_with_recalc(&workspace);
@@ -860,7 +860,7 @@ fn first_cell_address(changes: &[Change]) -> Option<&str> {
 async fn test_get_changeset_paging_limit_offset_and_summary_only() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("changeset_paging.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Sheet1");
     });
 
@@ -957,11 +957,11 @@ async fn test_get_changeset_paging_limit_offset_and_summary_only() -> Result<()>
 async fn test_get_changeset_exclude_recalc_result() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("changeset_filter.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Sheet1");
-        sheet.get_cell_mut("A1").set_value_number(1);
+        sheet.cell_mut("A1").set_value_number(1);
         sheet
-            .get_cell_mut("B1")
+            .cell_mut("B1")
             .set_formula("A1*2")
             .set_formula_result_default("2");
     });
@@ -995,8 +995,8 @@ async fn test_get_changeset_exclude_recalc_result() -> Result<()> {
     let work_path = fork_ctx.work_path.clone();
 
     let mut book = umya_spreadsheet::reader::xlsx::read(&work_path)?;
-    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-    sheet.get_cell_mut("B1").set_formula_result_default("999");
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+    sheet.cell_mut("B1").set_formula_result_default("999");
     umya_spreadsheet::writer::xlsx::write(&book, &work_path)?;
 
     let unfiltered = get_changeset(

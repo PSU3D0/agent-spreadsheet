@@ -98,13 +98,13 @@ async fn actual_session_family_starts_stages_applies_reads_and_navigates() {
     let _cleanup = AutoHostCleanup(root.clone());
     let source = workspace.path().join("source.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    book.get_sheet_mut(&0).ok()
+    book.sheet_mut(0).ok()
         .unwrap()
-        .get_cell_mut("A1")
+        .cell_mut("A1")
         .set_value_number(1);
-    book.get_sheet_mut(&0).ok()
+    book.sheet_mut(0).ok()
         .unwrap()
-        .get_cell_mut("B1")
+        .cell_mut("B1")
         .set_formula("A1*2");
     umya_spreadsheet::writer::xlsx::write(&book, &source).unwrap();
     let invoke = |arguments: &[&str]| -> Value {
@@ -390,11 +390,11 @@ async fn actual_session_family_starts_stages_applies_reads_and_navigates() {
         umya_spreadsheet::reader::xlsx::read_reader(std::io::Cursor::new(&bytes), true).unwrap();
     assert_eq!(
         saved
-            .get_sheet_by_name("Sheet1").ok()
+            .sheet_by_name("Sheet1").ok()
             .unwrap()
-            .get_cell("A1")
+            .cell("A1")
             .unwrap()
-            .get_value(),
+            .value(),
         "7"
     );
     invoke(&[
@@ -523,9 +523,9 @@ async fn pending_forced_export_cannot_overwrite_newer_destination() {
     std::fs::create_dir(&out).unwrap();
     let source = out.join("source.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    book.get_sheet_mut(&0).ok()
+    book.sheet_mut(0).ok()
         .unwrap()
-        .get_cell_mut("A1")
+        .cell_mut("A1")
         .set_value_number(7);
     umya_spreadsheet::writer::xlsx::write(&book, &source).unwrap();
     let invoke = |args: &[&str]| {
@@ -751,18 +751,18 @@ async fn actual_native_configured_libreoffice_retains_document_and_retry() {
     let root = provision_root(&directory.path().canonicalize().unwrap(), "host").unwrap();
     let source = directory.path().join("source.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_mut(&0).ok().unwrap();
-    sheet.get_cell_mut("A1").set_value_number(1);
+    let sheet = book.sheet_mut(0).ok().unwrap();
+    sheet.cell_mut("A1").set_value_number(1);
     sheet
-        .get_cell_mut("A1")
-        .get_style_mut()
-        .get_font_mut()
+        .cell_mut("A1")
+        .style_mut()
+        .font_mut()
         .set_bold(true);
-    sheet.get_cell_mut("B1").set_formula("A1*3");
-    sheet.get_cell_mut("B2").set_formula("\"00123\"");
-    sheet.get_cell_mut("B3").set_formula("\"TRUE\"");
-    sheet.get_cell_mut("B4").set_formula("\"\"");
-    sheet.get_cell_mut("C1").set_formula("1/0");
+    sheet.cell_mut("B1").set_formula("A1*3");
+    sheet.cell_mut("B2").set_formula("\"00123\"");
+    sheet.cell_mut("B3").set_formula("\"TRUE\"");
+    sheet.cell_mut("B4").set_formula("\"\"");
+    sheet.cell_mut("C1").set_formula("1/0");
     umya_spreadsheet::writer::xlsx::write(&book, &source).unwrap();
     let (files, _) = agent_spreadsheet::runtime::stateless::StatelessRuntime
         .open_state_for_file(&source)
@@ -848,21 +848,21 @@ async fn actual_native_configured_libreoffice_retains_document_and_retry() {
         String::from_utf8_lossy(&saved.stderr)
     );
     let saved = umya_spreadsheet::reader::xlsx::read(&destination).unwrap();
-    let sheet = saved.get_sheet(&0).ok().unwrap();
-    assert_eq!(sheet.get_cell("B1").unwrap().get_formula(), "A1*3");
-    assert_eq!(sheet.get_cell("B1").unwrap().get_value(), "12");
-    assert_eq!(sheet.get_cell("B2").unwrap().get_value(), "00123");
-    assert_eq!(sheet.get_cell("B3").unwrap().get_value(), "TRUE");
-    assert_eq!(sheet.get_cell("B4").unwrap().get_value(), "");
-    assert_eq!(sheet.get_cell("C1").unwrap().get_value(), "#DIV/0!");
+    let sheet = saved.sheet(0).ok().unwrap();
+    assert_eq!(sheet.cell("B1").unwrap().formula(), "A1*3");
+    assert_eq!(sheet.cell("B1").unwrap().value(), "12");
+    assert_eq!(sheet.cell("B2").unwrap().value(), "00123");
+    assert_eq!(sheet.cell("B3").unwrap().value(), "TRUE");
+    assert_eq!(sheet.cell("B4").unwrap().value(), "");
+    assert_eq!(sheet.cell("C1").unwrap().value(), "#DIV/0!");
     assert!(
-        *sheet
-            .get_cell("A1")
+        sheet
+            .cell("A1")
             .unwrap()
-            .get_style()
-            .get_font()
+            .style()
+            .font()
             .unwrap()
-            .get_bold()
+            .bold()
     );
     host.child.kill().unwrap();
     host.child.wait().unwrap();
@@ -888,13 +888,13 @@ async fn actual_cli_processes_share_owner_and_recover_original_outcomes() {
     let root = provision_root(&directory.path().canonicalize().unwrap(), "host").unwrap();
     let source = directory.path().join("source.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    book.get_sheet_mut(&0).ok()
+    book.sheet_mut(0).ok()
         .unwrap()
-        .get_cell_mut("A1")
+        .cell_mut("A1")
         .set_value_number(1);
-    book.get_sheet_mut(&0).ok()
+    book.sheet_mut(0).ok()
         .unwrap()
-        .get_cell_mut("B1")
+        .cell_mut("B1")
         .set_formula("A1*2");
     umya_spreadsheet::writer::xlsx::write(&book, &source).unwrap();
     let (state, _) = agent_spreadsheet::runtime::stateless::StatelessRuntime
@@ -1439,17 +1439,17 @@ async fn actual_cli_canonical_creation_keeps_owner_and_original_outcome() {
     let _cleanup = AutoHostCleanup(root.clone());
     let source = directory.path().join("source.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    book.get_sheet_mut(&0).ok()
+    book.sheet_mut(0).ok()
         .unwrap()
-        .get_cell_mut("A1")
+        .cell_mut("A1")
         .set_value_number(2);
-    book.get_sheet_mut(&0).ok()
+    book.sheet_mut(0).ok()
         .unwrap()
-        .get_cell_mut("B1")
+        .cell_mut("B1")
         .set_formula("A1*3");
-    let sheet = book.get_sheet_mut(&0).ok().unwrap();
-    sheet.get_style_mut("D1").get_font_mut().set_bold(true);
-    sheet.get_column_dimension_mut("D").set_width(24.0);
+    let sheet = book.sheet_mut(0).ok().unwrap();
+    sheet.style_mut("D1").font_mut().set_bold(true);
+    sheet.column_dimension_mut("D").set_width(24.0);
     sheet.add_merge_cells("D1:E1");
     sheet.add_defined_name("InputCell", "Sheet1!$A$1").unwrap();
     umya_spreadsheet::writer::xlsx::write(&book, &source).unwrap();
@@ -1632,9 +1632,9 @@ async fn actual_cli_canonical_creation_keeps_owner_and_original_outcome() {
     std::fs::copy(&source, verification_files.path().join("baseline.xlsx")).unwrap();
     let mut expected_book = book.clone();
     expected_book
-        .get_sheet_mut(&0).ok()
+        .sheet_mut(0).ok()
         .unwrap()
-        .get_cell_mut("A1")
+        .cell_mut("A1")
         .set_value_number(7);
     umya_spreadsheet::writer::xlsx::write(
         &expected_book,
@@ -1781,23 +1781,23 @@ async fn actual_cli_canonical_creation_keeps_owner_and_original_outcome() {
         agent_spreadsheet::utils::hash_file_sha256_hex(&artifact_path).unwrap()
     );
     let saved = umya_spreadsheet::reader::xlsx::read(&artifact_path).unwrap();
-    let sheet = saved.get_sheet_by_name("Sheet1").ok().unwrap();
-    assert_eq!(sheet.get_cell("A1").unwrap().get_value(), "7");
-    assert_eq!(sheet.get_cell("B1").unwrap().get_value(), "21");
-    assert_eq!(sheet.get_cell("B1").unwrap().get_formula(), "A1*3");
-    assert!(sheet.get_style("D1").get_font().unwrap().get_bold());
-    assert_eq!(sheet.get_column_dimension("D").unwrap().get_width(), 24.0);
+    let sheet = saved.sheet_by_name("Sheet1").ok().unwrap();
+    assert_eq!(sheet.cell("A1").unwrap().value(), "7");
+    assert_eq!(sheet.cell("B1").unwrap().value(), "21");
+    assert_eq!(sheet.cell("B1").unwrap().formula(), "A1*3");
+    assert!(sheet.style("D1").font().unwrap().bold());
+    assert_eq!(sheet.column_dimension("D").unwrap().width(), 24.0);
     assert!(
         sheet
-            .get_merge_cells()
+            .merge_cells()
             .iter()
-            .any(|merge| merge.get_range() == "D1:E1")
+            .any(|merge| merge.range() == "D1:E1")
     );
     assert!(
         sheet
-            .get_defined_names()
+            .defined_names()
             .iter()
-            .any(|name| name.get_name() == "InputCell")
+            .any(|name| name.name() == "InputCell")
     );
     assert_eq!(
         invoke(
@@ -1809,9 +1809,9 @@ async fn actual_cli_canonical_creation_keeps_owner_and_original_outcome() {
         ),
         exported
     );
-    book.get_sheet_mut(&0).ok()
+    book.sheet_mut(0).ok()
         .unwrap()
-        .get_cell_mut("A1")
+        .cell_mut("A1")
         .set_value_number(3);
     umya_spreadsheet::writer::xlsx::write(&book, &source).unwrap();
     assert_eq!(

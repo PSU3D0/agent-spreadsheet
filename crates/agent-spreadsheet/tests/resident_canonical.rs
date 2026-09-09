@@ -12,9 +12,9 @@ use serde_json::{Value, json};
 
 fn fixture() -> Vec<u8> {
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-    sheet.get_cell_mut("A1").set_value_number(1.0);
-    sheet.get_cell_mut("B1").set_formula("A1*2");
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+    sheet.cell_mut("A1").set_value_number(1.0);
+    sheet.cell_mut("B1").set_formula("A1*2");
     let mut bytes = Vec::new();
     umya_spreadsheet::writer::xlsx::write_writer(&book, &mut bytes).unwrap();
     bytes
@@ -35,10 +35,10 @@ fn exported_cell(session: &mut ResidentWriteSession, address: &str) -> String {
     let bytes = session.export_bytes().unwrap();
     let book =
         umya_spreadsheet::reader::xlsx::read_reader(std::io::Cursor::new(bytes), true).unwrap();
-    book.get_sheet_by_name("Sheet1").ok()
+    book.sheet_by_name("Sheet1").ok()
         .unwrap()
-        .get_cell(address)
-        .map(|cell| cell.get_value().to_string())
+        .cell(address)
+        .map(|cell| cell.value().to_string())
         .unwrap_or_default()
 }
 
@@ -57,16 +57,16 @@ fn normalize_response(mut value: Value) -> Value {
 fn workbook_cells(bytes: &[u8]) -> Vec<(String, String, String)> {
     let book =
         umya_spreadsheet::reader::xlsx::read_reader(std::io::Cursor::new(bytes), true).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
+    let sheet = book.sheet_by_name("Sheet1").ok().unwrap();
     ["A1", "B1", "C1", "D1", "A2", "B2", "C2", "D2"]
         .into_iter()
         .map(|address| {
-            let cell = sheet.get_cell(address);
+            let cell = sheet.cell(address);
             (
                 address.to_string(),
-                cell.map(|cell| cell.get_value().to_string())
+                cell.map(|cell| cell.value().to_string())
                     .unwrap_or_default(),
-                cell.map(|cell| cell.get_formula().to_string())
+                cell.map(|cell| cell.formula().to_string())
                     .unwrap_or_default(),
             )
         })
@@ -313,9 +313,9 @@ fn common_preparation_matches_byte_executor_for_multiop_overlap_skip_preview_and
 #[tokio::test]
 async fn durable_snapshot_recovery_restores_calculated_copy_value_and_literal_type() {
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-    sheet.get_cell_mut("A1").set_formula("2+3");
-    sheet.get_cell_mut("A2").set_formula("\"00123\"");
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+    sheet.cell_mut("A1").set_formula("2+3");
+    sheet.cell_mut("A2").set_formula("\"00123\"");
     let mut base = Vec::new();
     umya_spreadsheet::writer::xlsx::write_writer(&book, &mut base).unwrap();
     let dir = tempfile::tempdir().unwrap();
@@ -343,13 +343,13 @@ async fn durable_snapshot_recovery_restores_calculated_copy_value_and_literal_ty
         let book =
             umya_spreadsheet::reader::xlsx::read_reader(std::io::Cursor::new(bytes), true).unwrap();
         let cell = book
-            .get_sheet_by_name("Sheet1").ok()
+            .sheet_by_name("Sheet1").ok()
             .unwrap()
-            .get_cell(address)
+            .cell(address)
             .unwrap();
         (
-            cell.get_value().to_string(),
-            cell.get_cell_value().get_data_type().to_string(),
+            cell.value().to_string(),
+            cell.cell_value().data_type().to_string(),
         )
     };
     assert_eq!(inspect(&live, "B1"), inspect(&replayed, "B1"));
@@ -360,9 +360,9 @@ async fn durable_snapshot_recovery_restores_calculated_copy_value_and_literal_ty
     let mut wrong =
         umya_spreadsheet::reader::xlsx::read_reader(std::io::Cursor::new(&base), true).unwrap();
     wrong
-        .get_sheet_by_name_mut("Sheet1").ok()
+        .sheet_by_name_mut("Sheet1").ok()
         .unwrap()
-        .get_cell_mut("D1")
+        .cell_mut("D1")
         .set_value("wrong base");
     let mut wrong_bytes = Vec::new();
     umya_spreadsheet::writer::xlsx::write_writer(&wrong, &mut wrong_bytes).unwrap();
@@ -578,9 +578,9 @@ async fn true_noop_undo_receipt_cannot_mutate_after_intervening_write() {
     assert_eq!(exported_cell(&mut session, "A1"), "7");
     let mut wrong_book = umya_spreadsheet::new_file();
     wrong_book
-        .get_sheet_by_name_mut("Sheet1").ok()
+        .sheet_by_name_mut("Sheet1").ok()
         .unwrap()
-        .get_cell_mut("A1")
+        .cell_mut("A1")
         .set_value_number(999.0);
     let mut wrong_base = Vec::new();
     umya_spreadsheet::writer::xlsx::write_writer(&wrong_book, &mut wrong_base).unwrap();
@@ -1143,12 +1143,12 @@ fn non_atomic_failed_value_edit_does_not_invalidate_style_only_success() {
         umya_spreadsheet::reader::xlsx::read_reader(std::io::Cursor::new(exported), true).unwrap();
     assert!(
         book
-            .get_sheet_by_name("Sheet1").ok()
+            .sheet_by_name("Sheet1").ok()
             .unwrap()
-            .get_style("A1")
-            .get_font()
+            .style("A1")
+            .font()
             .unwrap()
-            .get_bold()
+            .bold()
     );
     session.recalculate(None).unwrap();
     let after = session.diagnostic_workbook().evaluator_counters();

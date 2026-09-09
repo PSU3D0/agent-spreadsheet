@@ -2576,7 +2576,7 @@ fn canonical_response_from_prepared(
 
 fn logical_workbook_sha256(bytes: &[u8]) -> Result<String> {
     let mut book = crate::xlsx_import::read_reader(std::io::Cursor::new(bytes), true)?;
-    for sheet in book.get_sheet_collection_mut() {
+    for sheet in book.sheet_collection_mut() {
         for cell in sheet.cells_mut() {
             if cell.is_formula() {
                 cell.set_formula_result_blank();
@@ -3075,9 +3075,9 @@ fn prepare_common_transaction(
     };
     let source = session.workbook.spreadsheet();
     let mut shadow = umya_spreadsheet::new_file_empty_worksheet();
-    for sheet in source.get_sheet_collection() {
+    for sheet in source.sheet_collection() {
         shadow
-            .new_sheet(sheet.get_name())
+            .new_sheet(sheet.name())
             .map_err(|error| anyhow!(error))?;
     }
     let policy = request
@@ -3125,15 +3125,15 @@ fn prepare_common_transaction(
             if before.contains_key(&key) {
                 continue;
             }
-            let source_sheet = match source.get_sheet_by_name(&sheet_name).ok() {
+            let source_sheet = match source.sheet_by_name(&sheet_name).ok() {
                 Some(sheet) => sheet,
                 None => continue,
             };
-            let original = source_sheet.get_cell((*column, *row)).cloned();
+            let original = source_sheet.cell((*column, *row)).cloned();
             before.insert(key, original.as_ref().map(materialize_umya_cell));
             if let Some(cell) = original {
                 shadow
-                    .get_sheet_by_name_mut(&sheet_name).ok()
+                    .sheet_by_name_mut(&sheet_name).ok()
                     .expect("source sheet copied to shadow")
                     .set_cell(cell);
             }
@@ -3166,8 +3166,8 @@ fn prepare_common_transaction(
     ordered_before.sort_by(|((ls, lc, lr), _), ((rs, rc, rr), _)| (ls, lr, lc).cmp(&(rs, rr, rc)));
     for ((sheet_name, column, row), expected_before) in ordered_before {
         let after = shadow
-            .get_sheet_by_name(sheet_name).ok()
-            .and_then(|sheet| sheet.get_cell((*column, *row)))
+            .sheet_by_name(sheet_name).ok()
+            .and_then(|sheet| sheet.cell((*column, *row)))
             .map(materialize_umya_cell);
         if let Some(change) = prepared_cell_change(
             sheet_name,
@@ -5305,9 +5305,9 @@ mod durable_calculation_failure_tests {
     #[tokio::test]
     async fn failed_retained_evaluation_poison_requires_durable_recovery() {
         let mut book = umya_spreadsheet::new_file();
-        book.get_sheet_by_name_mut("Sheet1").ok()
+        book.sheet_by_name_mut("Sheet1").ok()
             .unwrap()
-            .get_cell_mut("A1")
+            .cell_mut("A1")
             .set_formula("1+1");
         let mut base = Vec::new();
         crate::xlsx_export::write_writer(&book, &mut base).unwrap();

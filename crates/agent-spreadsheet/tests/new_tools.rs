@@ -209,13 +209,13 @@ async fn new_tools_cover_navigation_and_reads() -> Result<()> {
 async fn find_value_search_headers_only() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("headers_search.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("Name");
-        sheet.get_cell_mut("B1").set_value("Value");
-        sheet.get_cell_mut("A2").set_value("Name");
-        sheet.get_cell_mut("B2").set_value_number(100);
-        sheet.get_cell_mut("A3").set_value("Other");
-        sheet.get_cell_mut("B3").set_value_number(200);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("Name");
+        sheet.cell_mut("B1").set_value("Value");
+        sheet.cell_mut("A2").set_value("Name");
+        sheet.cell_mut("B2").set_value_number(100);
+        sheet.cell_mut("A3").set_value("Other");
+        sheet.cell_mut("B3").set_value_number(200);
     });
     let state = workspace.app_state();
     let workbooks = list_workbooks(
@@ -269,27 +269,27 @@ async fn find_value_search_headers_only() -> Result<()> {
 }
 
 fn build_inputs_workbook(book: &mut Spreadsheet) {
-    let inputs = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+    let inputs = book.sheet_by_name_mut("Sheet1").ok().unwrap();
     inputs.set_name("Inputs");
-    inputs.get_cell_mut("A1").set_value("Label");
-    inputs.get_cell_mut("B1").set_value("Value");
-    inputs.get_cell_mut("A2").set_value("Comp Rate");
-    inputs.get_cell_mut("B2").set_value_number(175.5);
-    inputs.get_cell_mut("A3").set_value("Widget");
-    inputs.get_cell_mut("B3").set_value("Blue");
-    inputs.get_cell_mut("C3").set_value("Note");
+    inputs.cell_mut("A1").set_value("Label");
+    inputs.cell_mut("B1").set_value("Value");
+    inputs.cell_mut("A2").set_value("Comp Rate");
+    inputs.cell_mut("B2").set_value_number(175.5);
+    inputs.cell_mut("A3").set_value("Widget");
+    inputs.cell_mut("B3").set_value("Blue");
+    inputs.cell_mut("C3").set_value("Note");
 
     let data = book.new_sheet("Data").expect("data sheet");
-    data.get_cell_mut("A1").set_value("Date");
-    data.get_cell_mut("B1").set_value("Revenue");
-    data.get_cell_mut("C1").set_value("Cost");
-    data.get_cell_mut("A2").set_value("2024-01-01");
-    data.get_cell_mut("B2").set_value_number(100.0);
-    data.get_cell_mut("C2").set_value_number(30.0);
-    data.get_cell_mut("A3").set_value("2024-01-02");
-    data.get_cell_mut("B3").set_value_number(120.0);
-    data.get_cell_mut("C3").set_value_number(40.0);
-    data.get_cell_mut("A4").set_value("2024-01-03");
-    data.get_cell_mut("B4").set_value_number(140.0);
-    data.get_cell_mut("C4").set_value_number(50.0);
+    data.cell_mut("A1").set_value("Date");
+    data.cell_mut("B1").set_value("Revenue");
+    data.cell_mut("C1").set_value("Cost");
+    data.cell_mut("A2").set_value("2024-01-01");
+    data.cell_mut("B2").set_value_number(100.0);
+    data.cell_mut("C2").set_value_number(30.0);
+    data.cell_mut("A3").set_value("2024-01-02");
+    data.cell_mut("B3").set_value_number(120.0);
+    data.cell_mut("C3").set_value_number(40.0);
+    data.cell_mut("A4").set_value("2024-01-03");
+    data.cell_mut("B4").set_value_number(140.0);
+    data.cell_mut("C4").set_value_number(50.0);
 }

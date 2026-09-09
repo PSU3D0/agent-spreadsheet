@@ -10,13 +10,13 @@ async fn test_apply_formula_pattern_recalc_fidelity_in_docker() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("formula_pattern.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-            sheet.get_cell_mut("A1").set_value_number(1);
-            sheet.get_cell_mut("B1").set_value_number(2);
-            sheet.get_cell_mut("A2").set_value_number(10);
-            sheet.get_cell_mut("B2").set_value_number(20);
-            sheet.get_cell_mut("A3").set_value_number(100);
-            sheet.get_cell_mut("B3").set_value_number(200);
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("A1").set_value_number(1);
+            sheet.cell_mut("B1").set_value_number(2);
+            sheet.cell_mut("A2").set_value_number(10);
+            sheet.cell_mut("B2").set_value_number(20);
+            sheet.cell_mut("A3").set_value_number(100);
+            sheet.cell_mut("B3").set_value_number(200);
         });
 
     let client = test.connect().await?;
@@ -85,13 +85,13 @@ async fn test_apply_formula_pattern_2d_fill_resolves_dependencies_in_docker() ->
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("formula_pattern_2d.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-            sheet.get_cell_mut("A1").set_value_number(1);
-            sheet.get_cell_mut("B1").set_value_number(2);
-            sheet.get_cell_mut("A2").set_value_number(10);
-            sheet.get_cell_mut("B2").set_value_number(20);
-            sheet.get_cell_mut("A3").set_value_number(100);
-            sheet.get_cell_mut("B3").set_value_number(200);
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("A1").set_value_number(1);
+            sheet.cell_mut("B1").set_value_number(2);
+            sheet.cell_mut("A2").set_value_number(10);
+            sheet.cell_mut("B2").set_value_number(20);
+            sheet.cell_mut("A3").set_value_number(100);
+            sheet.cell_mut("B3").set_value_number(200);
         });
 
     let client = test.connect().await?;
@@ -163,13 +163,13 @@ async fn test_apply_formula_pattern_abs_rows_freezes_row_offsets_in_docker() -> 
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("formula_pattern_abs_rows.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-            sheet.get_cell_mut("A1").set_value_number(1);
-            sheet.get_cell_mut("B1").set_value_number(2);
-            sheet.get_cell_mut("A2").set_value_number(10);
-            sheet.get_cell_mut("B2").set_value_number(20);
-            sheet.get_cell_mut("A3").set_value_number(100);
-            sheet.get_cell_mut("B3").set_value_number(200);
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("A1").set_value_number(1);
+            sheet.cell_mut("B1").set_value_number(2);
+            sheet.cell_mut("A2").set_value_number(10);
+            sheet.cell_mut("B2").set_value_number(20);
+            sheet.cell_mut("A3").set_value_number(100);
+            sheet.cell_mut("B3").set_value_number(200);
         });
 
     let client = test.connect().await?;

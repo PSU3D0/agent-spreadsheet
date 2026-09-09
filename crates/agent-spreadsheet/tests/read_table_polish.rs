@@ -11,14 +11,14 @@ mod support;
 async fn read_table_uses_region_header_hint_and_range_offsets() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("region_header.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         // leave some blank rows to force trim; header on row 5
-        sheet.get_cell_mut("A5").set_value("ColA");
-        sheet.get_cell_mut("B5").set_value("ColB");
-        sheet.get_cell_mut("A6").set_value("R1");
-        sheet.get_cell_mut("B6").set_value_number(1);
-        sheet.get_cell_mut("A7").set_value("R2");
-        sheet.get_cell_mut("B7").set_value_number(2);
+        sheet.cell_mut("A5").set_value("ColA");
+        sheet.cell_mut("B5").set_value("ColB");
+        sheet.cell_mut("A6").set_value("R1");
+        sheet.cell_mut("B6").set_value_number(1);
+        sheet.cell_mut("A7").set_value("R2");
+        sheet.cell_mut("B7").set_value_number(2);
     });
     let state = workspace.app_state();
     let descriptor = list_workbooks(
@@ -90,15 +90,15 @@ async fn read_table_uses_region_header_hint_and_range_offsets() -> Result<()> {
 async fn read_table_handles_multi_row_headers_and_filters() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("multi_headers.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("Group");
-        sheet.get_cell_mut("B1").set_value("Group");
-        sheet.get_cell_mut("A2").set_value("X");
-        sheet.get_cell_mut("B2").set_value("Y");
-        sheet.get_cell_mut("A3").set_value("foo");
-        sheet.get_cell_mut("B3").set_value_number(10);
-        sheet.get_cell_mut("A4").set_value("bar");
-        sheet.get_cell_mut("B4").set_value_number(20);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("Group");
+        sheet.cell_mut("B1").set_value("Group");
+        sheet.cell_mut("A2").set_value("X");
+        sheet.cell_mut("B2").set_value("Y");
+        sheet.cell_mut("A3").set_value("foo");
+        sheet.cell_mut("B3").set_value_number(10);
+        sheet.cell_mut("A4").set_value("bar");
+        sheet.cell_mut("B4").set_value_number(20);
     });
     let state = workspace.app_state();
     let workbook_id = list_workbooks(
@@ -155,15 +155,15 @@ async fn read_table_handles_multi_row_headers_and_filters() -> Result<()> {
 async fn read_table_expands_merged_headers_and_in_filters() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("merged.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("Q1");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("Q1");
         sheet.add_merge_cells("A1:B1");
-        sheet.get_cell_mut("A2").set_value("Name");
-        sheet.get_cell_mut("B2").set_value("Value");
-        sheet.get_cell_mut("A3").set_value("alpha");
-        sheet.get_cell_mut("B3").set_value_number(1);
-        sheet.get_cell_mut("A4").set_value("beta");
-        sheet.get_cell_mut("B4").set_value_number(2);
+        sheet.cell_mut("A2").set_value("Name");
+        sheet.cell_mut("B2").set_value("Value");
+        sheet.cell_mut("A3").set_value("alpha");
+        sheet.cell_mut("B3").set_value_number(1);
+        sheet.cell_mut("A4").set_value("beta");
+        sheet.cell_mut("B4").set_value_number(2);
     });
     let state = workspace.app_state();
     let workbook_id = list_workbooks(
@@ -227,12 +227,12 @@ async fn read_table_expands_merged_headers_and_in_filters() -> Result<()> {
 async fn read_table_large_range_stops_after_limit_and_counts() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("large.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("X");
-        sheet.get_cell_mut("B1").set_value("Y");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("X");
+        sheet.cell_mut("B1").set_value("Y");
         for row in 2..=200 {
-            sheet.get_cell_mut((1u32, row)).set_value(format!("r{row}"));
-            sheet.get_cell_mut((2u32, row)).set_value_number(row as i32);
+            sheet.cell_mut((1u32, row)).set_value(format!("r{row}"));
+            sheet.cell_mut((2u32, row)).set_value_number(row as i32);
         }
     });
     let state = workspace.app_state();
@@ -283,15 +283,15 @@ async fn read_table_large_range_stops_after_limit_and_counts() -> Result<()> {
 async fn read_table_handles_huge_sheet_sampling() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("huge.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("Idx");
-        sheet.get_cell_mut("B1").set_value("Value");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("Idx");
+        sheet.cell_mut("B1").set_value("Value");
         for row in 2..=10001 {
             sheet
-                .get_cell_mut((1u32, row))
+                .cell_mut((1u32, row))
                 .set_value_number((row - 1) as i32);
             sheet
-                .get_cell_mut((2u32, row))
+                .cell_mut((2u32, row))
                 .set_value_number(((row - 1) * 2) as i32);
         }
     });
@@ -339,15 +339,15 @@ async fn read_table_handles_huge_sheet_sampling() -> Result<()> {
 async fn read_table_handles_empty_header_cells_in_multi_row() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("empty_headers.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("Category");
-        sheet.get_cell_mut("A2").set_value("Sub");
-        sheet.get_cell_mut("B1").set_value("Values");
-        sheet.get_cell_mut("C1").set_value("Values");
-        sheet.get_cell_mut("C2").set_value("Amt");
-        sheet.get_cell_mut("A3").set_value("foo");
-        sheet.get_cell_mut("B3").set_value_number(1);
-        sheet.get_cell_mut("C3").set_value_number(100);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("Category");
+        sheet.cell_mut("A2").set_value("Sub");
+        sheet.cell_mut("B1").set_value("Values");
+        sheet.cell_mut("C1").set_value("Values");
+        sheet.cell_mut("C2").set_value("Amt");
+        sheet.cell_mut("A3").set_value("foo");
+        sheet.cell_mut("B3").set_value_number(1);
+        sheet.cell_mut("C3").set_value_number(100);
     });
     let state = workspace.app_state();
     let workbook_id = list_workbooks(
@@ -391,11 +391,11 @@ async fn read_table_handles_empty_header_cells_in_multi_row() -> Result<()> {
 async fn read_table_filter_contains_case_insensitive() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("contains.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("A1").set_value("Name");
-        sheet.get_cell_mut("A2").set_value("Apple Pie");
-        sheet.get_cell_mut("A3").set_value("Banana Bread");
-        sheet.get_cell_mut("A4").set_value("Cherry Cake");
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("A1").set_value("Name");
+        sheet.cell_mut("A2").set_value("Apple Pie");
+        sheet.cell_mut("A3").set_value("Banana Bread");
+        sheet.cell_mut("A4").set_value("Cherry Cake");
     });
     let state = workspace.app_state();
     let workbook_id = list_workbooks(
@@ -443,13 +443,13 @@ async fn read_table_filter_contains_case_insensitive() -> Result<()> {
 async fn read_table_resolves_excel_table_by_name() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("with_table.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-        sheet.get_cell_mut("B2").set_value("ID");
-        sheet.get_cell_mut("C2").set_value("Amount");
-        sheet.get_cell_mut("B3").set_value_number(1);
-        sheet.get_cell_mut("C3").set_value_number(100);
-        sheet.get_cell_mut("B4").set_value_number(2);
-        sheet.get_cell_mut("C4").set_value_number(200);
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+        sheet.cell_mut("B2").set_value("ID");
+        sheet.cell_mut("C2").set_value("Amount");
+        sheet.cell_mut("B3").set_value_number(1);
+        sheet.cell_mut("C3").set_value_number(100);
+        sheet.cell_mut("B4").set_value_number(2);
+        sheet.cell_mut("C4").set_value_number(200);
         let mut table = umya_spreadsheet::structs::Table::new("SalesData", ("B2", "C4"));
         table.set_display_name("SalesData");
         sheet.add_table(table);

@@ -62,23 +62,23 @@ fn direct_argb(color: &umya_spreadsheet::Color) -> Option<String> {
 }
 
 pub fn descriptor_from_style(style: &Style) -> StyleDescriptor {
-    let font = style.get_font().and_then(descriptor_from_font);
-    let fill = style.get_fill().and_then(descriptor_from_fill);
-    let borders = style.get_borders().and_then(|borders| {
-        let left = descriptor_from_border_side(borders.get_left_border());
-        let right = descriptor_from_border_side(borders.get_right_border());
-        let top = descriptor_from_border_side(borders.get_top_border());
-        let bottom = descriptor_from_border_side(borders.get_bottom_border());
-        let diagonal = descriptor_from_border_side(borders.get_diagonal_border());
-        let vertical = descriptor_from_border_side(borders.get_vertical_border());
-        let horizontal = descriptor_from_border_side(borders.get_horizontal_border());
+    let font = style.font().and_then(descriptor_from_font);
+    let fill = style.fill().and_then(descriptor_from_fill);
+    let borders = style.borders().and_then(|borders| {
+        let left = descriptor_from_border_side(borders.left_border());
+        let right = descriptor_from_border_side(borders.right_border());
+        let top = descriptor_from_border_side(borders.top_border());
+        let bottom = descriptor_from_border_side(borders.bottom_border());
+        let diagonal = descriptor_from_border_side(borders.diagonal_border());
+        let vertical = descriptor_from_border_side(borders.vertical_border());
+        let horizontal = descriptor_from_border_side(borders.horizontal_border());
 
-        let diagonal_up = if borders.get_diagonal_up() {
+        let diagonal_up = if borders.diagonal_up() {
             Some(true)
         } else {
             None
         };
-        let diagonal_down = if borders.get_diagonal_down() {
+        let diagonal_down = if borders.diagonal_down() {
             Some(true)
         } else {
             None
@@ -102,9 +102,9 @@ pub fn descriptor_from_style(style: &Style) -> StyleDescriptor {
             Some(descriptor)
         }
     });
-    let alignment = style.get_alignment().and_then(descriptor_from_alignment);
-    let number_format = style.get_number_format().and_then(|fmt| {
-        let code = fmt.get_format_code();
+    let alignment = style.alignment().and_then(descriptor_from_alignment);
+    let number_format = style.number_format().and_then(|fmt| {
+        let code = fmt.format_code();
         if code.eq_ignore_ascii_case("general") {
             None
         } else {
@@ -211,15 +211,15 @@ fn format_range(start_col: u32, end_col: u32, start_row: u32, end_row: u32) -> S
 }
 
 fn descriptor_from_font(font: &Font) -> Option<FontDescriptor> {
-    let bold = font.get_bold();
-    let italic = font.get_italic();
-    let underline = font.get_underline();
-    let strikethrough = font.get_strikethrough();
-    let color = direct_argb(font.get_color());
+    let bold = font.bold();
+    let italic = font.italic();
+    let underline = font.underline();
+    let strikethrough = font.strikethrough();
+    let color = direct_argb(font.color());
 
     let descriptor = FontDescriptor {
-        name: Some(font.get_name().to_string()).filter(|s| !s.is_empty()),
-        size: Some(font.get_size()).filter(|s| *s > 0.0),
+        name: Some(font.name().to_string()).filter(|s| !s.is_empty()),
+        size: Some(font.size()).filter(|s| *s > 0.0),
         bold: if bold { Some(true) } else { None },
         italic: if italic { Some(true) } else { None },
         underline: if underline.eq_ignore_ascii_case("none") {
@@ -239,15 +239,15 @@ fn descriptor_from_font(font: &Font) -> Option<FontDescriptor> {
 }
 
 fn descriptor_from_fill(fill: &Fill) -> Option<FillDescriptor> {
-    if let Some(pattern) = fill.get_pattern_fill() {
-        let pattern_type = pattern.get_pattern_type();
+    if let Some(pattern) = fill.pattern_fill() {
+        let pattern_type = pattern.pattern_type();
         let kind = pattern_type.value_string();
         let fg = pattern
-            .get_foreground_color()
+            .foreground_color()
             .and_then(direct_argb)
             .filter(|s| !s.is_empty());
         let bg = pattern
-            .get_background_color()
+            .background_color()
             .and_then(direct_argb)
             .filter(|s| !s.is_empty());
 
@@ -266,17 +266,17 @@ fn descriptor_from_fill(fill: &Fill) -> Option<FillDescriptor> {
         }));
     }
 
-    if let Some(gradient) = fill.get_gradient_fill() {
+    if let Some(gradient) = fill.gradient_fill() {
         let stops: Vec<GradientStopDescriptor> = gradient
-            .get_gradient_stop()
+            .gradient_stop()
             .iter()
             .map(|stop| GradientStopDescriptor {
-                position: stop.get_position(),
-                color: direct_argb(stop.get_color()).unwrap_or_default(),
+                position: stop.position(),
+                color: direct_argb(stop.color()).unwrap_or_default(),
             })
             .collect();
 
-        let degree = gradient.get_degree();
+        let degree = gradient.degree();
         if stops.is_empty() && degree == 0.0 {
             return None;
         }
@@ -291,7 +291,7 @@ fn descriptor_from_fill(fill: &Fill) -> Option<FillDescriptor> {
 }
 
 fn descriptor_from_border_side(border: &Border) -> Option<BorderSideDescriptor> {
-    let style = border.get_border_style();
+    let style = border.border_style();
     let style = if style.eq_ignore_ascii_case("none") {
         None
     } else {
@@ -310,23 +310,23 @@ fn descriptor_from_border_side(border: &Border) -> Option<BorderSideDescriptor> 
 fn descriptor_from_alignment(
     alignment: &umya_spreadsheet::Alignment,
 ) -> Option<AlignmentDescriptor> {
-    let horizontal = if alignment.get_horizontal() != &HorizontalAlignmentValues::General {
-        Some(alignment.get_horizontal().value_string().to_string())
+    let horizontal = if alignment.horizontal() != &HorizontalAlignmentValues::General {
+        Some(alignment.horizontal().value_string().to_string())
     } else {
         None
     };
-    let vertical = if alignment.get_vertical() != &VerticalAlignmentValues::Bottom {
-        Some(alignment.get_vertical().value_string().to_string())
+    let vertical = if alignment.vertical() != &VerticalAlignmentValues::Bottom {
+        Some(alignment.vertical().value_string().to_string())
     } else {
         None
     };
-    let wrap_text = if alignment.get_wrap_text() {
+    let wrap_text = if alignment.wrap_text() {
         Some(true)
     } else {
         None
     };
-    let text_rotation = if alignment.get_text_rotation() != 0 {
-        Some(alignment.get_text_rotation())
+    let text_rotation = if alignment.text_rotation() != 0 {
+        Some(alignment.text_rotation())
     } else {
         None
     };
@@ -685,7 +685,7 @@ fn apply_alignment_patch(desc: &mut AlignmentDescriptor, patch: &AlignmentPatch)
 
 fn apply_descriptor_to_style(style: &mut Style, desc: &StyleDescriptor) {
     if let Some(font_desc) = &desc.font {
-        let font = style.get_font_mut();
+        let font = style.font_mut();
         if let Some(name) = &font_desc.name {
             font.set_name(name.clone());
         }
@@ -705,36 +705,36 @@ fn apply_descriptor_to_style(style: &mut Style, desc: &StyleDescriptor) {
             font.set_strikethrough(strike);
         }
         if let Some(color) = &font_desc.color {
-            set_color_hex(font.get_color_mut(), color);
+            set_color_hex(font.color_mut(), color);
         }
     }
 
     if let Some(fill_desc) = &desc.fill {
         match fill_desc {
             FillDescriptor::Pattern(p) => {
-                let pat = style.get_fill_mut().get_pattern_fill_mut();
+                let pat = style.fill_mut().pattern_fill_mut();
                 if let Some(kind) = &p.pattern_type
                     && let Ok(pv) = PatternValues::from_str(kind)
                 {
                     pat.set_pattern_type(pv);
                 }
                 if let Some(fg) = &p.foreground_color {
-                    set_color_hex(pat.get_foreground_color_mut(), fg);
+                    set_color_hex(pat.foreground_color_mut(), fg);
                 }
                 if let Some(bg) = &p.background_color {
-                    set_color_hex(pat.get_background_color_mut(), bg);
+                    set_color_hex(pat.background_color_mut(), bg);
                 }
             }
             FillDescriptor::Gradient(g) => {
-                let grad = style.get_fill_mut().get_gradient_fill_mut();
+                let grad = style.fill_mut().gradient_fill_mut();
                 if let Some(deg) = g.degree {
                     grad.set_degree(deg);
                 }
-                grad.get_gradient_stop_mut().clear();
+                grad.gradient_stop_mut().clear();
                 for stop in &g.stops {
                     let mut st = umya_spreadsheet::GradientStop::default();
                     st.set_position(stop.position);
-                    set_color_hex(st.get_color_mut(), &stop.color);
+                    set_color_hex(st.color_mut(), &stop.color);
                     grad.set_gradient_stop(st);
                 }
             }
@@ -742,14 +742,14 @@ fn apply_descriptor_to_style(style: &mut Style, desc: &StyleDescriptor) {
     }
 
     if let Some(border_desc) = &desc.borders {
-        let borders = style.get_borders_mut();
-        apply_border_side_descriptor(borders.get_left_border_mut(), &border_desc.left);
-        apply_border_side_descriptor(borders.get_right_border_mut(), &border_desc.right);
-        apply_border_side_descriptor(borders.get_top_border_mut(), &border_desc.top);
-        apply_border_side_descriptor(borders.get_bottom_border_mut(), &border_desc.bottom);
-        apply_border_side_descriptor(borders.get_diagonal_border_mut(), &border_desc.diagonal);
-        apply_border_side_descriptor(borders.get_vertical_border_mut(), &border_desc.vertical);
-        apply_border_side_descriptor(borders.get_horizontal_border_mut(), &border_desc.horizontal);
+        let borders = style.borders_mut();
+        apply_border_side_descriptor(borders.left_border_mut(), &border_desc.left);
+        apply_border_side_descriptor(borders.right_border_mut(), &border_desc.right);
+        apply_border_side_descriptor(borders.top_border_mut(), &border_desc.top);
+        apply_border_side_descriptor(borders.bottom_border_mut(), &border_desc.bottom);
+        apply_border_side_descriptor(borders.diagonal_border_mut(), &border_desc.diagonal);
+        apply_border_side_descriptor(borders.vertical_border_mut(), &border_desc.vertical);
+        apply_border_side_descriptor(borders.horizontal_border_mut(), &border_desc.horizontal);
         if let Some(up) = border_desc.diagonal_up {
             borders.set_diagonal_up(up);
         }
@@ -759,7 +759,7 @@ fn apply_descriptor_to_style(style: &mut Style, desc: &StyleDescriptor) {
     }
 
     if let Some(align_desc) = &desc.alignment {
-        let align = style.get_alignment_mut();
+        let align = style.alignment_mut();
         if let Some(h) = &align_desc.horizontal
             && let Ok(val) = HorizontalAlignmentValues::from_str(h)
         {
@@ -779,7 +779,7 @@ fn apply_descriptor_to_style(style: &mut Style, desc: &StyleDescriptor) {
     }
 
     if let Some(fmt) = &desc.number_format {
-        style.get_number_format_mut().set_format_code(fmt.clone());
+        style.number_format_mut().set_format_code(fmt.clone());
     }
 }
 

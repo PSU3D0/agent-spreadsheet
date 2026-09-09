@@ -193,26 +193,26 @@ fn asp_op_write_previews_and_applies_non_empty_pattern_and_gradient_fills() {
     assert_eq!(apply_json["data"]["ops_applied"], 2);
 
     let book = umya_spreadsheet::reader::xlsx::read(&applied_path).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
+    let sheet = book.sheet_by_name("Sheet1").ok().unwrap();
     let pattern = sheet
-        .get_style("A10")
-        .get_fill()
+        .style("A10")
+        .fill()
         .expect("fill")
-        .get_pattern_fill()
+        .pattern_fill()
         .expect("pattern fill");
-    assert_eq!(pattern.get_pattern_type().value_string(), "solid");
+    assert_eq!(pattern.pattern_type().value_string(), "solid");
     assert_eq!(
-        pattern.get_foreground_color().unwrap().argb_str(),
+        pattern.foreground_color().unwrap().argb_str(),
         "FFFF0000"
     );
     let gradient = sheet
-        .get_style("B10")
-        .get_fill()
+        .style("B10")
+        .fill()
         .expect("fill")
-        .get_gradient_fill()
+        .gradient_fill()
         .expect("gradient fill");
-    assert_eq!(gradient.get_degree(), 45.0);
-    assert_eq!(gradient.get_gradient_stop().len(), 2);
+    assert_eq!(gradient.degree(), 45.0);
+    assert_eq!(gradient.gradient_stop().len(), 2);
 }
 
 #[test]
@@ -223,15 +223,15 @@ fn human_table_append_matches_canonical_write_bytes_and_rich_detail() {
     let canonical_output = temp.path().join("canonical.xlsx");
     let rows_path = temp.path().join("rows.json");
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-    sheet.get_cell_mut("C1").set_value("Name");
-    sheet.get_cell_mut("D1").set_value("Amount");
-    sheet.get_cell_mut("C2").set_value("Alice");
-    sheet.get_cell_mut("D2").set_value_number(10.0);
-    sheet.get_cell_mut("C3").set_value("Bob");
-    sheet.get_cell_mut("D3").set_value_number(20.0);
-    sheet.get_cell_mut("C4").set_value("Total");
-    sheet.get_cell_mut("D4").set_formula("SUM(D2:D3)");
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+    sheet.cell_mut("C1").set_value("Name");
+    sheet.cell_mut("D1").set_value("Amount");
+    sheet.cell_mut("C2").set_value("Alice");
+    sheet.cell_mut("D2").set_value_number(10.0);
+    sheet.cell_mut("C3").set_value("Bob");
+    sheet.cell_mut("D3").set_value_number(20.0);
+    sheet.cell_mut("C4").set_value("Total");
+    sheet.cell_mut("D4").set_formula("SUM(D2:D3)");
     let mut table = umya_spreadsheet::structs::Table::new("SalesTable", ("C1", "D4"));
     table.set_display_name("SalesTable");
     sheet.add_table(table);
@@ -503,9 +503,9 @@ async fn staged_bundle_applies_through_the_canonical_dispatcher_in_order() {
     );
     assert_ne!(hash_file_sha256_hex(&fork_path).unwrap(), revision);
     let book = umya_spreadsheet::reader::xlsx::read(&fork_path).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
-    assert_eq!(sheet.get_value("A1"), "2");
-    assert_eq!(sheet.get_cell("B1").unwrap().get_formula(), "A1*3");
+    let sheet = book.sheet_by_name("Sheet1").ok().unwrap();
+    assert_eq!(sheet.value("A1"), "2");
+    assert_eq!(sheet.cell("B1").unwrap().formula(), "A1*3");
 }
 
 #[tokio::test]
@@ -902,9 +902,9 @@ async fn merge_preview_has_structured_effect_and_grid_merges_translate() {
     .unwrap();
     assert_eq!(applied.data["status"], "applied");
     let book = umya_spreadsheet::reader::xlsx::read(&fork_path).unwrap();
-    let merges = book.get_sheet_by_name("Sheet1").ok().unwrap().get_merge_cells();
-    assert!(merges.iter().any(|merge| merge.get_range() == "D5:E5"));
-    assert!(!merges.iter().any(|merge| merge.get_range() == "A1:B1"));
+    let merges = book.sheet_by_name("Sheet1").ok().unwrap().merge_cells();
+    assert!(merges.iter().any(|merge| merge.range() == "D5:E5"));
+    assert!(!merges.iter().any(|merge| merge.range() == "A1:B1"));
 }
 
 #[tokio::test]
@@ -955,15 +955,15 @@ async fn update_name_replaces_definition_and_non_atomic_stage_is_rejected() {
     assert_eq!(names.data["items"][0]["sheet_name"], Value::Null);
     let book = umya_spreadsheet::reader::xlsx::read(&fork_path).unwrap();
     let address = book
-        .get_defined_names()
+        .defined_names()
         .iter()
         .chain(
-            book.get_sheet_collection()
+            book.sheet_collection()
                 .iter()
-                .flat_map(|sheet| sheet.get_defined_names().iter()),
+                .flat_map(|sheet| sheet.defined_names().iter()),
         )
-        .find(|name| name.get_name() == "Rate")
-        .map(|name| name.get_address())
+        .find(|name| name.name() == "Rate")
+        .map(|name| name.address())
         .expect("Rate definition");
     assert_eq!(address, "Sheet1!$B$1");
     assert!(!address.contains(','));

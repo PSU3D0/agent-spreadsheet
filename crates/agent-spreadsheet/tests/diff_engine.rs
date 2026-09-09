@@ -58,11 +58,11 @@ fn test_no_changes() {
     let scenario = DiffScenario::new();
     scenario.setup(
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             builders::set_cell(sheet, 1, 1, &CellVal::from(10)); // A1
         },
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             builders::set_cell(sheet, 1, 1, &CellVal::from(10)); // A1
         },
     );
@@ -77,7 +77,7 @@ fn test_basic_edits() {
 
     // A1=10, A2="foo", A3=SUM(A1) (val=10)
     let setup_base = |book: &mut Spreadsheet| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         builders::set_cell(sheet, 1, 1, &CellVal::from(10));
         builders::set_cell(sheet, 1, 2, &CellVal::from("foo"));
         builders::set_cell(sheet, 1, 3, &CellVal::Formula("SUM(A1)".to_string()));
@@ -86,7 +86,7 @@ fn test_basic_edits() {
 
     // A1=20 (Val Edit), A2="bar" (Val Edit), A3=SUM(A1)+1 (Formula Edit)
     let setup_fork = |book: &mut Spreadsheet| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         builders::set_cell(sheet, 1, 1, &CellVal::from(20));
         builders::set_cell(sheet, 1, 2, &CellVal::from("bar"));
         builders::set_cell(sheet, 1, 3, &CellVal::Formula("SUM(A1)+1".to_string()));
@@ -184,10 +184,10 @@ fn test_structural_changes() {
     // Fork: B1=20 (Added), A1 deleted
     scenario.setup(
         |book| {
-            builders::set_cell(book.get_sheet_mut(&0).ok().unwrap(), 1, 1, &CellVal::from(10));
+            builders::set_cell(book.sheet_mut(0).ok().unwrap(), 1, 1, &CellVal::from(10));
         },
         |book| {
-            builders::set_cell(book.get_sheet_mut(&0).ok().unwrap(), 2, 1, &CellVal::from(20));
+            builders::set_cell(book.sheet_mut(0).ok().unwrap(), 2, 1, &CellVal::from(20));
         },
     );
 
@@ -224,7 +224,7 @@ fn test_sheet_filtering() {
     // Base: Sheet1!A1=1, Sheet2!A1=1
     // Fork: Sheet1!A1=2, Sheet2!A1=2
     let setup = |book: &mut Spreadsheet, val: i32| {
-        let s1 = book.get_sheet_mut(&0).ok().unwrap();
+        let s1 = book.sheet_mut(0).ok().unwrap();
         s1.set_name("Sheet1");
         builders::set_cell(s1, 1, 1, &CellVal::from(val));
 
@@ -251,12 +251,12 @@ fn test_sst_resolution() {
     // Fork: A1="Banana", B1="Apple"
     scenario.setup(
         |book| {
-            let s = book.get_sheet_mut(&0).ok().unwrap();
+            let s = book.sheet_mut(0).ok().unwrap();
             builders::set_cell(s, 1, 1, &CellVal::from("Apple"));
             builders::set_cell(s, 2, 1, &CellVal::from("Apple"));
         },
         |book| {
-            let s = book.get_sheet_mut(&0).ok().unwrap();
+            let s = book.sheet_mut(0).ok().unwrap();
             builders::set_cell(s, 1, 1, &CellVal::from("Banana")); // Change A1
             builders::set_cell(s, 2, 1, &CellVal::from("Apple")); // Keep B1
         },
@@ -291,7 +291,7 @@ fn test_large_dataset() {
 
     // Setup 5k rows
     let setup = |book: &mut Spreadsheet, modify: bool| {
-        let s = book.get_sheet_mut(&0).ok().unwrap();
+        let s = book.sheet_mut(0).ok().unwrap();
         for r in 1..=rows {
             let val = if modify && r == rows { 9999 } else { r as i32 };
             builders::set_cell(s, 1, r, &CellVal::from(val)); // A{r}
@@ -335,16 +335,16 @@ fn test_recalc_result_classification() {
     // Fork: A1=10, B1=SUM(A1) with cached value 20 (simulated recalc)
     scenario.setup(
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
-            sheet.get_cell_mut("A1").set_value_number(10);
-            let cell = sheet.get_cell_mut("B1");
+            let sheet = book.sheet_mut(0).ok().unwrap();
+            sheet.cell_mut("A1").set_value_number(10);
+            let cell = sheet.cell_mut("B1");
             cell.set_formula("SUM(A1)");
             cell.set_formula_result_default("10");
         },
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
-            sheet.get_cell_mut("A1").set_value_number(10);
-            let cell = sheet.get_cell_mut("B1");
+            let sheet = book.sheet_mut(0).ok().unwrap();
+            sheet.cell_mut("A1").set_value_number(10);
+            let cell = sheet.cell_mut("B1");
             cell.set_formula("SUM(A1)");
             cell.set_formula_result_default("20");
         },
@@ -388,12 +388,12 @@ fn test_float_epsilon_comparison() {
     // 0.1 + 0.2 = 0.30000000000000004 in IEEE 754
     scenario.setup(
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
-            sheet.get_cell_mut("A1").set_value_number(0.3);
+            let sheet = book.sheet_mut(0).ok().unwrap();
+            sheet.cell_mut("A1").set_value_number(0.3);
         },
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
-            sheet.get_cell_mut("A1").set_value_number(0.1 + 0.2);
+            let sheet = book.sheet_mut(0).ok().unwrap();
+            sheet.cell_mut("A1").set_value_number(0.1 + 0.2);
         },
     );
 
@@ -412,12 +412,12 @@ fn test_float_beyond_epsilon() {
     // Values differ by more than 1e-9
     scenario.setup(
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
-            sheet.get_cell_mut("A1").set_value_number(1.0);
+            let sheet = book.sheet_mut(0).ok().unwrap();
+            sheet.cell_mut("A1").set_value_number(1.0);
         },
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
-            sheet.get_cell_mut("A1").set_value_number(1.000000002);
+            let sheet = book.sheet_mut(0).ok().unwrap();
+            sheet.cell_mut("A1").set_value_number(1.000000002);
         },
     );
 
@@ -436,16 +436,16 @@ fn test_pure_numeric_sheet_no_sst() {
     // Sheet with only numbers - no shared strings at all
     scenario.setup(
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             for i in 1..=10 {
-                sheet.get_cell_mut((1, i)).set_value_number(i as f64);
+                sheet.cell_mut((1, i)).set_value_number(i as f64);
             }
         },
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             for i in 1..=10 {
                 let val = if i == 5 { 999.0 } else { i as f64 };
-                sheet.get_cell_mut((1, i)).set_value_number(val);
+                sheet.cell_mut((1, i)).set_value_number(val);
             }
         },
     );
@@ -487,8 +487,8 @@ fn test_empty_to_populated() {
     scenario.setup(
         |_book| {},
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
-            sheet.get_cell_mut("A1").set_value_number(42);
+            let sheet = book.sheet_mut(0).ok().unwrap();
+            sheet.cell_mut("A1").set_value_number(42);
         },
     );
 
@@ -516,7 +516,7 @@ fn test_rich_text_in_sst() {
     // Create rich text with multiple runs: "Hello" + "World"
     scenario.setup(
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
 
             let mut rt = RichText::default();
             let mut elem1 = TextElement::default();
@@ -526,10 +526,10 @@ fn test_rich_text_in_sst() {
             rt.add_rich_text_elements(elem1);
             rt.add_rich_text_elements(elem2);
 
-            sheet.get_cell_mut("A1").set_rich_text(rt);
+            sheet.cell_mut("A1").set_rich_text(rt);
         },
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
 
             let mut rt = RichText::default();
             let mut elem1 = TextElement::default();
@@ -539,7 +539,7 @@ fn test_rich_text_in_sst() {
             rt.add_rich_text_elements(elem1);
             rt.add_rich_text_elements(elem2);
 
-            sheet.get_cell_mut("A1").set_rich_text(rt);
+            sheet.cell_mut("A1").set_rich_text(rt);
         },
     );
 
@@ -560,26 +560,26 @@ fn test_rich_text_changed() {
 
     scenario.setup(
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
 
             let mut rt = RichText::default();
             let mut elem = TextElement::default();
             elem.set_text("Hello");
             rt.add_rich_text_elements(elem);
-            sheet.get_cell_mut("A1").set_rich_text(rt);
+            sheet.cell_mut("A1").set_rich_text(rt);
 
-            sheet.get_cell_mut("B1").set_value_number(1);
+            sheet.cell_mut("B1").set_value_number(1);
         },
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
 
             let mut rt = RichText::default();
             let mut elem = TextElement::default();
             elem.set_text("Goodbye");
             rt.add_rich_text_elements(elem);
-            sheet.get_cell_mut("A1").set_rich_text(rt);
+            sheet.cell_mut("A1").set_rich_text(rt);
 
-            sheet.get_cell_mut("B1").set_value_number(2);
+            sheet.cell_mut("B1").set_value_number(2);
         },
     );
 
@@ -623,13 +623,13 @@ fn test_style_only_edit_emits_style_diff() {
     let scenario = DiffScenario::new();
     scenario.setup(
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             builders::set_cell(sheet, 1, 1, &CellVal::from("x")); // A1
         },
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             builders::set_cell(sheet, 1, 1, &CellVal::from("x")); // A1
-            sheet.get_style_mut("A1").get_font_mut().set_bold(true);
+            sheet.style_mut("A1").font_mut().set_bold(true);
         },
     );
 
@@ -651,14 +651,14 @@ fn test_style_and_value_edit_keeps_value_subtype_with_style_ids() {
     let scenario = DiffScenario::new();
     scenario.setup(
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             builders::set_cell(sheet, 1, 1, &CellVal::from("x")); // A1
-            sheet.get_style_mut("A1").get_font_mut().set_italic(true);
+            sheet.style_mut("A1").font_mut().set_italic(true);
         },
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             builders::set_cell(sheet, 1, 1, &CellVal::from("y")); // A1
-            sheet.get_style_mut("A1").get_font_mut().set_bold(true);
+            sheet.style_mut("A1").font_mut().set_bold(true);
         },
     );
 

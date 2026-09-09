@@ -16,14 +16,14 @@ mod support;
 async fn path_and_virtual_readflows_match() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("parity.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+        let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.set_name("Data");
-        sheet.get_cell_mut("A1").set_value("item");
-        sheet.get_cell_mut("B1").set_value("amount");
-        sheet.get_cell_mut("A2").set_value("rent");
-        sheet.get_cell_mut("B2").set_value_number(1000);
-        sheet.get_cell_mut("A3").set_value("food");
-        sheet.get_cell_mut("B3").set_value_number(500);
+        sheet.cell_mut("A1").set_value("item");
+        sheet.cell_mut("B1").set_value("amount");
+        sheet.cell_mut("A2").set_value("rent");
+        sheet.cell_mut("B2").set_value_number(1000);
+        sheet.cell_mut("A3").set_value("food");
+        sheet.cell_mut("B3").set_value_number(500);
     });
 
     let config = Arc::new(workspace.config());

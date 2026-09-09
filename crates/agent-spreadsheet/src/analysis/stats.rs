@@ -13,7 +13,7 @@ pub struct SheetStats {
 }
 
 pub fn compute_sheet_statistics(sheet: &Worksheet, _sample_rows: usize) -> SheetStats {
-    let (max_col, max_row) = sheet.get_highest_column_and_row();
+    let (max_col, max_row) = sheet.highest_column_and_row();
     if max_col == 0 || max_row == 0 {
         return SheetStats {
             numeric_columns: Vec::new(),
@@ -32,7 +32,7 @@ pub fn compute_sheet_statistics(sheet: &Worksheet, _sample_rows: usize) -> Sheet
 
     for col in 1..=max_col {
         let column_name = column_number_to_name(col);
-        let header = sheet.get_cell((1u32, col)).and_then(cell_to_value);
+        let header = sheet.cell((1u32, col)).and_then(cell_to_value);
         let mut numeric_values = Vec::new();
         let mut text_values = Vec::new();
         let mut samples = Vec::new();
@@ -40,7 +40,7 @@ pub fn compute_sheet_statistics(sheet: &Worksheet, _sample_rows: usize) -> Sheet
         let mut duplicate_flag = false;
 
         for row in 1..=max_row {
-            if let Some(cell) = sheet.get_cell((row, col))
+            if let Some(cell) = sheet.cell((row, col))
                 && let Some(value) = cell_to_value(cell)
             {
                 filled_cells += 1;

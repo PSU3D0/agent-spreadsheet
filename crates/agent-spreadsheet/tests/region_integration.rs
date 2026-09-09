@@ -105,22 +105,22 @@ async fn sheet_overview_reports_regions_and_tools_scope_to_region() -> Result<()
 }
 
 fn build_regioned_workbook(book: &mut Spreadsheet) {
-    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
     // Left table
-    sheet.get_cell_mut("A1").set_value("Month");
-    sheet.get_cell_mut("B1").set_value("Value");
-    sheet.get_cell_mut("A2").set_value("Jan");
-    sheet.get_cell_mut("B2").set_value_number(10);
-    sheet.get_cell_mut("A3").set_value("Feb");
-    sheet.get_cell_mut("B3").set_value_number(20);
-    sheet.get_cell_mut("A4").set_value("Mar");
-    sheet.get_cell_mut("B4").set_value_number(30);
+    sheet.cell_mut("A1").set_value("Month");
+    sheet.cell_mut("B1").set_value("Value");
+    sheet.cell_mut("A2").set_value("Jan");
+    sheet.cell_mut("B2").set_value_number(10);
+    sheet.cell_mut("A3").set_value("Feb");
+    sheet.cell_mut("B3").set_value_number(20);
+    sheet.cell_mut("A4").set_value("Mar");
+    sheet.cell_mut("B4").set_value_number(30);
 
     // Right parameters block separated by gutter at column C
-    sheet.get_cell_mut("E1").set_value("Target");
-    sheet.get_cell_mut("F1").set_value("Value");
-    sheet.get_cell_mut("E2").set_value("North");
-    sheet.get_cell_mut("F2").set_value_number(5);
-    sheet.get_cell_mut("E3").set_value("South");
-    sheet.get_cell_mut("F3").set_value_number(7);
+    sheet.cell_mut("E1").set_value("Target");
+    sheet.cell_mut("F1").set_value("Value");
+    sheet.cell_mut("E2").set_value("North");
+    sheet.cell_mut("F2").set_value_number(5);
+    sheet.cell_mut("E3").set_value("South");
+    sheet.cell_mut("F3").set_value_number(7);
 }

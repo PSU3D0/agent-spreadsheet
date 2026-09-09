@@ -7,17 +7,17 @@ fn write_fixture(path: &Path) {
     let mut workbook = umya_spreadsheet::new_file();
     {
         let sheet = workbook
-            .get_sheet_by_name_mut("Sheet1").ok()
+            .sheet_by_name_mut("Sheet1").ok()
             .expect("default sheet exists");
-        sheet.get_cell_mut("A1").set_value("Name");
-        sheet.get_cell_mut("B1").set_value("Amount");
-        sheet.get_cell_mut("C1").set_value("Total");
-        sheet.get_cell_mut("A2").set_value("Alice");
-        sheet.get_cell_mut("B2").set_value_number(10.0);
-        sheet.get_cell_mut("C2").set_formula("B2*2");
-        sheet.get_cell_mut("A3").set_value("Bob");
-        sheet.get_cell_mut("B3").set_value_number(20.0);
-        sheet.get_cell_mut("C3").set_formula("B3*2");
+        sheet.cell_mut("A1").set_value("Name");
+        sheet.cell_mut("B1").set_value("Amount");
+        sheet.cell_mut("C1").set_value("Total");
+        sheet.cell_mut("A2").set_value("Alice");
+        sheet.cell_mut("B2").set_value_number(10.0);
+        sheet.cell_mut("C2").set_formula("B2*2");
+        sheet.cell_mut("A3").set_value("Bob");
+        sheet.cell_mut("B3").set_value_number(20.0);
+        sheet.cell_mut("C3").set_formula("B3*2");
     }
     workbook.new_sheet("Summary").expect("add summary sheet");
     umya_spreadsheet::writer::xlsx::write(&workbook, path).expect("write workbook");

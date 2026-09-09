@@ -142,7 +142,7 @@ fn test_table_changes() {
     // Fork: Table "Sales" resized to A1:C10
     scenario.setup(
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             sheet.set_name("Sheet1");
             let mut table = Table::default();
             table.set_name("Table1");
@@ -151,7 +151,7 @@ fn test_table_changes() {
             sheet.add_table(table);
         },
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             sheet.set_name("Sheet1");
             let mut table = Table::default();
             table.set_name("Table1");
@@ -186,11 +186,11 @@ fn test_table_addition() {
 
     scenario.setup(
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             sheet.set_name("Sheet1");
         },
         |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             sheet.set_name("Sheet1");
             let mut table = Table::default();
             table.set_name("NewTable");

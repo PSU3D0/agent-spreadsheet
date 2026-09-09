@@ -117,7 +117,7 @@ async fn formualizer_coverage_counts_errors_and_empty_results_as_evaluated() -> 
         EvaluationFreshness::CurrentRevision
     );
     let value = stale.workbook.with_sheet("Sheet1", |sheet| {
-        cell_to_value(sheet.get_cell("B1").unwrap())
+        cell_to_value(sheet.cell("B1").unwrap())
     })?;
     assert!(matches!(value, Some(CellValue::Number(value)) if value == 20.0));
 
@@ -133,7 +133,7 @@ async fn formualizer_coverage_counts_errors_and_empty_results_as_evaluated() -> 
     assert_eq!(broken.coverage.state(), EvaluationState::ErrorsFound);
     assert_eq!(broken.coverage.error_formula_cells, 2);
     let broken_value = broken.workbook.with_sheet("Sheet1", |sheet| {
-        cell_to_value(sheet.get_cell("B1").unwrap())
+        cell_to_value(sheet.cell("B1").unwrap())
     })?;
     assert!(matches!(broken_value, Some(CellValue::Error(_))));
 
@@ -211,9 +211,9 @@ async fn verify_evaluates_errors_and_detects_same_address_changes() -> Result<()
     let changed_path = temp.path().join("changed-errors.xlsx");
     let mut changed = umya_spreadsheet::reader::xlsx::read(fixture("real_errors.xlsx"))?;
     changed
-        .get_sheet_by_name_mut("Sheet1").ok()
+        .sheet_by_name_mut("Sheet1").ok()
         .unwrap()
-        .get_cell_mut("A1")
+        .cell_mut("A1")
         .set_formula("UNKNOWNFN(2)")
         .set_formula_result_default("#NAME?");
     umya_spreadsheet::writer::xlsx::write(&changed, &changed_path)?;
@@ -285,19 +285,19 @@ fn ooxml_errors_are_typed_but_error_like_strings_remain_text() {
     cell_types
         .with_sheet("Sheet1", |sheet| {
             assert!(matches!(
-                cell_to_value(sheet.get_cell("A1").unwrap()),
+                cell_to_value(sheet.cell("A1").unwrap()),
                 Some(CellValue::Error(value)) if value == "#N/A"
             ));
             assert!(matches!(
-                cell_to_value(sheet.get_cell("B1").unwrap()),
+                cell_to_value(sheet.cell("B1").unwrap()),
                 Some(CellValue::Text(value)) if value == "#N/A"
             ));
             assert!(matches!(
-                cell_to_value(sheet.get_cell("C1").unwrap()),
+                cell_to_value(sheet.cell("C1").unwrap()),
                 Some(CellValue::Text(value)) if value == "#REF!"
             ));
             assert!(matches!(
-                cell_to_value(sheet.get_cell("D1").unwrap()),
+                cell_to_value(sheet.cell("D1").unwrap()),
                 Some(CellValue::Error(value)) if value == "#DIV/0!"
             ));
         })

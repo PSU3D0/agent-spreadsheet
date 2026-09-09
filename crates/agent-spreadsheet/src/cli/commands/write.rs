@@ -420,7 +420,7 @@ pub async fn create_workbook(
         .cloned()
         .ok_or_else(|| anyhow!("at least one sheet is required"))?;
     workbook
-        .get_sheet_by_name_mut("Sheet1").ok()
+        .sheet_by_name_mut("Sheet1").ok()
         .ok_or_else(|| anyhow!("failed to initialize workbook default sheet"))?
         .set_name(first_sheet_name.as_str());
 

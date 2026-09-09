@@ -100,17 +100,17 @@ pub fn compute_structure_impact(
     let mut notes: Vec<String> = Vec::new();
     let mut formula_deltas: Vec<FormulaDeltaItem> = Vec::new();
 
-    for sheet in book.get_sheet_collection() {
-        let sheet_name = sheet.get_name().to_string();
+    for sheet in book.sheet_collection() {
+        let sheet_name = sheet.name().to_string();
         for cell in sheet.cells() {
             if !cell.is_formula() {
                 continue;
             }
-            let formula_text = cell.get_formula();
+            let formula_text = cell.formula();
             if formula_text.is_empty() {
                 continue;
             }
-            let cell_address = cell.get_coordinate().get_coordinate().to_string();
+            let cell_address = cell.coordinate().get_coordinate().to_string();
             let full_cell = format!("{}!{}", sheet_name, cell_address);
 
             let formula_with_equals = if formula_text.starts_with('=') {
@@ -641,11 +641,11 @@ mod tests {
     #[test]
     fn impact_report_detects_affected_formulas() {
         let tmp = create_test_workbook(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-            sheet.get_cell_mut("A1").set_value_number(10);
-            sheet.get_cell_mut("A2").set_value_number(20);
-            sheet.get_cell_mut("B1").set_formula("A1+A2".to_string());
-            sheet.get_cell_mut("C1").set_formula("$A$5".to_string());
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("A1").set_value_number(10);
+            sheet.cell_mut("A2").set_value_number(20);
+            sheet.cell_mut("B1").set_formula("A1+A2".to_string());
+            sheet.cell_mut("C1").set_formula("$A$5".to_string());
         });
 
         let ops = vec![StructureOp::InsertRows {
@@ -664,9 +664,9 @@ mod tests {
     #[test]
     fn impact_report_flags_absolute_ref_crossing_insert() {
         let tmp = create_test_workbook(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
             sheet
-                .get_cell_mut("A1")
+                .cell_mut("A1")
                 .set_formula("$A$5+$A$10".to_string());
         });
 
@@ -693,10 +693,10 @@ mod tests {
     #[test]
     fn formula_delta_preview_shows_before_after() {
         let tmp = create_test_workbook(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-            sheet.get_cell_mut("A1").set_value_number(10);
-            sheet.get_cell_mut("A5").set_value_number(50);
-            sheet.get_cell_mut("B1").set_formula("A5*2".to_string());
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("A1").set_value_number(10);
+            sheet.cell_mut("A5").set_value_number(50);
+            sheet.cell_mut("B1").set_formula("A5*2".to_string());
         });
 
         let ops = vec![StructureOp::InsertRows {
@@ -721,8 +721,8 @@ mod tests {
     #[test]
     fn token_counts_do_not_double_count_across_multiple_spans() {
         let tmp = create_test_workbook(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-            sheet.get_cell_mut("B1").set_formula("A5*2".to_string());
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("B1").set_formula("A5*2".to_string());
         });
 
         let ops = vec![
@@ -759,9 +759,9 @@ mod tests {
     #[test]
     fn no_mutation_occurs_during_preview() {
         let tmp = create_test_workbook(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
-            sheet.get_cell_mut("A1").set_value_number(42);
-            sheet.get_cell_mut("B1").set_formula("A1*2".to_string());
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
+            sheet.cell_mut("A1").set_value_number(42);
+            sheet.cell_mut("B1").set_formula("A1*2".to_string());
         });
 
         let before_bytes = std::fs::read(wb_path(&tmp)).unwrap();
@@ -785,9 +785,9 @@ mod tests {
     #[test]
     fn single_cell_range_noted() {
         let tmp = create_test_workbook(|book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
+            let sheet = book.sheet_by_name_mut("Sheet1").ok().unwrap();
             sheet
-                .get_cell_mut("B1")
+                .cell_mut("B1")
                 .set_formula("SUM(K54:K54)".to_string());
         });
 

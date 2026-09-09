@@ -107,27 +107,27 @@ async fn test_screenshot_sheet_basic() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("screenshot_test.xlsx", |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             sheet.set_name("Data");
-            sheet.get_cell_mut("A1").set_value("Header1");
-            sheet.get_cell_mut("B1").set_value("Header2");
-            sheet.get_cell_mut("C1").set_value("Header3");
-            sheet.get_cell_mut("A2").set_value_number(100);
-            sheet.get_cell_mut("B2").set_value_number(200);
-            sheet.get_cell_mut("C2").set_value_number(300);
-            sheet.get_cell_mut("A3").set_value("Text Value");
-            sheet.get_cell_mut("B3").set_value_number(42.5);
-            sheet.get_cell_mut("C3").set_value("More Text");
+            sheet.cell_mut("A1").set_value("Header1");
+            sheet.cell_mut("B1").set_value("Header2");
+            sheet.cell_mut("C1").set_value("Header3");
+            sheet.cell_mut("A2").set_value_number(100);
+            sheet.cell_mut("B2").set_value_number(200);
+            sheet.cell_mut("C2").set_value_number(300);
+            sheet.cell_mut("A3").set_value("Text Value");
+            sheet.cell_mut("B3").set_value_number(42.5);
+            sheet.cell_mut("C3").set_value("More Text");
 
             let mut header_style = Style::default();
-            header_style.set_background_color(Color::COLOR_DARKBLUE);
+            header_style.set_background_color(Color::argb8_to_hex(Color::COLOR_DARKBLUE));
             let white_font = Color::default().set_argb(Color::COLOR_WHITE).to_owned();
             {
-                let font = header_style.get_font_mut();
+                let font = header_style.font_mut();
                 font.set_bold(true);
                 font.set_color(white_font);
             }
-            sheet.set_style_by_range("A1:C1", header_style);
+            sheet.set_style_by_range("A1:C1", &header_style);
         });
 
     let client = test.connect().await?;
@@ -185,13 +185,13 @@ async fn test_screenshot_sheet_concurrent_requests_are_safe() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("screenshot_concurrent.xlsx", |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             sheet.set_name("Data");
-            sheet.get_cell_mut("A1").set_value("X");
-            sheet.get_cell_mut("D1").set_value("Y");
+            sheet.cell_mut("A1").set_value("X");
+            sheet.cell_mut("D1").set_value("Y");
             let mut fill = Style::default();
             fill.set_background_color("FFEEEEEE");
-            sheet.set_style_by_range("A1:F10", fill);
+            sheet.set_style_by_range("A1:F10", &fill);
         });
 
     let client = test.connect().await?;
@@ -239,11 +239,11 @@ async fn test_screenshot_sheet_inline_image_content() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("screenshot_inline_test.xlsx", |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             sheet.set_name("Data");
-            sheet.get_cell_mut("A1").set_value("Header1");
-            sheet.get_cell_mut("A2").set_value_number(1);
-            sheet.get_cell_mut("B2").set_value_number(2);
+            sheet.cell_mut("A1").set_value("Header1");
+            sheet.cell_mut("A2").set_value_number(1);
+            sheet.cell_mut("B2").set_value_number(2);
         });
 
     let client = test.connect().await?;
@@ -267,18 +267,18 @@ async fn test_screenshot_sheet_targets_requested_sheet_not_first() -> Result<()>
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("screenshot_multi_sheet.xlsx", |book| {
-            let sheet1 = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet1 = book.sheet_mut(0).ok().unwrap();
             sheet1.set_name("First");
-            sheet1.get_cell_mut("A1").set_value("FIRST");
+            sheet1.cell_mut("A1").set_value("FIRST");
             let mut red = Style::default();
             red.set_background_color("FFFF0000");
-            sheet1.set_style_by_range("A1:M40", red);
+            sheet1.set_style_by_range("A1:M40", &red);
 
             let sheet2 = book.new_sheet("Calculations").unwrap();
-            sheet2.get_cell_mut("A1").set_value("CALC");
+            sheet2.cell_mut("A1").set_value("CALC");
             let mut green = Style::default();
             green.set_background_color("FF00FF00");
-            sheet2.set_style_by_range("A1:M40", green);
+            sheet2.set_style_by_range("A1:M40", &green);
         });
 
     let client = test.connect().await?;
@@ -335,104 +335,104 @@ async fn test_screenshot_visual_scenarios_original_and_forked() -> Result<()> {
 
     // Sparse, tiny content.
     test.workspace().create_workbook("sparse.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Data");
-        sheet.get_cell_mut("A1").set_value("X");
-        sheet.get_cell_mut("A2").set_value_number(1);
-        sheet.get_cell_mut("B3").set_value_number(123);
+        sheet.cell_mut("A1").set_value("X");
+        sheet.cell_mut("A2").set_value_number(1);
+        sheet.cell_mut("B3").set_value_number(123);
     });
 
     // Offset content inside a larger requested range.
     test.workspace().create_workbook("offset.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Data");
-        sheet.get_cell_mut("E10").set_value("Start");
-        sheet.get_cell_mut("F12").set_value_number(42);
-        sheet.get_cell_mut("H20").set_value_number(999);
+        sheet.cell_mut("E10").set_value("Start");
+        sheet.cell_mut("F12").set_value_number(42);
+        sheet.cell_mut("H20").set_value_number(999);
     });
 
     // Very wide table.
     test.workspace().create_workbook("wide.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Wide");
         for (i, col) in ('A'..='Z').enumerate() {
             let header_addr = format!("{}1", col);
             let value_addr = format!("{}2", col);
             sheet
-                .get_cell_mut(header_addr.as_str())
+                .cell_mut(header_addr.as_str())
                 .set_value(format!("H{}", i + 1));
             sheet
-                .get_cell_mut(value_addr.as_str())
+                .cell_mut(value_addr.as_str())
                 .set_value_number((i + 1) as f64);
         }
     });
 
     // Very tall table near row limit.
     test.workspace().create_workbook("tall.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Tall");
-        sheet.get_cell_mut("A1").set_value("Idx");
-        sheet.get_cell_mut("B1").set_value("Val1");
-        sheet.get_cell_mut("C1").set_value("Val2");
-        sheet.get_cell_mut("D1").set_value("Val3");
+        sheet.cell_mut("A1").set_value("Idx");
+        sheet.cell_mut("B1").set_value("Val1");
+        sheet.cell_mut("C1").set_value("Val2");
+        sheet.cell_mut("D1").set_value("Val3");
         for row in 2..=100 {
             sheet
-                .get_cell_mut(format!("A{}", row).as_str())
+                .cell_mut(format!("A{}", row).as_str())
                 .set_value_number((row - 1) as f64);
             sheet
-                .get_cell_mut(format!("B{}", row).as_str())
+                .cell_mut(format!("B{}", row).as_str())
                 .set_value_number((row * 2) as f64);
             sheet
-                .get_cell_mut(format!("C{}", row).as_str())
+                .cell_mut(format!("C{}", row).as_str())
                 .set_value_number((row * 3) as f64);
             sheet
-                .get_cell_mut(format!("D{}", row).as_str())
+                .cell_mut(format!("D{}", row).as_str())
                 .set_value_number((row * 4) as f64);
         }
     });
 
     // Filled background all the way to selection edges.
     test.workspace().create_workbook("filled_bg.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Filled");
-        sheet.get_cell_mut("A1").set_value("Filled Region");
-        sheet.get_cell_mut("B3").set_value_number(10);
-        sheet.get_cell_mut("C4").set_value_number(20);
+        sheet.cell_mut("A1").set_value("Filled Region");
+        sheet.cell_mut("B3").set_value_number(10);
+        sheet.cell_mut("C4").set_value_number(20);
         let mut fill_style = Style::default();
         fill_style.set_background_color("FFEEEEEE");
-        sheet.set_style_by_range("A1:F15", fill_style);
+        sheet.set_style_by_range("A1:F15", &fill_style);
     });
 
     // Low-contrast text on white.
     test.workspace()
         .create_workbook("low_contrast.xlsx", |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             sheet.set_name("LowContrast");
-            sheet.get_cell_mut("A1").set_value("Faint Header");
-            sheet.get_cell_mut("A2").set_value_number(1);
-            sheet.get_cell_mut("B2").set_value_number(2);
+            sheet.cell_mut("A1").set_value("Faint Header");
+            sheet.cell_mut("A2").set_value_number(1);
+            sheet.cell_mut("B2").set_value_number(2);
             let mut faint_style = Style::default();
             let faint = Color::default().set_argb_str("FFDDDDDD").to_owned();
-            faint_style.get_font_mut().set_color(faint);
-            sheet.set_style_by_range("A1:D5", faint_style);
+            faint_style.font_mut().set_color(faint);
+            sheet.set_style_by_range("A1:D5", &faint_style);
         });
 
     // Merged header with long text.
     test.workspace().create_workbook("merged.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Merged");
         sheet.add_merge_cells("A1:D2");
         sheet
-            .get_cell_mut("A1")
+            .cell_mut("A1")
             .set_value("This is a merged header with a long description");
-        sheet.get_cell_mut("A3").set_value("Row");
-        sheet.get_cell_mut("B3").set_value("Value");
+        sheet.cell_mut("A3").set_value("Row");
+        sheet.cell_mut("B3").set_value("Value");
         for row in 4..=12 {
             sheet
-                .get_cell_mut(format!("A{}", row).as_str())
+                .cell_mut(format!("A{}", row).as_str())
                 .set_value_number((row - 3) as f64);
             sheet
-                .get_cell_mut(format!("B{}", row).as_str())
+                .cell_mut(format!("B{}", row).as_str())
                 .set_value_number((row * 5) as f64);
         }
     });
@@ -440,63 +440,63 @@ async fn test_screenshot_visual_scenarios_original_and_forked() -> Result<()> {
     // Border-only-ish region: strong filled border around sparse content.
     test.workspace()
         .create_workbook("border_only.xlsx", |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             sheet.set_name("BorderOnly");
-            sheet.get_cell_mut("B3").set_value("Inside");
+            sheet.cell_mut("B3").set_value("Inside");
             let mut edge_style = Style::default();
             edge_style.set_background_color("FF666666");
-            sheet.set_style_by_range("A1:D1", edge_style);
+            sheet.set_style_by_range("A1:D1", &edge_style);
             let mut edge_style = Style::default();
             edge_style.set_background_color("FF666666");
-            sheet.set_style_by_range("A1:A10", edge_style);
+            sheet.set_style_by_range("A1:A10", &edge_style);
             let mut edge_style = Style::default();
             edge_style.set_background_color("FF666666");
-            sheet.set_style_by_range("D1:D10", edge_style);
+            sheet.set_style_by_range("D1:D10", &edge_style);
             let mut edge_style = Style::default();
             edge_style.set_background_color("FF666666");
-            sheet.set_style_by_range("A10:D10", edge_style);
+            sheet.set_style_by_range("A10:D10", &edge_style);
         });
 
     // Non-Latin / RTL text.
     test.workspace().create_workbook("non_latin.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Intl");
-        sheet.get_cell_mut("A1").set_value("标题");
-        sheet.get_cell_mut("B1").set_value("القيمة");
-        sheet.get_cell_mut("C1").set_value("ヘッダー");
-        sheet.get_cell_mut("A2").set_value("数据");
-        sheet.get_cell_mut("B2").set_value_number(42);
-        sheet.get_cell_mut("C2").set_value("テキスト");
+        sheet.cell_mut("A1").set_value("标题");
+        sheet.cell_mut("B1").set_value("القيمة");
+        sheet.cell_mut("C1").set_value("ヘッダー");
+        sheet.cell_mut("A2").set_value("数据");
+        sheet.cell_mut("B2").set_value_number(42);
+        sheet.cell_mut("C2").set_value("テキスト");
     });
 
     // Pseudo-chart / colored blocks (stands in for charts/images).
     test.workspace()
         .create_workbook("colored_blocks.xlsx", |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             sheet.set_name("Blocks");
-            sheet.get_cell_mut("A1").set_value("Metric");
-            sheet.get_cell_mut("B1").set_value("Value");
+            sheet.cell_mut("A1").set_value("Metric");
+            sheet.cell_mut("B1").set_value("Value");
             for row in 2..=8 {
                 sheet
-                    .get_cell_mut(format!("A{}", row).as_str())
+                    .cell_mut(format!("A{}", row).as_str())
                     .set_value(format!("M{}", row - 1));
                 sheet
-                    .get_cell_mut(format!("B{}", row).as_str())
+                    .cell_mut(format!("B{}", row).as_str())
                     .set_value_number((row * 7) as f64);
             }
             let mut block_style = Style::default();
             block_style.set_background_color("FFB3D9FF");
-            sheet.set_style_by_range("C2:C8", block_style);
+            sheet.set_style_by_range("C2:C8", &block_style);
         });
 
     // Forked workbook: edits should be screenshot-able too.
     test.workspace().create_workbook("forked.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("Data");
-        sheet.get_cell_mut("A1").set_value("Original");
-        sheet.get_cell_mut("A2").set_value_number(10);
-        sheet.get_cell_mut("B2").set_formula("A2*2");
-        sheet.get_cell_mut("B2").set_formula_result_default("0");
+        sheet.cell_mut("A1").set_value("Original");
+        sheet.cell_mut("A2").set_value_number(10);
+        sheet.cell_mut("B2").set_formula("A2*2");
+        sheet.cell_mut("B2").set_formula_result_default("0");
     });
 
     let client = test.connect().await?;
@@ -644,9 +644,9 @@ async fn test_screenshot_range_too_large() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("large_range.xlsx", |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             sheet.set_name("Data");
-            sheet.get_cell_mut("A1").set_value("Test");
+            sheet.cell_mut("A1").set_value("Test");
         });
 
     let client = test.connect().await?;
@@ -704,14 +704,14 @@ async fn test_screenshot_pixel_guard_suggests_split() -> Result<()> {
         .with_env_override("SPREADSHEET_MCP_MAX_PNG_AREA_PX", "20000");
     test.workspace()
         .create_workbook("pixel_guard.xlsx", |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             sheet.set_name("Data");
-            sheet.get_cell_mut("A1").set_value("Header1");
-            sheet.get_cell_mut("B1").set_value("Header2");
-            sheet.get_cell_mut("C1").set_value("Header3");
-            sheet.get_cell_mut("A2").set_value_number(100);
-            sheet.get_cell_mut("B2").set_value_number(200);
-            sheet.get_cell_mut("C2").set_value_number(300);
+            sheet.cell_mut("A1").set_value("Header1");
+            sheet.cell_mut("B1").set_value("Header2");
+            sheet.cell_mut("C1").set_value("Header3");
+            sheet.cell_mut("A2").set_value_number(100);
+            sheet.cell_mut("B2").set_value_number(200);
+            sheet.cell_mut("C2").set_value_number(300);
         });
 
     let client = test.connect().await?;
@@ -758,9 +758,9 @@ async fn test_screenshot_default_range() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("default_range.xlsx", |book| {
-            let sheet = book.get_sheet_mut(&0).ok().unwrap();
+            let sheet = book.sheet_mut(0).ok().unwrap();
             sheet.set_name("Sheet1");
-            sheet.get_cell_mut("A1").set_value("Default Range Test");
+            sheet.cell_mut("A1").set_value("Default Range Test");
         });
 
     let client = test.connect().await?;
@@ -798,7 +798,7 @@ async fn test_screenshot_default_range() -> Result<()> {
 async fn test_screenshot_invalid_sheet() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("valid.xlsx", |book| {
-        let sheet = book.get_sheet_mut(&0).ok().unwrap();
+        let sheet = book.sheet_mut(0).ok().unwrap();
         sheet.set_name("RealSheet");
     });
 

@@ -960,9 +960,9 @@ fn evaluate_cell_matches(
         };
 
         let actual_value = sheet
-            .get_cell(cell_ref)
+            .cell(cell_ref)
             .map(|c| {
-                let val = c.get_value();
+                let val = c.value();
                 if val.is_empty() {
                     serde_json::Value::Null
                 } else if let Ok(n) = val.parse::<f64>() {

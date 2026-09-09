@@ -785,21 +785,21 @@ async fn workbook_style_summary_truncates_with_max_items() -> Result<()> {
 }
 
 fn build_simple_workbook(book: &mut Spreadsheet) {
-    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().expect("Sheet1");
-    sheet.get_cell_mut("A1").set_value("Name");
-    sheet.get_cell_mut("B1").set_value("Value");
-    sheet.get_cell_mut("C1").set_value("Flag");
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().expect("Sheet1");
+    sheet.cell_mut("A1").set_value("Name");
+    sheet.cell_mut("B1").set_value("Value");
+    sheet.cell_mut("C1").set_value("Flag");
 
     for i in 0..5 {
         let row = i + 2;
         sheet
-            .get_cell_mut(format!("A{row}").as_str())
+            .cell_mut(format!("A{row}").as_str())
             .set_value(format!("Item {}", i + 1));
         sheet
-            .get_cell_mut(format!("B{row}").as_str())
+            .cell_mut(format!("B{row}").as_str())
             .set_value_number((i + 1) as f64);
         sheet
-            .get_cell_mut(format!("C{row}").as_str())
+            .cell_mut(format!("C{row}").as_str())
             .set_value("Y");
     }
 }
@@ -811,9 +811,9 @@ fn build_two_sheet_workbook(book: &mut Spreadsheet) {
 
 fn build_styled_workbook(book: &mut Spreadsheet) {
     build_simple_workbook(book);
-    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().expect("Sheet1");
-    sheet.get_style_mut("A2").get_font_mut().set_bold(true);
-    sheet.get_style_mut("B2").get_font_mut().set_italic(true);
+    let sheet = book.sheet_by_name_mut("Sheet1").ok().expect("Sheet1");
+    sheet.style_mut("A2").font_mut().set_bold(true);
+    sheet.style_mut("B2").font_mut().set_italic(true);
 }
 
 #[tokio::test(flavor = "current_thread")]

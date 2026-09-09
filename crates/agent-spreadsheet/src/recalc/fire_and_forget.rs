@@ -138,11 +138,11 @@ impl RecalcExecutor for FireAndForgetExecutor {
         let book = crate::xlsx_import::read(workbook_path)?;
         let mut formula_cells = 0u64;
         let mut error_formula_cells = 0u64;
-        for sheet in book.get_sheet_collection() {
+        for sheet in book.sheet_collection() {
             for cell in sheet.cells() {
                 if cell.is_formula() {
                     formula_cells += 1;
-                    if is_spreadsheet_error(&cell.get_value()) {
+                    if is_spreadsheet_error(&cell.value()) {
                         error_formula_cells += 1;
                     }
                 }

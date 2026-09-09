@@ -49,7 +49,7 @@ fn sheet_has_formula_in_bounds(sheet: &umya_spreadsheet::Worksheet, bounds: &[Ce
         if !cell.is_formula() {
             continue;
         }
-        let address = cell.get_coordinate().get_coordinate().to_string();
+        let address = cell.coordinate().get_coordinate().to_string();
         let Some((col, row)) = parse_address(&address) else {
             continue;
         };
@@ -1588,8 +1588,8 @@ fn resolve_sheet_index_on_book(
     book: &umya_spreadsheet::Workbook,
     sheet_name: &str,
 ) -> Result<u32> {
-    for (idx, sheet) in book.get_sheet_collection().iter().enumerate() {
-        if sheet.get_name() == sheet_name {
+    for (idx, sheet) in book.sheet_collection().iter().enumerate() {
+        if sheet.name() == sheet_name {
             return Ok(idx as u32);
         }
     }
@@ -1614,17 +1614,17 @@ pub(crate) fn define_name_in_file(
                 .ok_or_else(|| anyhow!("scope_sheet_name required for sheet scope"))?;
             let sheet_index = resolve_sheet_index_on_book(&book, sn)?;
             let sheet = book
-                .get_sheet_by_name_mut(sn).ok()
+                .sheet_by_name_mut(sn).ok()
                 .ok_or_else(|| anyhow!("sheet '{}' not found", sn))?;
             sheet
                 .add_defined_name(name.to_string(), refers_to.to_string())
                 .map_err(|e| anyhow!("failed to add defined name: {e}"))?;
             // Set local_sheet_id on the just-added entry.
             let sheet = book
-                .get_sheet_by_name_mut(sn).ok()
+                .sheet_by_name_mut(sn).ok()
                 .ok_or_else(|| anyhow!("sheet '{}' disappeared", sn))?;
-            if let Some(last) = sheet.get_defined_names_mut().last_mut()
-                && last.get_name() == name
+            if let Some(last) = sheet.defined_names_mut().last_mut()
+                && last.name() == name
             {
                 last.set_local_sheet_id(sheet_index);
             }
@@ -1633,21 +1633,21 @@ pub(crate) fn define_name_in_file(
             // set_name is pub(crate) in umya, so we create through a sheet then move
             // to workbook level.
             let first_sheet: String = book
-                .get_sheet_collection()
+                .sheet_collection()
                 .first()
-                .map(|s| s.get_name().to_string())
+                .map(|s| s.name().to_string())
                 .ok_or_else(|| anyhow!("workbook has no sheets"))?;
             let sheet = book
-                .get_sheet_by_name_mut(&first_sheet).ok()
+                .sheet_by_name_mut(&first_sheet).ok()
                 .ok_or_else(|| anyhow!("sheet '{}' not found", first_sheet))?;
             sheet
                 .add_defined_name(name.to_string(), refers_to.to_string())
                 .map_err(|e| anyhow!("failed to add defined name: {e}"))?;
             // Move the just-added entry from sheet-level to workbook-level.
             let sheet = book
-                .get_sheet_by_name_mut(&first_sheet).ok()
+                .sheet_by_name_mut(&first_sheet).ok()
                 .ok_or_else(|| anyhow!("sheet disappeared"))?;
-            let entry = sheet.get_defined_names_mut().pop();
+            let entry = sheet.defined_names_mut().pop();
             if let Some(entry) = entry {
                 book.add_defined_names(entry);
             }
@@ -1677,11 +1677,11 @@ pub(crate) fn update_name_in_file(
 
     // Try workbook-level defined names.
     if scope_kind.is_none() || scope_kind == Some(NamedRangeScope::Workbook) {
-        for defined in book.get_defined_names_mut().iter_mut() {
-            if defined.get_name() == name
+        for defined in book.defined_names_mut().iter_mut() {
+            if defined.name() == name
                 && (scope_kind == Some(NamedRangeScope::Workbook) || !defined.has_local_sheet_id())
             {
-                previous_refers_to = defined.get_address();
+                previous_refers_to = defined.address();
                 if let Some(new_addr) = new_refers_to {
                     defined.set_address(new_addr.to_string());
                 }
@@ -1695,9 +1695,9 @@ pub(crate) fn update_name_in_file(
     // Try sheet-level.
     if !found && (scope_kind.is_none() || scope_kind == Some(NamedRangeScope::Sheet)) {
         let sheet_names: Vec<String> = book
-            .get_sheet_collection()
+            .sheet_collection()
             .iter()
-            .map(|s: &umya_spreadsheet::Worksheet| s.get_name().to_string())
+            .map(|s: &umya_spreadsheet::Worksheet| s.name().to_string())
             .collect();
         for sn in &sheet_names {
             if let Some(filter_sheet) = scope_sheet_name
@@ -1705,10 +1705,10 @@ pub(crate) fn update_name_in_file(
             {
                 continue;
             }
-            if let Some(sheet) = book.get_sheet_by_name_mut(sn).ok() {
-                for defined in sheet.get_defined_names_mut().iter_mut() {
-                    if defined.get_name() == name {
-                        previous_refers_to = defined.get_address();
+            if let Some(sheet) = book.sheet_by_name_mut(sn).ok() {
+                for defined in sheet.defined_names_mut().iter_mut() {
+                    if defined.name() == name {
+                        previous_refers_to = defined.address();
                         if let Some(new_addr) = new_refers_to {
                             defined.set_address(new_addr.to_string());
                         }
@@ -1734,20 +1734,20 @@ pub(crate) fn update_name_in_file(
     if let Some(new_addr) = new_refers_to {
         match effective_scope {
             NamedRangeScope::Workbook => {
-                book.get_defined_names_mut()
-                    .retain(|defined| defined.get_name() != name);
+                book.defined_names_mut()
+                    .retain(|defined| defined.name() != name);
                 let first_sheet = book
-                    .get_sheet_collection()
+                    .sheet_collection()
                     .first()
-                    .map(|sheet| sheet.get_name().to_string())
+                    .map(|sheet| sheet.name().to_string())
                     .ok_or_else(|| anyhow!("workbook has no sheets"))?;
                 let sheet = book
-                    .get_sheet_by_name_mut(&first_sheet).ok()
+                    .sheet_by_name_mut(&first_sheet).ok()
                     .ok_or_else(|| anyhow!("sheet disappeared"))?;
                 sheet
                     .add_defined_name(name.to_string(), new_addr.to_string())
                     .map_err(|error| anyhow!("failed to replace defined name: {error}"))?;
-                let replacement = sheet.get_defined_names_mut().pop();
+                let replacement = sheet.defined_names_mut().pop();
                 if let Some(replacement) = replacement {
                     book.add_defined_names(replacement);
                 }
@@ -1758,15 +1758,15 @@ pub(crate) fn update_name_in_file(
                     .ok_or_else(|| anyhow!("sheet-scoped name has no sheet"))?;
                 let sheet_index = resolve_sheet_index_on_book(&book, sheet_name)?;
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name).ok()
+                    .sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
                 sheet
-                    .get_defined_names_mut()
-                    .retain(|defined| defined.get_name() != name);
+                    .defined_names_mut()
+                    .retain(|defined| defined.name() != name);
                 sheet
                     .add_defined_name(name.to_string(), new_addr.to_string())
                     .map_err(|error| anyhow!("failed to replace defined name: {error}"))?;
-                if let Some(replacement) = sheet.get_defined_names_mut().last_mut() {
+                if let Some(replacement) = sheet.defined_names_mut().last_mut() {
                     replacement.set_local_sheet_id(sheet_index);
                 }
             }
@@ -1792,9 +1792,9 @@ pub(crate) fn delete_name_in_file(
 
     // Try workbook-level.
     if scope_kind.is_none() || scope_kind == Some(NamedRangeScope::Workbook) {
-        let names = book.get_defined_names_mut();
+        let names = book.defined_names_mut();
         let before_len = names.len();
-        names.retain(|d: &umya_spreadsheet::DefinedName| d.get_name() != name);
+        names.retain(|d: &umya_spreadsheet::DefinedName| d.name() != name);
         if names.len() < before_len {
             deleted = true;
         }
@@ -1803,9 +1803,9 @@ pub(crate) fn delete_name_in_file(
     // Try sheet-level.
     if !deleted && (scope_kind.is_none() || scope_kind == Some(NamedRangeScope::Sheet)) {
         let sheet_names: Vec<String> = book
-            .get_sheet_collection()
+            .sheet_collection()
             .iter()
-            .map(|s: &umya_spreadsheet::Worksheet| s.get_name().to_string())
+            .map(|s: &umya_spreadsheet::Worksheet| s.name().to_string())
             .collect();
         for sn in &sheet_names {
             if let Some(filter_sheet) = scope_sheet_name
@@ -1813,10 +1813,10 @@ pub(crate) fn delete_name_in_file(
             {
                 continue;
             }
-            if let Some(sheet) = book.get_sheet_by_name_mut(sn).ok() {
-                let names = sheet.get_defined_names_mut();
+            if let Some(sheet) = book.sheet_by_name_mut(sn).ok() {
+                let names = sheet.defined_names_mut();
                 let before_len = names.len();
-                names.retain(|d: &umya_spreadsheet::DefinedName| d.get_name() != name);
+                names.retain(|d: &umya_spreadsheet::DefinedName| d.name() != name);
                 if names.len() < before_len {
                     deleted = true;
                     break;
@@ -1997,8 +1997,8 @@ fn build_page(
     include_header: bool,
     header_row: u32,
 ) -> PageBuildResult {
-    let max_col = sheet.get_highest_column();
-    let end_row = (start_row + page_size - 1).min(sheet.get_highest_row().max(start_row));
+    let max_col = sheet.highest_column();
+    let end_row = (start_row + page_size - 1).min(sheet.highest_row().max(start_row));
     let column_indices = resolve_columns_with_headers(
         sheet,
         columns.as_ref(),
@@ -2042,7 +2042,7 @@ fn build_row_snapshot(
 ) -> RowSnapshot {
     let mut cells = Vec::new();
     for &col in columns {
-        if let Some(cell) = sheet.get_cell((col, row_index)) {
+        if let Some(cell) = sheet.cell((col, row_index)) {
             cells.push(build_cell_snapshot(cell, include_formulas, include_styles));
         } else {
             let address = crate::utils::cell_address(col, row_index);
@@ -2066,10 +2066,10 @@ fn build_cell_snapshot(
     include_formulas: bool,
     include_styles: bool,
 ) -> CellSnapshot {
-    let address = cell.get_coordinate().get_coordinate();
+    let address = cell.coordinate().get_coordinate();
     let value = crate::workbook::cell_to_value(cell);
     let formula = if include_formulas && cell.is_formula() {
-        Some(cell.get_formula().to_string())
+        Some(cell.formula().to_string())
     } else {
         None
     };
@@ -2079,9 +2079,9 @@ fn build_cell_snapshot(
         None
     };
     let number_format = if include_styles {
-        cell.get_style()
-            .get_number_format()
-            .map(|fmt| fmt.get_format_code().to_string())
+        cell.style()
+            .number_format()
+            .map(|fmt| fmt.format_code().to_string())
     } else {
         None
     };
@@ -2161,7 +2161,7 @@ fn resolve_columns_with_headers(
         .collect();
 
     for col_idx in 1..=max_column.max(1) {
-        let header_cell = sheet.get_cell((col_idx, header_row));
+        let header_cell = sheet.cell((col_idx, header_row));
         let header_value = header_cell
             .and_then(cell_to_value)
             .map(cell_value_to_string_lower);
@@ -3047,7 +3047,7 @@ fn extract_table_rows(
                 .get(i)
                 .cloned()
                 .unwrap_or_else(|| format!("Col{col_idx}"));
-            let value = sheet.get_cell((*col_idx, row_idx)).and_then(cell_to_value);
+            let value = sheet.cell((*col_idx, row_idx)).and_then(cell_to_value);
             row.insert(header, value);
         }
         if !row_passes_filters(&row, filters.as_ref()) {
@@ -3077,7 +3077,7 @@ fn build_headers(
         for h in header_start..(header_start + header_rows) {
             let (origin_col, origin_row) = sheet.map_merged_cell((*col_idx, h));
             if let Some(value) = sheet
-                .get_cell((origin_col, origin_row))
+                .cell((origin_col, origin_row))
                 .and_then(cell_to_value)
             {
                 match value {
@@ -3423,9 +3423,9 @@ fn collect_value_matches(
     let context_width = params.context_width.unwrap_or(3).max(1);
 
     for cell in sheet.cells() {
-        let coord = cell.get_coordinate();
-        let col = coord.get_col_num();
-        let row = coord.get_row_num();
+        let coord = cell.coordinate();
+        let col = coord.col_num();
+        let row = coord.row_num();
         if col < bounds.0.0 || col > bounds.1.0 || row < bounds.0.1 || row > bounds.1.1 {
             continue;
         }
@@ -3473,11 +3473,11 @@ fn collect_value_matches(
         };
         let (label_hit, match_value) = if matches!(mode, FindMode::Label) {
             let target_value = match direction {
-                LabelDirection::Right => sheet.get_cell((col + 1, row)),
-                LabelDirection::Below => sheet.get_cell((col, row + 1)),
+                LabelDirection::Right => sheet.cell((col + 1, row)),
+                LabelDirection::Below => sheet.cell((col, row + 1)),
                 LabelDirection::Any => sheet
-                    .get_cell((col + 1, row))
-                    .or_else(|| sheet.get_cell((col, row + 1))),
+                    .cell((col + 1, row))
+                    .or_else(|| sheet.cell((col, row + 1))),
             }
             .and_then(cell_to_value);
             if target_value.is_none() {
@@ -3523,7 +3523,7 @@ fn label_from_cell(cell: &umya_spreadsheet::Cell) -> String {
             CellValue::Date(d) => d,
             CellValue::Error(e) => e,
         })
-        .unwrap_or_else(|| cell.get_value().to_string())
+        .unwrap_or_else(|| cell.value().to_string())
 }
 
 fn value_matches(
@@ -3602,17 +3602,17 @@ fn collect_neighbors(
 ) -> Option<NeighborValues> {
     Some(NeighborValues {
         left: if col > 1 {
-            sheet.get_cell((col - 1, row)).and_then(cell_to_value)
+            sheet.cell((col - 1, row)).and_then(cell_to_value)
         } else {
             None
         },
-        right: sheet.get_cell((col + 1, row)).and_then(cell_to_value),
+        right: sheet.cell((col + 1, row)).and_then(cell_to_value),
         up: if row > 1 {
-            sheet.get_cell((col, row - 1)).and_then(cell_to_value)
+            sheet.cell((col, row - 1)).and_then(cell_to_value)
         } else {
             None
         },
-        down: sheet.get_cell((col, row + 1)).and_then(cell_to_value),
+        down: sheet.cell((col, row + 1)).and_then(cell_to_value),
     })
 }
 
@@ -3624,7 +3624,7 @@ fn build_row_context(
 ) -> Option<RowContext> {
     let width = width.max(1);
     let half = width / 2;
-    let max_col = sheet.get_highest_column().max(1);
+    let max_col = sheet.highest_column().max(1);
     let start_col = col.saturating_sub(half).max(1);
     let end_col = (col + half).min(max_col);
 
@@ -3633,7 +3633,7 @@ fn build_row_context(
 
     for current_col in start_col..=end_col {
         let header_value = sheet
-            .get_cell((current_col, 1u32))
+            .cell((current_col, 1u32))
             .and_then(cell_to_value)
             .map(|v| match v {
                 CellValue::Text(s) => s,
@@ -3643,7 +3643,7 @@ fn build_row_context(
                 CellValue::Error(e) => e,
             })
             .unwrap_or_else(|| format!("Col{}", current_col));
-        let value = sheet.get_cell((current_col, row)).and_then(cell_to_value);
+        let value = sheet.cell((current_col, row)).and_then(cell_to_value);
         headers.push(header_value);
         values.push(value);
     }
@@ -4031,8 +4031,8 @@ pub async fn workbook_style_summary(
                 }
                 scanned_cells += 1;
 
-                let address = cell.get_coordinate().get_coordinate().to_string();
-                let descriptor = crate::styles::descriptor_from_style(cell.get_style());
+                let address = cell.coordinate().get_coordinate().to_string();
+                let descriptor = crate::styles::descriptor_from_style(cell.style());
                 let style_id = crate::styles::stable_style_id(&descriptor);
 
                 let entry = acc
@@ -4095,9 +4095,9 @@ pub async fn workbook_style_summary(
     };
 
     let theme = workbook.with_spreadsheet(|book| {
-        let theme = book.get_theme();
-        let elements = theme.get_theme_elements();
-        let scheme = elements.get_color_scheme();
+        let theme = book.theme();
+        let elements = theme.theme_elements();
+        let scheme = elements.color_scheme();
         let mut colors = BTreeMap::new();
 
         let mut insert_color = |name: &str, value: String| {
@@ -4106,39 +4106,39 @@ pub async fn workbook_style_summary(
             }
         };
 
-        insert_color("dk1", scheme.get_dk1().get_val());
-        insert_color("lt1", scheme.get_lt1().get_val());
-        insert_color("dk2", scheme.get_dk2().get_val());
-        insert_color("lt2", scheme.get_lt2().get_val());
-        insert_color("accent1", scheme.get_accent1().get_val());
-        insert_color("accent2", scheme.get_accent2().get_val());
-        insert_color("accent3", scheme.get_accent3().get_val());
-        insert_color("accent4", scheme.get_accent4().get_val());
-        insert_color("accent5", scheme.get_accent5().get_val());
-        insert_color("accent6", scheme.get_accent6().get_val());
-        insert_color("hlink", scheme.get_hlink().get_val());
-        insert_color("fol_hlink", scheme.get_fol_hlink().get_val());
+        insert_color("dk1", scheme.dk1().val());
+        insert_color("lt1", scheme.lt1().val());
+        insert_color("dk2", scheme.dk2().val());
+        insert_color("lt2", scheme.lt2().val());
+        insert_color("accent1", scheme.accent1().val());
+        insert_color("accent2", scheme.accent2().val());
+        insert_color("accent3", scheme.accent3().val());
+        insert_color("accent4", scheme.accent4().val());
+        insert_color("accent5", scheme.accent5().val());
+        insert_color("accent6", scheme.accent6().val());
+        insert_color("hlink", scheme.hlink().val());
+        insert_color("fol_hlink", scheme.fol_hlink().val());
 
-        let font_scheme = elements.get_font_scheme();
-        let major = font_scheme.get_major_font();
-        let minor = font_scheme.get_minor_font();
+        let font_scheme = elements.font_scheme();
+        let major = font_scheme.major_font();
+        let minor = font_scheme.minor_font();
         let font_scheme_summary = ThemeFontSchemeSummary {
-            major_latin: Some(major.get_latin_font().get_typeface().to_string())
+            major_latin: Some(major.latin_font().typeface().to_string())
                 .filter(|s| !s.trim().is_empty()),
-            major_east_asian: Some(major.get_east_asian_font().get_typeface().to_string())
+            major_east_asian: Some(major.east_asian_font().typeface().to_string())
                 .filter(|s| !s.trim().is_empty()),
-            major_complex_script: Some(major.get_complex_script_font().get_typeface().to_string())
+            major_complex_script: Some(major.complex_script_font().typeface().to_string())
                 .filter(|s| !s.trim().is_empty()),
-            minor_latin: Some(minor.get_latin_font().get_typeface().to_string())
+            minor_latin: Some(minor.latin_font().typeface().to_string())
                 .filter(|s| !s.trim().is_empty()),
-            minor_east_asian: Some(minor.get_east_asian_font().get_typeface().to_string())
+            minor_east_asian: Some(minor.east_asian_font().typeface().to_string())
                 .filter(|s| !s.trim().is_empty()),
-            minor_complex_script: Some(minor.get_complex_script_font().get_typeface().to_string())
+            minor_complex_script: Some(minor.complex_script_font().typeface().to_string())
                 .filter(|s| !s.trim().is_empty()),
         };
 
         ThemeSummary {
-            name: Some(theme.get_name().to_string()).filter(|s| !s.trim().is_empty()),
+            name: Some(theme.name().to_string()).filter(|s| !s.trim().is_empty()),
             colors,
             font_scheme: font_scheme_summary,
         }
@@ -4173,14 +4173,14 @@ pub async fn workbook_style_summary(
                 break;
             }
             workbook.with_sheet(sheet_name, |sheet| {
-                for cf in sheet.get_conditional_formatting_collection() {
+                for cf in sheet.conditional_formatting_collection() {
                     if conditional_formats.len() >= cf_limit {
                         conditional_formats_truncated = true;
                         break;
                     }
-                    let range = cf.get_sequence_of_references().get_sqref().to_string();
+                    let range = cf.sequence_of_references().get_sqref().to_string();
                     let mut types: HashSet<String> = HashSet::new();
-                    for rule in cf.get_conditional_collection() {
+                    for rule in cf.conditional_collection() {
                         types.insert(rule.get_type().value_string().to_string());
                     }
                     let mut rule_types: Vec<String> = types.into_iter().collect();
@@ -4189,7 +4189,7 @@ pub async fn workbook_style_summary(
                         sheet_name: sheet_name.clone(),
                         range,
                         rule_types,
-                        rule_count: cf.get_conditional_collection().len() as u32,
+                        rule_count: cf.conditional_collection().len() as u32,
                     });
                 }
             })?;
@@ -4414,7 +4414,7 @@ pub(crate) async fn sheet_styles_bounded(
         let mut cells_in_scope = 0_u64;
 
         for cell in sheet.cells() {
-            let address = cell.get_coordinate().get_coordinate().to_string();
+            let address = cell.coordinate().get_coordinate().to_string();
             let Some((col, row)) = parse_address(&address) else {
                 continue;
             };
@@ -4427,7 +4427,7 @@ pub(crate) async fn sheet_styles_bounded(
             }
             cells_scanned += 1;
 
-            let descriptor = crate::styles::descriptor_from_style(cell.get_style());
+            let descriptor = crate::styles::descriptor_from_style(cell.style());
             let style_id = crate::styles::stable_style_id(&descriptor);
 
             let entry = acc
@@ -4615,11 +4615,11 @@ pub async fn range_values(
                         } else {
                             r
                         };
-                        let cell = sheet.get_cell((c, row_index));
+                        let cell = sheet.cell((c, row_index));
                         row_vals.push(cell.and_then(cell_to_value));
                         if let Some(formulas) = row_formulas.as_mut() {
                             formulas.push(cell.and_then(|entry| {
-                                entry.is_formula().then(|| entry.get_formula().to_string())
+                                entry.is_formula().then(|| entry.formula().to_string())
                             }));
                         }
                     }
@@ -4864,7 +4864,7 @@ pub(crate) async fn inspect_cells_semantic(
     let mut cells = workbook.with_sheet(&params.sheet_name, |sheet| {
         let mut out = Vec::new();
         for (col, row) in &coords {
-            if let Some(cell) = sheet.get_cell((*col, *row)) {
+            if let Some(cell) = sheet.cell((*col, *row)) {
                 out.push(build_cell_snapshot(cell, true, true));
             } else if include_empty {
                 out.push(CellSnapshot {
@@ -5686,7 +5686,7 @@ fn collect_formula_matches(
         if !cell.is_formula() {
             continue;
         }
-        let formula = cell.get_formula();
+        let formula = cell.formula();
         let haystack = if case_sensitive {
             formula.to_string()
         } else {
@@ -5705,9 +5705,9 @@ fn collect_formula_matches(
             return (results, seen, true);
         }
 
-        let coord = cell.get_coordinate();
-        let column = coord.get_col_num();
-        let row = coord.get_row_num();
+        let coord = cell.coordinate();
+        let column = coord.col_num();
+        let row = coord.row_num();
 
         let context = if include_context {
             let col_start = column.saturating_sub(context_cols / 2).max(1);
@@ -5722,7 +5722,7 @@ fn collect_formula_matches(
             }
 
             let row_start = row.saturating_sub(context_rows / 2).max(1);
-            let row_end = (row + context_rows / 2).min(sheet.get_highest_row());
+            let row_end = (row + context_rows / 2).min(sheet.highest_row());
 
             for ctx_row in row_start..=row_end {
                 let ctx_row_snapshot = build_row_snapshot(sheet, ctx_row, &columns, true, false);
@@ -6043,7 +6043,7 @@ fn collect_neighbor_details(
             continue;
         };
 
-        let cell_opt = sheet.get_cell((col, row));
+        let cell_opt = sheet.cell((col, row));
         let formula_info = lookup_formula_info(formula_lookup, &cell_ref_upper, address);
         if let Some(cell) = cell_opt {
             let value = cell_to_value(cell);
@@ -6606,8 +6606,8 @@ pub async fn grid_export(
     let payload = workbook.with_sheet(&params.sheet_name, |sheet| {
         let mut columns = Vec::new();
         for col_idx in min_col..=max_col {
-            if let Some(dim) = sheet.get_column_dimension_by_number(&col_idx) {
-                let w = dim.get_width();
+            if let Some(dim) = sheet.column_dimension_by_number(col_idx) {
+                let w = dim.width();
                 if w > 0.0 {
                     columns.push(crate::model::GridColumnHint {
                         offset: col_idx - min_col,
@@ -6618,8 +6618,8 @@ pub async fn grid_export(
         }
 
         let mut merges = Vec::new();
-        for mc in sheet.get_merge_cells() {
-            let m_range = mc.get_range();
+        for mc in sheet.merge_cells() {
+            let m_range = mc.range();
             if let Some(((c1, r1), (c2, r2))) = parse_range(&m_range)
                 && c1 <= max_col
                 && c2 >= min_col
@@ -6634,12 +6634,12 @@ pub async fn grid_export(
         for row in min_row..=max_row {
             let mut cells = Vec::new();
             for col in min_col..=max_col {
-                if let Some(cell) = sheet.get_cell((col, row)) {
+                if let Some(cell) = sheet.cell((col, row)) {
                     let mut v = None;
                     let mut f = None;
 
                     if cell.is_formula() {
-                        f = Some(format!("={}", cell.get_formula()));
+                        f = Some(format!("={}", cell.formula()));
                     } else {
                         let value = crate::workbook::cell_to_value(cell);
                         if let Some(cv) = value {
@@ -6663,7 +6663,7 @@ pub async fn grid_export(
                         }
                     }
 
-                    let style = cell.get_style();
+                    let style = cell.style();
                     let desc = crate::styles::descriptor_from_style(style);
 
                     let fmt = desc.number_format.clone();
@@ -6872,9 +6872,9 @@ pub async fn layout_page(
                 .map(|col_idx| {
                     let col_name = column_number_to_name(col_idx);
                     let (raw_width, is_default) =
-                        match sheet.get_column_dimension_by_number(&col_idx) {
+                        match sheet.column_dimension_by_number(col_idx) {
                             Some(dim) => {
-                                let w = dim.get_width();
+                                let w = dim.width();
                                 if w > 0.0 {
                                     (w, false)
                                 } else {
@@ -6894,9 +6894,9 @@ pub async fn layout_page(
 
             // ── merged cells ─────────────────────────────────────────────────
             let merged_strings: Vec<String> = sheet
-                .get_merge_cells()
+                .merge_cells()
                 .iter()
-                .map(|m| m.get_range())
+                .map(|m| m.range())
                 .collect();
 
             // Build set of (col, row) that are top-left of a merge span
@@ -6909,7 +6909,7 @@ pub async fn layout_page(
             let mut cell_map: HashMap<(u32, u32), LayoutCellInfo> = HashMap::new();
 
             for cell in sheet.cells() {
-                let address = cell.get_coordinate().get_coordinate().to_string();
+                let address = cell.coordinate().get_coordinate().to_string();
                 let Some((col, row)) = parse_address(&address) else {
                     continue;
                 };
@@ -6919,7 +6919,7 @@ pub async fn layout_page(
 
                 let text: String = match mode {
                     LayoutMode::Formulas => {
-                        let formula = cell.get_formula();
+                        let formula = cell.formula();
                         if !formula.is_empty() {
                             format!("={formula}")
                         } else {
@@ -6929,7 +6929,7 @@ pub async fn layout_page(
                     LayoutMode::Values => cell_display_string(cell),
                 };
 
-                let desc = crate::styles::descriptor_from_style(cell.get_style());
+                let desc = crate::styles::descriptor_from_style(cell.style());
                 let bold = desc.font.as_ref().and_then(|f| f.bold);
                 let italic = desc.font.as_ref().and_then(|f| f.italic);
                 let align_h = desc.alignment.as_ref().and_then(|a| a.horizontal.clone());
