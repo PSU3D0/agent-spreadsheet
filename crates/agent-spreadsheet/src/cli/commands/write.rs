@@ -420,7 +420,7 @@ pub async fn create_workbook(
         .cloned()
         .ok_or_else(|| anyhow!("at least one sheet is required"))?;
     workbook
-        .get_sheet_by_name_mut("Sheet1")
+        .get_sheet_by_name_mut("Sheet1").ok()
         .ok_or_else(|| anyhow!("failed to initialize workbook default sheet"))?
         .set_name(first_sheet_name.as_str());
 
@@ -430,7 +430,7 @@ pub async fn create_workbook(
             .map_err(|err| anyhow!("failed to create sheet '{}': {}", sheet_name, err))?;
     }
 
-    umya_spreadsheet::writer::xlsx::write(&workbook, &path)
+    crate::xlsx_export::write(&workbook, &path)
         .with_context(|| format!("failed to write workbook '{}'", path.display()))?;
 
     Ok(serde_json::to_value(CreateWorkbookResponse {

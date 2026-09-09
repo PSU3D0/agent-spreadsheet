@@ -28,7 +28,7 @@ async fn first_workbook_id(state: Arc<agent_spreadsheet::state::AppState>) -> Re
 async fn test_write_matrix_applies_correctly() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("test.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("Old");
         sheet.get_cell_mut("B1").set_formula("=SUM(1,2)");
     });
@@ -85,7 +85,7 @@ async fn test_write_matrix_applies_correctly() -> Result<()> {
 
     let fork_ctx = state.fork_registry().unwrap().get_fork(&fork_id).unwrap();
     let book = umya_spreadsheet::reader::xlsx::read(&fork_ctx.work_path).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
 
     assert_eq!(sheet.get_cell("A1").unwrap().get_value(), "New1");
     assert_eq!(sheet.get_cell("B1").unwrap().get_value(), "New2");
@@ -102,7 +102,7 @@ async fn test_write_matrix_applies_correctly() -> Result<()> {
 async fn test_write_matrix_respects_overwrite_formulas() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("test2.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_formula("SUM(1,2)");
     });
 
@@ -148,7 +148,7 @@ async fn test_write_matrix_respects_overwrite_formulas() -> Result<()> {
 
     let fork_ctx = state.fork_registry().unwrap().get_fork(&fork_id).unwrap();
     let book = umya_spreadsheet::reader::xlsx::read(&fork_ctx.work_path).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
     assert_eq!(sheet.get_cell("A1").unwrap().get_formula(), "SUM(1,2)");
 
     Ok(())
@@ -158,7 +158,7 @@ async fn test_write_matrix_respects_overwrite_formulas() -> Result<()> {
 async fn test_write_matrix_formula_parse_policy() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("test3.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("Old");
     });
 
@@ -203,7 +203,7 @@ async fn test_write_matrix_formula_parse_policy() -> Result<()> {
     // Warn mode drops the invalid formula cell, skipping it.
     let fork_ctx = state.fork_registry().unwrap().get_fork(&fork_id).unwrap();
     let book = umya_spreadsheet::reader::xlsx::read(&fork_ctx.work_path).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
     assert_eq!(sheet.get_cell("A1").unwrap().get_value(), "Old");
 
     // Fail mode error
@@ -229,7 +229,7 @@ async fn test_write_matrix_formula_parse_policy() -> Result<()> {
 async fn test_grid_export_and_import_roundtrip_core_data() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("grid_roundtrip.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("Revenue");
         sheet.get_cell_mut("B1").set_formula("A1&\"!\"");
     });
@@ -282,7 +282,7 @@ async fn test_grid_export_and_import_roundtrip_core_data() -> Result<()> {
 
     let fork_ctx = state.fork_registry().unwrap().get_fork(&fork_id).unwrap();
     let book = umya_spreadsheet::reader::xlsx::read(&fork_ctx.work_path).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
 
     assert_eq!(sheet.get_cell("C3").unwrap().get_value(), "Revenue");
     assert!(sheet.get_cell("D3").unwrap().is_formula());

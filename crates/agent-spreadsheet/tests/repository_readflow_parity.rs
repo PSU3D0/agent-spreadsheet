@@ -16,7 +16,7 @@ mod support;
 async fn path_and_virtual_readflows_match() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("parity.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.set_name("Data");
         sheet.get_cell_mut("A1").set_value("item");
         sheet.get_cell_mut("B1").set_value("amount");

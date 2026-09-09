@@ -13,7 +13,7 @@ mod support;
 fn virtual_repo_register_resolve_and_load() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("virtual_source.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("hello");
     });
 

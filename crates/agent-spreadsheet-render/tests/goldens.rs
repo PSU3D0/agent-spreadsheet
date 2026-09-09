@@ -107,6 +107,7 @@ fn every_fixture_renders_a_nonempty_png() {
         let (scene, output) = render_fixture(name);
         if let Some(dir) = &dump {
             std::fs::write(format!("{dir}/{name}.png"), &output.png).unwrap();
+            std::fs::write(format!("{dir}/{name}.json"), serde_json::to_vec(&scene).unwrap()).unwrap();
         }
         assert!(output.width > 0 && output.height > 0, "{name} ({purpose})");
         assert!(

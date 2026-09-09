@@ -10,7 +10,7 @@ use agent_spreadsheet_mcp::state::AppState;
 use agent_spreadsheet_mcp::{OutputProfile, ServerConfig, SpreadsheetServer, TransportKind};
 use anyhow::Result;
 use tempfile::{TempDir, tempdir};
-use umya_spreadsheet::{self, Spreadsheet};
+use umya_spreadsheet::{self, Workbook as Spreadsheet};
 
 const DEFAULT_EXTENSIONS: &[&str] = &["xlsx", "xlsm", "xls", "xlsb"];
 

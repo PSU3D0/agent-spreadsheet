@@ -7,7 +7,7 @@ fn write_fixture(path: &Path) {
     let mut workbook = umya_spreadsheet::new_file();
     {
         let sheet = workbook
-            .get_sheet_by_name_mut("Sheet1")
+            .get_sheet_by_name_mut("Sheet1").ok()
             .expect("default sheet exists");
         sheet.get_cell_mut("A1").set_value("Name");
         sheet.get_cell_mut("B1").set_value("Amount");

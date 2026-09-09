@@ -6,7 +6,7 @@ use serde_json::json;
 
 fn fixture() -> Vec<u8> {
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
     sheet.get_cell_mut("A1").set_value_number(1.0);
     sheet.get_cell_mut("B1").set_formula("A1*2");
     sheet.get_cell_mut("C1").set_formula("B1+1");
@@ -89,7 +89,7 @@ fn retained_engine_recalculates_dependencies_without_reingest() {
     let exported = resident.export_bytes().unwrap();
     let book =
         umya_spreadsheet::reader::xlsx::read_reader(std::io::Cursor::new(exported), true).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
     assert_eq!(sheet.get_cell("B1").unwrap().get_value(), "10");
     assert_eq!(sheet.get_cell("C1").unwrap().get_value(), "11");
 }
@@ -114,10 +114,10 @@ fn formula_update_stays_retained_and_export_uses_umya_document() {
 
     let book =
         umya_spreadsheet::reader::xlsx::read_reader(std::io::Cursor::new(exported), true).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
     assert_eq!(sheet.get_cell("B1").unwrap().get_value(), "3");
-    assert!(*sheet.get_style("D1").get_font().unwrap().get_bold());
-    assert_eq!(*sheet.get_column_dimension("D").unwrap().get_width(), 24.0);
+    assert!(sheet.get_style("D1").get_font().unwrap().get_bold());
+    assert_eq!(sheet.get_column_dimension("D").unwrap().get_width(), 24.0);
     assert!(
         sheet
             .get_merge_cells()
@@ -160,7 +160,7 @@ fn unsupported_change_rebuilds_before_publishing_coverage() {
 
 fn type_fixture() -> Vec<u8> {
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
     sheet.get_cell_mut("A1").set_value_number(1.0);
     for (cell, formula) in [
         ("B1", "ISNUMBER(A1)"),
@@ -179,7 +179,7 @@ fn typed_snapshot(resident: &mut ResidentWorkbook, cells: &[&str]) -> Vec<(Strin
     let bytes = resident.export_bytes().unwrap();
     let book =
         umya_spreadsheet::reader::xlsx::read_reader(std::io::Cursor::new(bytes), true).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
     cells
         .iter()
         .map(|address| {

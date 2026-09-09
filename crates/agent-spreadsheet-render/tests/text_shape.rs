@@ -126,11 +126,11 @@ fn notdef_is_drawn_and_declared_for_out_of_subset_codepoints() {
 #[test]
 fn a_sheet_of_out_of_subset_text_raises_font_substituted() {
     let mut book = umya_spreadsheet::new_file();
-    book.get_sheet_mut(&0)
+    book.get_sheet_mut(&0).ok()
         .unwrap()
         .get_cell_mut("A1")
         .set_value("\u{03b1} \u{03b2} \u{03b3}");
-    let sheet = book.get_sheet(&0).unwrap();
+    let sheet = book.get_sheet(&0).ok().unwrap();
     let scene = extract_scene(
         sheet,
         &book,

@@ -47,7 +47,7 @@ fn write_fixture(path: &Path) {
     let mut workbook = umya_spreadsheet::new_file();
     {
         let sheet = workbook
-            .get_sheet_by_name_mut("Sheet1")
+            .get_sheet_by_name_mut("Sheet1").ok()
             .expect("default sheet");
         sheet.get_cell_mut("A1").set_value("Name");
         sheet.get_cell_mut("B1").set_value("Amount");
@@ -64,7 +64,7 @@ fn write_fixture(path: &Path) {
     }
     workbook.new_sheet("Summary").expect("add summary sheet");
     {
-        let s = workbook.get_sheet_by_name_mut("Summary").expect("summary");
+        let s = workbook.get_sheet_by_name_mut("Summary").ok().expect("summary");
         s.get_cell_mut("A1").set_value("Flag");
         s.get_cell_mut("B1").set_value("Ready");
         s.get_cell_mut("A2").set_value_number(42.0);
@@ -77,7 +77,7 @@ fn write_modified_fixture(path: &Path) {
     let mut workbook = umya_spreadsheet::new_file();
     {
         let sheet = workbook
-            .get_sheet_by_name_mut("Sheet1")
+            .get_sheet_by_name_mut("Sheet1").ok()
             .expect("default sheet");
         sheet.get_cell_mut("A1").set_value("Name");
         sheet.get_cell_mut("B1").set_value("Amount");
@@ -94,7 +94,7 @@ fn write_modified_fixture(path: &Path) {
     }
     workbook.new_sheet("Summary").expect("add summary sheet");
     {
-        let s = workbook.get_sheet_by_name_mut("Summary").expect("summary");
+        let s = workbook.get_sheet_by_name_mut("Summary").ok().expect("summary");
         s.get_cell_mut("A1").set_value("Flag");
         s.get_cell_mut("B1").set_value("Done"); // changed
         s.get_cell_mut("A2").set_value_number(42.0);
@@ -107,7 +107,7 @@ fn write_formula_fixture(path: &Path) {
     let mut workbook = umya_spreadsheet::new_file();
     {
         let sheet = workbook
-            .get_sheet_by_name_mut("Sheet1")
+            .get_sheet_by_name_mut("Sheet1").ok()
             .expect("default sheet");
         sheet.get_cell_mut("A1").set_value("Item");
         sheet.get_cell_mut("B1").set_value("Value");
@@ -174,7 +174,7 @@ fn range_values_format_rows_omits_empty_cells() {
     // Create a sparse workbook
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("X");
         // B1 intentionally empty
         sheet.get_cell_mut("C1").set_value("Y");
@@ -236,7 +236,7 @@ fn inspect_cells_budget_raises_limit() {
     // Create workbook with 50 cells of data
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         for row in 1..=10u32 {
             for col in 1..=5u32 {
                 sheet
@@ -320,7 +320,7 @@ fn inspect_cells_budget_200_accepts_large_range() {
     // Create workbook with 200 cells
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         for row in 1..=20u32 {
             for col in 1..=10u32 {
                 sheet
@@ -361,7 +361,7 @@ fn recalculate_changed_cells_shows_summary() {
     // will "change" formula cells from empty-cache to computed values.
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value_number(10.0);
         sheet.get_cell_mut("A2").set_value_number(20.0);
         sheet.get_cell_mut("A3").set_formula("A1+A2");
@@ -423,13 +423,13 @@ fn recalculate_ignore_sheets_excludes_from_summary() {
     // Workbook with formulas on both sheets
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value_number(5.0);
         sheet.get_cell_mut("A2").set_formula("A1*2");
     }
     workbook.new_sheet("Ignored").unwrap();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Ignored").unwrap();
+        let sheet = workbook.get_sheet_by_name_mut("Ignored").ok().unwrap();
         sheet.get_cell_mut("A1").set_value_number(99.0);
         sheet.get_cell_mut("A2").set_formula("A1+1");
     }

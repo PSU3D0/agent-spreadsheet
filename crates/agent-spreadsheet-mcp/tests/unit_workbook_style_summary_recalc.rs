@@ -25,7 +25,7 @@ fn recalc_state(workspace: &support::TestWorkspace) -> std::sync::Arc<AppState> 
 async fn workbook_style_summary_reflects_styles_in_forks() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("fork_styles.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("x");
         sheet.get_cell_mut("A2").set_value("y");
     });

@@ -75,7 +75,7 @@ fn write_fixture(path: &Path) {
     let mut workbook = umya_spreadsheet::new_file();
     {
         let sheet = workbook
-            .get_sheet_by_name_mut("Sheet1")
+            .get_sheet_by_name_mut("Sheet1").ok()
             .expect("default sheet");
         sheet.get_cell_mut("A1").set_value("Name");
         sheet.get_cell_mut("B1").set_value("Amount");
@@ -89,7 +89,7 @@ fn write_fixture(path: &Path) {
     }
     workbook.new_sheet("Summary").expect("add summary sheet");
     {
-        let s = workbook.get_sheet_by_name_mut("Summary").expect("summary");
+        let s = workbook.get_sheet_by_name_mut("Summary").ok().expect("summary");
         s.get_cell_mut("A1").set_value("Flag");
         s.get_cell_mut("B1").set_value("Ready");
     }

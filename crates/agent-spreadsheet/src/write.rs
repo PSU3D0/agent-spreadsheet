@@ -105,11 +105,11 @@ pub fn normalize_object_edit(
 }
 
 pub fn apply_edits_to_file(path: &Path, sheet_name: &str, edits: &[CellEdit]) -> Result<()> {
-    let mut book = umya_spreadsheet::reader::xlsx::read(path)
+    let mut book = crate::xlsx_import::read(path)
         .with_context(|| format!("failed to open workbook '{}'", path.display()))?;
 
     let sheet = book
-        .get_sheet_by_name_mut(sheet_name)
+        .get_sheet_by_name_mut(sheet_name).ok()
         .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
 
     for edit in edits {
@@ -123,7 +123,7 @@ pub fn apply_edits_to_file(path: &Path, sheet_name: &str, edits: &[CellEdit]) ->
         }
     }
 
-    umya_spreadsheet::writer::xlsx::write(&book, path)
+    crate::xlsx_export::write(&book, path)
         .with_context(|| format!("failed to save workbook '{}'", path.display()))?;
     Ok(())
 }

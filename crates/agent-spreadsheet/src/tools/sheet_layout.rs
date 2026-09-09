@@ -216,14 +216,14 @@ pub(crate) fn apply_sheet_layout_ops_to_file(
     path: &Path,
     ops: &[SheetLayoutOp],
 ) -> Result<SheetLayoutApplyResult> {
-    let mut book = umya_spreadsheet::reader::xlsx::read(path)?;
+    let mut book = crate::xlsx_import::read(path)?;
     let result = apply_sheet_layout_ops_to_workbook(&mut book, ops)?;
-    umya_spreadsheet::writer::xlsx::write(&book, path)?;
+    crate::xlsx_export::write(&book, path)?;
     Ok(result)
 }
 
 pub(crate) fn apply_sheet_layout_ops_to_workbook(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     ops: &[SheetLayoutOp],
 ) -> Result<SheetLayoutApplyResult> {
     let mut affected_sheets: BTreeSet<String> = BTreeSet::new();
@@ -250,7 +250,7 @@ pub(crate) fn apply_sheet_layout_ops_to_workbook(
                 freeze_ops += 1;
                 affected_sheets.insert(sheet_name.clone());
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .get_sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
 
                 apply_freeze_panes(
@@ -271,7 +271,7 @@ pub(crate) fn apply_sheet_layout_ops_to_workbook(
                     bail!("zoom_percent must be between 10 and 400");
                 }
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .get_sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
                 let view = primary_sheet_view_mut(sheet);
                 view.set_zoom_scale(*zoom_percent);
@@ -281,7 +281,7 @@ pub(crate) fn apply_sheet_layout_ops_to_workbook(
                 grid_ops += 1;
                 affected_sheets.insert(sheet_name.clone());
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .get_sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
                 let view = primary_sheet_view_mut(sheet);
                 view.set_show_grid_lines(*show);
@@ -308,7 +308,7 @@ pub(crate) fn apply_sheet_layout_ops_to_workbook(
                     validate_margin_value("footer", *f)?;
                 }
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .get_sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
                 let margins = sheet.get_page_margins_mut();
                 margins.set_left(*left);
@@ -349,7 +349,7 @@ pub(crate) fn apply_sheet_layout_ops_to_workbook(
                 }
 
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .get_sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
                 let setup = sheet.get_page_setup_mut();
                 setup.set_orientation(orientation_value);
@@ -387,7 +387,7 @@ pub(crate) fn apply_sheet_layout_ops_to_workbook(
                     }
                 }
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .get_sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
                 apply_page_breaks(sheet, row_breaks, col_breaks);
             }
@@ -466,7 +466,7 @@ fn apply_freeze_panes(
         );
         let col = freeze_cols.saturating_add(1).max(1);
         let row = freeze_rows.saturating_add(1).max(1);
-        umya_spreadsheet::helper::coordinate::coordinate_from_index(&col, &row)
+        umya_spreadsheet::helper::coordinate::coordinate_from_index(col, row)
     };
 
     // Pane.topLeftCell is stored as a Coordinate (no $ locks).
@@ -527,7 +527,7 @@ fn validate_margin_value(field: &str, value: f64) -> Result<()> {
 }
 
 fn set_print_area_defined_name(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     sheet_name: &str,
     range: &str,
 ) -> Result<()> {
@@ -535,10 +535,10 @@ fn set_print_area_defined_name(
     let (start, end) = parse_a1_range(range)?;
 
     let start_abs = umya_spreadsheet::helper::coordinate::coordinate_from_index_with_lock(
-        &start.0, &start.1, &true, &true,
+        start.0, start.1, true, true,
     );
     let end_abs = umya_spreadsheet::helper::coordinate::coordinate_from_index_with_lock(
-        &end.0, &end.1, &true, &true,
+        end.0, end.1, true, true,
     );
     let sheet_prefix = format_sheet_prefix(sheet_name);
     let refers_to = format!("{sheet_prefix}{start_abs}:{end_abs}");
@@ -551,14 +551,14 @@ fn set_print_area_defined_name(
                 return true;
             }
             if d.has_local_sheet_id() {
-                return *d.get_local_sheet_id() != sheet_index;
+                return d.get_local_sheet_id() != sheet_index;
             }
             true
         });
     }
 
     let sheet = book
-        .get_sheet_by_name_mut(sheet_name)
+        .get_sheet_by_name_mut(sheet_name).ok()
         .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
 
     // If present on the sheet, update in place; otherwise create.
@@ -604,7 +604,7 @@ fn set_print_area_defined_name(
     Ok(())
 }
 
-fn resolve_sheet_index(book: &umya_spreadsheet::Spreadsheet, sheet_name: &str) -> Result<u32> {
+fn resolve_sheet_index(book: &umya_spreadsheet::Workbook, sheet_name: &str) -> Result<u32> {
     for (idx, sheet) in book.get_sheet_collection().iter().enumerate() {
         if sheet.get_name() == sheet_name {
             return Ok(idx as u32);

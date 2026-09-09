@@ -1558,7 +1558,7 @@ fn apply_formula_pattern_to_file(
     base_formula: &str,
     relative_mode: RelativeMode,
 ) -> Result<FormulaPatternApplyResult> {
-    let mut book = umya_spreadsheet::reader::xlsx::read(path)?;
+    let mut book = crate::xlsx_import::read(path)?;
     let result = apply_formula_pattern_to_workbook(
         &mut book,
         sheet_name,
@@ -1568,12 +1568,12 @@ fn apply_formula_pattern_to_file(
         base_formula,
         relative_mode,
     )?;
-    umya_spreadsheet::writer::xlsx::write(&book, path)?;
+    crate::xlsx_export::write(&book, path)?;
     Ok(result)
 }
 
 fn apply_formula_pattern_to_workbook(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     sheet_name: &str,
     target_range: &str,
     anchor_col: u32,
@@ -1584,7 +1584,7 @@ fn apply_formula_pattern_to_workbook(
     let ast = parse_base_formula(base_formula)?;
     let bounds = parse_range_bounds(target_range)?;
     let sheet = book
-        .get_sheet_by_name_mut(sheet_name)
+        .get_sheet_by_name_mut(sheet_name).ok()
         .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
 
     let mut cells_filled: u64 = 0;
@@ -1629,14 +1629,14 @@ pub(crate) fn apply_formula_pattern_ops_to_file(
     path: &Path,
     ops: &[ApplyFormulaPatternOpInput],
 ) -> Result<FormulaPatternBatchApplyResult> {
-    let mut book = umya_spreadsheet::reader::xlsx::read(path)?;
+    let mut book = crate::xlsx_import::read(path)?;
     let result = apply_formula_pattern_ops_to_workbook(&mut book, ops)?;
-    umya_spreadsheet::writer::xlsx::write(&book, path)?;
+    crate::xlsx_export::write(&book, path)?;
     Ok(result)
 }
 
 pub(crate) fn apply_formula_pattern_ops_to_workbook(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     ops: &[ApplyFormulaPatternOpInput],
 ) -> Result<FormulaPatternBatchApplyResult> {
     struct PreparedFormulaPatternOp {
@@ -2165,9 +2165,9 @@ pub(crate) fn apply_structure_ops_to_file(
     ops: &[StructureOp],
     policy: FormulaParsePolicy,
 ) -> Result<StructureApplyResult> {
-    let mut book = umya_spreadsheet::reader::xlsx::read(path)?;
+    let mut book = crate::xlsx_import::read(path)?;
     let mut result = apply_structure_ops_to_workbook(&mut book, ops, policy)?;
-    umya_spreadsheet::writer::xlsx::write(&book, path)?;
+    crate::xlsx_export::write(&book, path)?;
     // Umya exposes parsed defined names, but malformed legacy workbook.xml entries may
     // survive outside that model. Keep the ZIP-level native guardrail in the path wrapper.
     let clamped = sanitize_workbook_xml_defined_name_rows(path)?;
@@ -2180,7 +2180,7 @@ pub(crate) fn apply_structure_ops_to_file(
 }
 
 pub(crate) fn apply_structure_ops_to_workbook(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     ops: &[StructureOp],
     policy: FormulaParsePolicy,
 ) -> Result<StructureApplyResult> {
@@ -2200,7 +2200,7 @@ pub(crate) fn apply_structure_ops_to_workbook(
                 target_range,
             } => {
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .get_sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
                 sheet.add_merge_cells(target_range.clone());
                 affected_sheets.insert(sheet_name.clone());
@@ -2211,7 +2211,7 @@ pub(crate) fn apply_structure_ops_to_workbook(
                 target_range,
             } => {
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .get_sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
 
                 let original_len = sheet.get_merge_cells().len();
@@ -2245,7 +2245,7 @@ pub(crate) fn apply_structure_ops_to_workbook(
                 }
                 {
                     let sheet = book
-                        .get_sheet_by_name_mut(sheet_name)
+                        .get_sheet_by_name_mut(sheet_name).ok()
                         .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
                     let relocated_validations = transform_data_validations_for_structure_change(
                         sheet,
@@ -2255,7 +2255,7 @@ pub(crate) fn apply_structure_ops_to_workbook(
                             count: *count,
                         },
                     )?;
-                    sheet.insert_new_row(at_row, count);
+                    sheet.insert_new_row(*at_row, *count);
                     replace_data_validations(sheet, relocated_validations);
                 }
                 rewrite_formulas_for_sheet_row_insert(
@@ -2304,7 +2304,7 @@ pub(crate) fn apply_structure_ops_to_workbook(
                 // Step 1: Capture template row cells before insertion (pre-shift).
                 let template_cells = {
                     let sheet = book
-                        .get_sheet_by_name_mut(sheet_name)
+                        .get_sheet_by_name_mut(sheet_name).ok()
                         .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
                     capture_row_template(sheet, *source_row)?
                 };
@@ -2318,7 +2318,7 @@ pub(crate) fn apply_structure_ops_to_workbook(
                 // Step 2: Insert blank rows.
                 {
                     let sheet = book
-                        .get_sheet_by_name_mut(sheet_name)
+                        .get_sheet_by_name_mut(sheet_name).ok()
                         .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
                     let relocated_validations = transform_data_validations_for_structure_change(
                         sheet,
@@ -2328,7 +2328,7 @@ pub(crate) fn apply_structure_ops_to_workbook(
                             count: *count,
                         },
                     )?;
-                    sheet.insert_new_row(insert_at, count);
+                    sheet.insert_new_row(*insert_at, *count);
                     replace_data_validations(sheet, relocated_validations);
                 }
                 rewrite_formulas_for_sheet_row_insert(
@@ -2351,7 +2351,7 @@ pub(crate) fn apply_structure_ops_to_workbook(
                 // Step 3: Fill inserted rows from the template.
                 {
                     let sheet = book
-                        .get_sheet_by_name_mut(sheet_name)
+                        .get_sheet_by_name_mut(sheet_name).ok()
                         .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
                     let clone_warnings = stamp_template_rows(
                         sheet,
@@ -2396,7 +2396,7 @@ pub(crate) fn apply_structure_ops_to_workbook(
                 }
                 {
                     let sheet = book
-                        .get_sheet_by_name_mut(sheet_name)
+                        .get_sheet_by_name_mut(sheet_name).ok()
                         .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
                     let relocated_validations = transform_data_validations_for_structure_change(
                         sheet,
@@ -2406,7 +2406,7 @@ pub(crate) fn apply_structure_ops_to_workbook(
                             count: *count,
                         },
                     )?;
-                    sheet.remove_row(start_row, count);
+                    sheet.remove_row(*start_row, *count);
                     replace_data_validations(sheet, relocated_validations);
                 }
                 rewrite_formulas_for_sheet_row_delete(
@@ -2444,9 +2444,9 @@ pub(crate) fn apply_structure_ops_to_workbook(
                     umya_spreadsheet::helper::coordinate::column_index_from_string(&col_letters);
                 {
                     let sheet = book
-                        .get_sheet_by_name_mut(sheet_name)
+                        .get_sheet_by_name_mut(sheet_name).ok()
                         .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
-                    sheet.insert_new_column(&col_letters, count);
+                    sheet.insert_new_column(&col_letters, *count);
                 }
                 rewrite_formulas_for_sheet_col_insert(
                     book,
@@ -2483,9 +2483,9 @@ pub(crate) fn apply_structure_ops_to_workbook(
                     umya_spreadsheet::helper::coordinate::column_index_from_string(&col_letters);
                 {
                     let sheet = book
-                        .get_sheet_by_name_mut(sheet_name)
+                        .get_sheet_by_name_mut(sheet_name).ok()
                         .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
-                    sheet.remove_column(&col_letters, count);
+                    sheet.remove_column(&col_letters, *count);
                 }
                 rewrite_formulas_for_sheet_col_delete(
                     book,
@@ -2565,8 +2565,7 @@ pub(crate) fn apply_structure_ops_to_workbook(
                         ));
                     } else if desired != len - 1 {
                         let sheets = book.get_sheet_collection_mut();
-                        let created = sheets.remove(len - 1);
-                        sheets.insert(desired, created);
+                        sheets[desired..len].rotate_right(1);
                     }
                 }
 
@@ -2723,7 +2722,7 @@ fn ranges_intersect(
 
 #[allow(clippy::too_many_arguments)]
 fn copy_or_move_range(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     src_sheet_name: &str,
     dest_sheet_name: &str,
     src_range: &str,
@@ -3002,7 +3001,7 @@ fn copy_or_move_range(
 }
 
 fn rewrite_formulas_for_sheet_rename(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     old_name: &str,
     new_name: &str,
     policy: FormulaParsePolicy,
@@ -3012,7 +3011,7 @@ fn rewrite_formulas_for_sheet_rename(
 
     for sheet in book.get_sheet_collection_mut().iter_mut() {
         let sheet_name = sheet.get_name().to_string();
-        for cell in sheet.get_cell_collection_mut() {
+        for cell in sheet.cells_mut() {
             if !cell.is_formula() {
                 continue;
             }
@@ -3083,7 +3082,7 @@ fn rewrite_formulas_for_sheet_rename(
 }
 
 fn rewrite_defined_name_formulas_for_sheet_rename(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     old_name: &str,
     new_name: &str,
     policy: FormulaParsePolicy,
@@ -3170,7 +3169,7 @@ fn rewrite_defined_name_formulas_for_sheet_rename(
 }
 
 fn rewrite_defined_name_formulas_for_sheet_col_insert(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     sheet_name: &str,
     at_col: u32,
     count: u32,
@@ -3188,7 +3187,7 @@ fn rewrite_defined_name_formulas_for_sheet_col_insert(
 }
 
 fn rewrite_defined_name_formulas_for_sheet_col_delete(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     sheet_name: &str,
     start_col: u32,
     count: u32,
@@ -3209,7 +3208,7 @@ fn rewrite_defined_name_formulas_for_sheet_col_delete(
 }
 
 fn rewrite_defined_name_formulas_for_sheet_row_insert(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     sheet_name: &str,
     at_row: u32,
     count: u32,
@@ -3227,7 +3226,7 @@ fn rewrite_defined_name_formulas_for_sheet_row_insert(
 }
 
 fn rewrite_defined_name_formulas_for_sheet_row_delete(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     sheet_name: &str,
     start_row: u32,
     count: u32,
@@ -3248,7 +3247,7 @@ fn rewrite_defined_name_formulas_for_sheet_row_delete(
 }
 
 fn rewrite_defined_name_formulas_for_sheet_structure_change(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     sheet_name: &str,
     axis: StructureAxis,
     edit: StructureEdit,
@@ -3450,13 +3449,13 @@ fn clamp_ref_segment_max_row(segment: &str, max_row: u32) -> String {
 
     match (col, row) {
         (Some(c), Some(r)) => coordinate_from_index_with_lock(
-            &c,
-            &r,
-            &col_lock.unwrap_or(false),
-            &row_lock.unwrap_or(false),
+            c,
+            r,
+            col_lock.unwrap_or(false),
+            row_lock.unwrap_or(false),
         ),
         (Some(c), None) => {
-            let col_str = string_from_column_index(&c);
+            let col_str = string_from_column_index(c);
             format!(
                 "{}{}",
                 if col_lock.unwrap_or(false) { "$" } else { "" },
@@ -3468,7 +3467,7 @@ fn clamp_ref_segment_max_row(segment: &str, max_row: u32) -> String {
     }
 }
 
-fn clamp_out_of_bounds_defined_name_rows(book: &mut umya_spreadsheet::Spreadsheet) -> usize {
+fn clamp_out_of_bounds_defined_name_rows(book: &mut umya_spreadsheet::Workbook) -> usize {
     #[derive(Debug)]
     struct Patch {
         idx: usize,
@@ -3508,9 +3507,9 @@ fn clamp_out_of_bounds_defined_name_rows(book: &mut umya_spreadsheet::Spreadshee
                 idx,
                 name: defined.get_name().to_string(),
                 clamped_address,
-                hidden: *defined.get_hidden(),
+                hidden: defined.get_hidden(),
                 local_sheet_id: if defined.has_local_sheet_id() {
-                    Some(*defined.get_local_sheet_id())
+                    Some(defined.get_local_sheet_id())
                 } else {
                     None
                 },
@@ -3524,7 +3523,7 @@ fn clamp_out_of_bounds_defined_name_rows(book: &mut umya_spreadsheet::Spreadshee
         let target_sheet = patch
             .sheet_hint
             .as_ref()
-            .filter(|name| book.get_sheet_by_name(name).is_some())
+            .filter(|name| book.get_sheet_by_name(name).ok().is_some())
             .cloned()
             .or_else(|| {
                 book.get_sheet_collection_no_check()
@@ -3537,7 +3536,7 @@ fn clamp_out_of_bounds_defined_name_rows(book: &mut umya_spreadsheet::Spreadshee
         };
 
         let mut replacement = {
-            let Some(sheet) = book.get_sheet_by_name_mut(&target_sheet) else {
+            let Some(sheet) = book.get_sheet_by_name_mut(&target_sheet).ok() else {
                 continue;
             };
             let before = sheet.get_defined_names().len();
@@ -3677,7 +3676,7 @@ fn sanitize_workbook_xml_defined_name_rows(path: &Path) -> Result<usize> {
 }
 
 fn rewrite_formulas_for_sheet_col_insert(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     sheet_name: &str,
     at_col: u32,
     count: u32,
@@ -3695,7 +3694,7 @@ fn rewrite_formulas_for_sheet_col_insert(
 }
 
 fn rewrite_formulas_for_sheet_col_delete(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     sheet_name: &str,
     start_col: u32,
     count: u32,
@@ -3716,7 +3715,7 @@ fn rewrite_formulas_for_sheet_col_delete(
 }
 
 fn rewrite_formulas_for_sheet_row_insert(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     sheet_name: &str,
     at_row: u32,
     count: u32,
@@ -3734,7 +3733,7 @@ fn rewrite_formulas_for_sheet_row_insert(
 }
 
 fn rewrite_formulas_for_sheet_row_delete(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     sheet_name: &str,
     start_row: u32,
     count: u32,
@@ -3767,7 +3766,7 @@ enum StructureEdit {
 }
 
 fn rewrite_formulas_for_sheet_structure_change(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     sheet_name: &str,
     axis: StructureAxis,
     edit: StructureEdit,
@@ -3779,7 +3778,7 @@ fn rewrite_formulas_for_sheet_structure_change(
             continue;
         }
         let current_sheet_name = sheet.get_name().to_string();
-        for cell in sheet.get_cell_collection_mut() {
+        for cell in sheet.cells_mut() {
             if !cell.is_formula() {
                 continue;
             }
@@ -3965,15 +3964,15 @@ fn format_a1_ref_segment(segment: A1RefSegment) -> Result<String> {
 
     match (segment.col, segment.row) {
         (Some(col), Some(row)) => Ok(coordinate_from_index_with_lock(
-            &col,
-            &row,
-            &segment.col_lock,
-            &segment.row_lock,
+            col,
+            row,
+            segment.col_lock,
+            segment.row_lock,
         )),
         (Some(col), None) => Ok(format!(
             "{}{}",
             if segment.col_lock { "$" } else { "" },
-            string_from_column_index(&col)
+            string_from_column_index(col)
         )),
         (None, Some(row)) => Ok(format!(
             "{}{}",
@@ -4128,7 +4127,7 @@ fn simple_sum_range_regex() -> Regex {
 /// Only unambiguous single-range `SUM(Ax:Ay)` patterns are touched.
 /// Returns a list of warning strings for any skipped/ambiguous formulas.
 fn expand_adjacent_sum_formulas(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     sheet_name: &str,
     at_row: u32,
     count: u32,
@@ -4140,7 +4139,7 @@ fn expand_adjacent_sum_formulas(
     let sum_re = simple_sum_range_regex();
 
     let sheet = book
-        .get_sheet_by_name_mut(sheet_name)
+        .get_sheet_by_name_mut(sheet_name).ok()
         .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
 
     let max_col = sheet.get_highest_column();
@@ -4392,19 +4391,19 @@ pub(crate) fn apply_column_size_ops_to_file(
     sheet_name: &str,
     ops: &[ColumnSizeOp],
 ) -> Result<ColumnSizeApplyResult> {
-    let mut book = umya_spreadsheet::reader::xlsx::read(path)?;
+    let mut book = crate::xlsx_import::read(path)?;
     let result = apply_column_size_ops_to_workbook(&mut book, sheet_name, ops)?;
-    umya_spreadsheet::writer::xlsx::write(&book, path)?;
+    crate::xlsx_export::write(&book, path)?;
     Ok(result)
 }
 
 pub(crate) fn apply_column_size_ops_to_workbook(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     sheet_name: &str,
     ops: &[ColumnSizeOp],
 ) -> Result<ColumnSizeApplyResult> {
     let sheet = book
-        .get_sheet_by_name_mut(sheet_name)
+        .get_sheet_by_name_mut(sheet_name).ok()
         .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
 
     let mut affected_bounds: Vec<String> = Vec::new();
@@ -4437,8 +4436,8 @@ pub(crate) fn apply_column_size_ops_to_workbook(
                 auto_ops += 1;
 
                 let mut saw_formula_without_cached = false;
-                for cell in sheet.get_cell_collection() {
-                    let col_num = *cell.get_coordinate().get_col_num();
+                for cell in sheet.cells() {
+                    let col_num = cell.get_coordinate().get_col_num();
                     if col_num < start_col || col_num > end_col {
                         continue;
                     }
@@ -4466,7 +4465,7 @@ pub(crate) fn apply_column_size_ops_to_workbook(
                     col_dim.set_auto_width(false);
                     col_dim.set_best_fit(true);
 
-                    let mut width = *col_dim.get_width();
+                    let mut width = col_dim.get_width();
                     if let Some(min_width) = min_width_chars
                         && width < *min_width
                     {
@@ -4511,14 +4510,14 @@ pub(crate) fn apply_transform_ops_to_file(
     path: &Path,
     ops: &[TransformOp],
 ) -> Result<TransformApplyResult> {
-    let mut book = umya_spreadsheet::reader::xlsx::read(path)?;
+    let mut book = crate::xlsx_import::read(path)?;
     let result = apply_transform_ops_to_workbook(&mut book, ops)?;
-    umya_spreadsheet::writer::xlsx::write(&book, path)?;
+    crate::xlsx_export::write(&book, path)?;
     Ok(result)
 }
 
 pub(crate) fn apply_transform_ops_to_workbook(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     ops: &[TransformOp],
 ) -> Result<TransformApplyResult> {
     let mut sheets: BTreeSet<String> = BTreeSet::new();
@@ -4543,7 +4542,7 @@ pub(crate) fn apply_transform_ops_to_workbook(
                 clear_formulas,
             } => {
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .get_sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
                 sheets.insert(sheet_name.clone());
 
@@ -4625,7 +4624,7 @@ pub(crate) fn apply_transform_ops_to_workbook(
                 overwrite_formulas,
             } => {
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .get_sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
                 sheets.insert(sheet_name.clone());
 
@@ -4701,7 +4700,7 @@ pub(crate) fn apply_transform_ops_to_workbook(
                 include_formulas,
             } => {
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .get_sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
                 sheets.insert(sheet_name.clone());
 
@@ -4822,7 +4821,7 @@ pub(crate) fn apply_transform_ops_to_workbook(
                 overwrite_formulas,
             } => {
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .get_sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
                 sheets.insert(sheet_name.clone());
 
@@ -4961,19 +4960,19 @@ pub fn apply_replace_in_formulas_to_file(
     op: &ReplaceInFormulasOp,
     policy: FormulaParsePolicy,
 ) -> Result<ReplaceInFormulasApplyResult> {
-    let mut book = umya_spreadsheet::reader::xlsx::read(path)?;
+    let mut book = crate::xlsx_import::read(path)?;
     let result = apply_replace_in_formulas_to_workbook(&mut book, op, policy)?;
-    umya_spreadsheet::writer::xlsx::write(&book, path)?;
+    crate::xlsx_export::write(&book, path)?;
     Ok(result)
 }
 
 pub(crate) fn apply_replace_in_formulas_to_workbook(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     op: &ReplaceInFormulasOp,
     policy: FormulaParsePolicy,
 ) -> Result<ReplaceInFormulasApplyResult> {
     let sheet = book
-        .get_sheet_by_name_mut(&op.sheet_name)
+        .get_sheet_by_name_mut(&op.sheet_name).ok()
         .ok_or_else(|| anyhow!("sheet '{}' not found", op.sheet_name))?;
 
     // Determine bounds (optional range or used range).
@@ -5277,14 +5276,14 @@ pub async fn replace_in_formulas(
 }
 
 pub(crate) fn apply_style_ops_to_file(path: &Path, ops: &[StyleOp]) -> Result<StyleApplyResult> {
-    let mut book = umya_spreadsheet::reader::xlsx::read(path)?;
+    let mut book = crate::xlsx_import::read(path)?;
     let result = apply_style_ops_to_workbook(&mut book, ops)?;
-    umya_spreadsheet::writer::xlsx::write(&book, path)?;
+    crate::xlsx_export::write(&book, path)?;
     Ok(result)
 }
 
 pub(crate) fn apply_style_ops_to_workbook(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     ops: &[StyleOp],
 ) -> Result<StyleApplyResult> {
     use crate::styles::{
@@ -5298,7 +5297,7 @@ pub(crate) fn apply_style_ops_to_workbook(
 
     for op in ops {
         let sheet = book
-            .get_sheet_by_name_mut(&op.sheet_name)
+            .get_sheet_by_name_mut(&op.sheet_name).ok()
             .ok_or_else(|| anyhow!("sheet '{}' not found", op.sheet_name))?;
         sheets.insert(op.sheet_name.clone());
 
@@ -6658,8 +6657,8 @@ fn suggest_tiled_ranges(
         let mut col_start = bounds.min_col;
         while col_start <= bounds.max_col {
             let col_end = (col_start + max_cols - 1).min(bounds.max_col);
-            let start_cell = coordinate_from_index(&col_start, &row_start);
-            let end_cell = coordinate_from_index(&col_end, &row_end);
+            let start_cell = coordinate_from_index(col_start, row_start);
+            let end_cell = coordinate_from_index(col_end, row_end);
             out.push(format!("{start_cell}:{end_cell}"));
             if let Some(lim) = limit
                 && out.len() >= lim
@@ -7238,7 +7237,7 @@ mod tests {
             .get_data_validations_mut()
             .expect("validations")
             .add_data_validation_list(validation);
-        umya_spreadsheet::writer::xlsx::write(&workbook, &path).expect("write fixture");
+        crate::xlsx_export::write(&workbook, &path).expect("write fixture");
 
         apply_structure_ops_to_file(
             &path,
@@ -7251,7 +7250,7 @@ mod tests {
             FormulaParsePolicy::Warn,
         )
         .expect("insert rows");
-        let workbook = umya_spreadsheet::reader::xlsx::read(&path).expect("read inserted");
+        let workbook = crate::xlsx_import::read(&path).expect("read inserted");
         let sqref = workbook
             .get_sheet_by_name("Sheet1")
             .expect("sheet1")
@@ -7272,7 +7271,7 @@ mod tests {
             FormulaParsePolicy::Warn,
         )
         .expect("delete rows");
-        let workbook = umya_spreadsheet::reader::xlsx::read(&path).expect("read deleted");
+        let workbook = crate::xlsx_import::read(&path).expect("read deleted");
         let sqref = workbook
             .get_sheet_by_name("Sheet1")
             .expect("sheet1")

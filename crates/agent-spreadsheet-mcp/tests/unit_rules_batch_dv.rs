@@ -28,7 +28,7 @@ async fn rules_batch_set_data_validation_list_persists_and_is_idempotent() -> Re
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("dv.xlsx", |book| {
         let _ = book.new_sheet("Lists");
-        let lists = book.get_sheet_by_name_mut("Lists").unwrap();
+        let lists = book.get_sheet_by_name_mut("Lists").ok().unwrap();
         lists.get_cell_mut("A1").set_value("A");
         lists.get_cell_mut("A2").set_value("B");
         lists.get_cell_mut("A3").set_value("C");
@@ -129,7 +129,7 @@ async fn rules_batch_preview_then_apply_staged_change() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("dv_preview.xlsx", |book| {
         let _ = book.new_sheet("Lists");
-        let lists = book.get_sheet_by_name_mut("Lists").unwrap();
+        let lists = book.get_sheet_by_name_mut("Lists").ok().unwrap();
         lists.get_cell_mut("A1").set_value("A");
     });
 

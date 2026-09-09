@@ -111,7 +111,7 @@ fn write_roll_forward_fixture(path: &Path) {
     let mut workbook = umya_spreadsheet::new_file();
     {
         let inputs = workbook
-            .get_sheet_by_name_mut("Sheet1")
+            .get_sheet_by_name_mut("Sheet1").ok()
             .expect("default sheet exists");
         inputs.set_name("Inputs");
         inputs.get_cell_mut("A1").set_value("Period");
@@ -123,7 +123,7 @@ fn write_roll_forward_fixture(path: &Path) {
     workbook.new_sheet("Summary").expect("summary sheet");
     {
         let summary = workbook
-            .get_sheet_by_name_mut("Summary")
+            .get_sheet_by_name_mut("Summary").ok()
             .expect("summary exists");
         summary.get_cell_mut("A1").set_value("Annualized Revenue");
         let annualized = summary.get_cell_mut("B1");

@@ -12,7 +12,7 @@ use agent_spreadsheet_mcp::tools::{
     list_sheets, list_workbooks, named_ranges, scan_volatiles, sheet_formula_map, sheet_overview,
     sheet_page, sheet_statistics, sheet_styles,
 };
-use umya_spreadsheet::{NumberingFormat, Spreadsheet};
+use umya_spreadsheet::{NumberingFormat, Workbook as Spreadsheet};
 
 mod support;
 
@@ -331,7 +331,7 @@ async fn manifest_suite(state: Arc<AppState>, workbook_id: WorkbookId) -> Result
 }
 
 fn build_featured_workbook(book: &mut Spreadsheet) {
-    let data = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let data = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
     data.set_name("Data");
     let headers = [
         "Item",
@@ -412,7 +412,7 @@ fn build_featured_workbook(book: &mut Spreadsheet) {
         calc.get_cell_mut((2, 5)).set_value_number(42.0);
     }
 
-    let data_sheet = book.get_sheet_by_name_mut("Data").unwrap();
+    let data_sheet = book.get_sheet_by_name_mut("Data").ok().unwrap();
     data_sheet
         .add_defined_name("SalesTotal", "Data!$D$2:$D$21")
         .expect("global defined name");
@@ -425,7 +425,7 @@ fn build_featured_workbook(book: &mut Spreadsheet) {
 async fn find_formula_defaults_and_paging() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("find_formula_paging.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.set_name("Sheet1");
         for row in 1..=5 {
             sheet
@@ -518,7 +518,7 @@ async fn find_formula_defaults_and_paging() -> Result<()> {
 async fn scan_volatiles_limit_offset_pagination_is_deterministic() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("scan_volatiles_paging.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.set_name("Sheet1");
         sheet.get_cell_mut("A1").set_value("Volatile");
         sheet.get_cell_mut("A2").set_formula("NOW()");
@@ -608,7 +608,7 @@ async fn scan_volatiles_limit_offset_pagination_is_deterministic() -> Result<()>
 async fn scan_volatiles_skips_unparsable_formulas_instead_of_failing() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("scan_volatiles_parser_failure.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").expect("default sheet");
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().expect("default sheet");
         sheet.get_cell_mut("A1").set_value("Input");
         sheet.get_cell_mut("B1").set_value("Result");
         // Intentionally malformed: one extra closing parenthesis.

@@ -6,7 +6,7 @@ use agent_spreadsheet_mcp::tools::{
     SheetOverviewParams, SheetPageParams, TableProfileParams, find_value, inspect_cells,
     list_workbooks, range_values, read_table, sheet_overview, sheet_page, table_profile,
 };
-use umya_spreadsheet::Spreadsheet;
+use umya_spreadsheet::Workbook as Spreadsheet;
 
 mod support;
 
@@ -209,7 +209,7 @@ async fn new_tools_cover_navigation_and_reads() -> Result<()> {
 async fn find_value_search_headers_only() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("headers_search.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("Name");
         sheet.get_cell_mut("B1").set_value("Value");
         sheet.get_cell_mut("A2").set_value("Name");
@@ -269,7 +269,7 @@ async fn find_value_search_headers_only() -> Result<()> {
 }
 
 fn build_inputs_workbook(book: &mut Spreadsheet) {
-    let inputs = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let inputs = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
     inputs.set_name("Inputs");
     inputs.get_cell_mut("A1").set_value("Label");
     inputs.get_cell_mut("B1").set_value("Value");

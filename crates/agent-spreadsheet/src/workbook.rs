@@ -30,8 +30,8 @@ use std::io::{Cursor, Read, Seek};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Arc, OnceLock};
-use umya_spreadsheet::reader::xlsx;
-use umya_spreadsheet::{DefinedName, Spreadsheet, Worksheet};
+use crate::xlsx_import as xlsx;
+use umya_spreadsheet::{DefinedName, Workbook as Spreadsheet, Worksheet};
 use web_time::Instant;
 
 const KV_MAX_WIDTH_FOR_DENSITY_CHECK: u32 = 6;
@@ -385,7 +385,7 @@ mod borrowed_view_tests {
     fn borrowed_context_projects_the_exact_authority_without_copying() {
         let mut document = umya_spreadsheet::new_file();
         document
-            .get_sheet_by_name_mut("Sheet1")
+            .get_sheet_by_name_mut("Sheet1").ok()
             .unwrap()
             .get_cell_mut("A1")
             .set_value_number(7.0);
@@ -460,7 +460,7 @@ impl<S: WorkbookReadSource> WorkbookContext<S> {
 
     pub fn save_copy(&self, path: &Path) -> Result<()> {
         let book = self.spreadsheet.read();
-        umya_spreadsheet::writer::xlsx::write(&book, path)
+        crate::xlsx_export::write(&book, path)
             .with_context(|| format!("failed to write workbook copy {:?}", path))
     }
 
@@ -475,7 +475,7 @@ impl<S: WorkbookReadSource> WorkbookContext<S> {
                 let mut error_formula_cells = 0u64;
 
                 for sheet in book.get_sheet_collection() {
-                    for cell in sheet.get_cell_collection() {
+                    for cell in sheet.cells() {
                         if !cell.is_formula() {
                             continue;
                         }
@@ -565,7 +565,7 @@ impl<S: WorkbookReadSource> WorkbookContext<S> {
 
         let book = self.spreadsheet.read();
         let sheet = book
-            .get_sheet_by_name(sheet_name)
+            .get_sheet_by_name(sheet_name).ok()
             .ok_or_else(|| anyhow!("sheet {} not found", sheet_name))?;
         let (metrics, style_tags) = compute_sheet_metrics(sheet);
         let named_ranges = gather_named_ranges(sheet, book.get_defined_names());
@@ -590,7 +590,7 @@ impl<S: WorkbookReadSource> WorkbookContext<S> {
 
         let book = self.spreadsheet.read();
         let sheet = book
-            .get_sheet_by_name(sheet_name)
+            .get_sheet_by_name(sheet_name).ok()
             .ok_or_else(|| anyhow!("sheet {} not found", sheet_name))?;
         let detected = detect_regions(sheet, &entry.metrics);
         entry.set_detected_regions(detected.regions);
@@ -629,7 +629,7 @@ impl<S: WorkbookReadSource> WorkbookContext<S> {
     {
         let book = self.spreadsheet.read();
         let sheet = book
-            .get_sheet_by_name(sheet_name)
+            .get_sheet_by_name(sheet_name).ok()
             .ok_or_else(|| anyhow!("sheet {} not found", sheet_name))?;
         Ok(func(sheet))
     }
@@ -682,7 +682,7 @@ impl<S: WorkbookReadSource> WorkbookContext<S> {
         for defined in book.get_defined_names() {
             let refers_to = defined.get_address();
             let scope = if defined.has_local_sheet_id() {
-                let idx = *defined.get_local_sheet_id() as usize;
+                let idx = defined.get_local_sheet_id() as usize;
                 sheet_names.get(idx).cloned()
             } else {
                 None
@@ -694,7 +694,7 @@ impl<S: WorkbookReadSource> WorkbookContext<S> {
             };
 
             let (scope_kind, scope_sheet_name) = if defined.has_local_sheet_id() {
-                let idx = *defined.get_local_sheet_id() as usize;
+                let idx = defined.get_local_sheet_id() as usize;
                 (Some(NamedRangeScope::Sheet), sheet_names.get(idx).cloned())
             } else {
                 (Some(NamedRangeScope::Workbook), None)
@@ -860,7 +860,7 @@ fn is_date_formatted(cell: &umya_spreadsheet::Cell) -> bool {
     };
 
     let format_id = nf.get_number_format_id();
-    if DATE_FORMAT_IDS.contains(format_id) {
+    if DATE_FORMAT_IDS.contains(&format_id) {
         return true;
     }
 
@@ -971,7 +971,7 @@ pub fn compute_sheet_metrics(sheet: &Worksheet) -> (SheetMetrics, Vec<String>) {
     let comments = sheet.get_comments().len() as u32;
     let mut style_usage: StdHashMap<String, StyleUsage> = StdHashMap::new();
 
-    for cell in sheet.get_cell_collection() {
+    for cell in sheet.cells() {
         let value = cell.get_value();
         let is_formula = cell.is_formula();
         if is_formula || !value.is_empty() {
@@ -1413,10 +1413,10 @@ fn build_occupancy(sheet: &Worksheet) -> Occupancy {
     let mut min_col = u32::MAX;
     let mut max_col = 0u32;
 
-    for cell in sheet.get_cell_collection() {
+    for cell in sheet.cells() {
         let coord = cell.get_coordinate();
-        let row = *coord.get_row_num();
-        let col = *coord.get_col_num();
+        let row = coord.get_row_num();
+        let col = coord.get_col_num();
         let value = cell_to_value(cell);
         let is_formula = cell.is_formula();
         cells.insert((row, col), CellInfo { value, is_formula });

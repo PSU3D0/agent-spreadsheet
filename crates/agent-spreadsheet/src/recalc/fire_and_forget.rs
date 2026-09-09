@@ -135,11 +135,11 @@ impl RecalcExecutor for FireAndForgetExecutor {
             }
         }
 
-        let book = umya_spreadsheet::reader::xlsx::read(workbook_path)?;
+        let book = crate::xlsx_import::read(workbook_path)?;
         let mut formula_cells = 0u64;
         let mut error_formula_cells = 0u64;
         for sheet in book.get_sheet_collection() {
-            for cell in sheet.get_cell_collection() {
+            for cell in sheet.cells() {
                 if cell.is_formula() {
                     formula_cells += 1;
                     if is_spreadsheet_error(&cell.get_value()) {

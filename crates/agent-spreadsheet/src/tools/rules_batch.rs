@@ -317,14 +317,14 @@ pub(crate) fn apply_rules_ops_to_file(
     ops: &[RulesOp],
     policy: FormulaParsePolicy,
 ) -> Result<RulesApplyResult> {
-    let mut book = umya_spreadsheet::reader::xlsx::read(path)?;
+    let mut book = crate::xlsx_import::read(path)?;
     let result = apply_rules_ops_to_workbook(&mut book, ops, policy)?;
-    umya_spreadsheet::writer::xlsx::write(&book, path)?;
+    crate::xlsx_export::write(&book, path)?;
     Ok(result)
 }
 
 pub(crate) fn apply_rules_ops_to_workbook(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     ops: &[RulesOp],
     policy: FormulaParsePolicy,
 ) -> Result<RulesApplyResult> {
@@ -402,7 +402,7 @@ pub(crate) fn apply_rules_ops_to_workbook(
                 validation,
             } => {
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .get_sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
 
                 affected_sheets.insert(sheet_name.clone());
@@ -428,7 +428,7 @@ pub(crate) fn apply_rules_ops_to_workbook(
                 style,
             } => {
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .get_sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
 
                 affected_sheets.insert(sheet_name.clone());
@@ -451,7 +451,7 @@ pub(crate) fn apply_rules_ops_to_workbook(
                 style,
             } => {
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .get_sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
 
                 affected_sheets.insert(sheet_name.clone());
@@ -473,7 +473,7 @@ pub(crate) fn apply_rules_ops_to_workbook(
                 target_range,
             } => {
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .get_sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
 
                 affected_sheets.insert(sheet_name.clone());

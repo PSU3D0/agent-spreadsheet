@@ -82,7 +82,7 @@ async fn first_workbook_id(state: Arc<AppState>) -> Result<WorkbookId> {
 async fn formula_edit_sets_recalc_needed_true() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("recalc_needed_edit.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value_number(10);
         let out = sheet.get_cell_mut("A2");
         out.set_formula("A1*2");
@@ -124,7 +124,7 @@ async fn formula_edit_sets_recalc_needed_true() -> Result<()> {
 async fn recalculate_clears_recalc_needed() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("recalc_needed_recalc.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value_number(10);
         let out = sheet.get_cell_mut("A2");
         out.set_formula("A1*2");
@@ -178,7 +178,7 @@ async fn recalculate_clears_recalc_needed() -> Result<()> {
 async fn range_values_warns_when_stale_formulas_present() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("recalc_needed_read.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value_number(10);
         let out = sheet.get_cell_mut("A2");
         out.set_formula("A1*2");

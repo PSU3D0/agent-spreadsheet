@@ -10,7 +10,7 @@ async fn test_style_batch_apply_emits_style_diff_in_docker() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("style_batch.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
             sheet.get_cell_mut("A1").set_value("x");
         });
 
@@ -73,7 +73,7 @@ async fn test_style_batch_apply_emits_style_diff_in_docker() -> Result<()> {
 async fn test_style_batch_large_range_counts_in_docker() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("large.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("x");
     });
 

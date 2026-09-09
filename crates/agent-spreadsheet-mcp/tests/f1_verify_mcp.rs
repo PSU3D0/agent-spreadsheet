@@ -75,7 +75,7 @@ async fn verify_workbook_detects_changed_error_at_the_same_address() -> Result<(
     let changed_path = workspace.copy_workbook(&fixture("real_errors.xlsx"), "changed-errors.xlsx");
     let mut changed = umya_spreadsheet::reader::xlsx::read(&changed_path)?;
     changed
-        .get_sheet_by_name_mut("Sheet1")
+        .get_sheet_by_name_mut("Sheet1").ok()
         .unwrap()
         .get_cell_mut("A1")
         .set_formula("UNKNOWNFN(2)")

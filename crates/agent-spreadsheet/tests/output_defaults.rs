@@ -8,7 +8,7 @@ use agent_spreadsheet_mcp::tools::{
     range_values, read_table, sheet_page, sheet_statistics, sheet_styles, table_profile,
     workbook_style_summary, workbook_summary,
 };
-use umya_spreadsheet::Spreadsheet;
+use umya_spreadsheet::Workbook as Spreadsheet;
 
 mod support;
 
@@ -785,7 +785,7 @@ async fn workbook_style_summary_truncates_with_max_items() -> Result<()> {
 }
 
 fn build_simple_workbook(book: &mut Spreadsheet) {
-    let sheet = book.get_sheet_by_name_mut("Sheet1").expect("Sheet1");
+    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().expect("Sheet1");
     sheet.get_cell_mut("A1").set_value("Name");
     sheet.get_cell_mut("B1").set_value("Value");
     sheet.get_cell_mut("C1").set_value("Flag");
@@ -811,7 +811,7 @@ fn build_two_sheet_workbook(book: &mut Spreadsheet) {
 
 fn build_styled_workbook(book: &mut Spreadsheet) {
     build_simple_workbook(book);
-    let sheet = book.get_sheet_by_name_mut("Sheet1").expect("Sheet1");
+    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().expect("Sheet1");
     sheet.get_style_mut("A2").get_font_mut().set_bold(true);
     sheet.get_style_mut("B2").get_font_mut().set_italic(true);
 }

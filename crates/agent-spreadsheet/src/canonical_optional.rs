@@ -263,8 +263,8 @@ pub async fn bind_check_manifest_content(
 
     let workbook = state.open_workbook(&workbook_id).await?;
     let bytes = std::fs::read(&workbook.path)?;
-    let adapter = formualizer::workbook::UmyaAdapter::open_bytes(bytes)
-        .or_else(|_| formualizer::workbook::UmyaAdapter::open_path(&workbook.path))
+    let adapter = formualizer::workbook::Umya3Adapter::open_bytes(bytes)
+        .or_else(|_| formualizer::workbook::Umya3Adapter::open_path(&workbook.path))
         .map_err(|_| anyhow!("failed to open workbook adapter"))?;
     let workbook = formualizer::workbook::Workbook::from_reader(
         adapter,

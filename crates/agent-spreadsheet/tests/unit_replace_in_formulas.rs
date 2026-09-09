@@ -12,7 +12,7 @@ mod support;
 
 fn create_formula_workbook(workspace: &support::TestWorkspace, name: &str) -> PathBuf {
     workspace.create_workbook(name, |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         // Row 1: headers
         sheet.get_cell_mut("A1").set_value("Label");
         sheet.get_cell_mut("B1").set_value("Value");
@@ -71,7 +71,7 @@ fn replace_plain_text_in_formula_body() {
 
     // Verify the formulas were updated
     let book = umya_spreadsheet::reader::xlsx::read(&work).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
 
     let b2 = sheet.get_cell("B2").unwrap();
     assert_eq!(b2.get_formula(), "SUM(D2:D20)");
@@ -109,7 +109,7 @@ fn replace_regex_mode() {
     assert_eq!(result.formulas_changed, 1, "only B4 references Sheet1!D");
 
     let book = umya_spreadsheet::reader::xlsx::read(&work).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
     let b4 = sheet.get_cell("B4").unwrap();
     assert_eq!(b4.get_formula(), "Sheet2!E5+Sheet2!E6");
 }
@@ -171,7 +171,7 @@ fn range_scoped_replace_touches_only_target_area() {
     assert_eq!(result.formulas_changed, 1, "only B2 is in the range");
 
     let book = umya_spreadsheet::reader::xlsx::read(&work).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
 
     // B2 changed
     assert_eq!(sheet.get_cell("B2").unwrap().get_formula(), "SUM(X1:X5)");
@@ -210,7 +210,7 @@ fn case_insensitive_plain_text_replace() {
     );
 
     let book = umya_spreadsheet::reader::xlsx::read(&work).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
     assert_eq!(
         sheet.get_cell("B2").unwrap().get_formula(),
         "SUMPRODUCT(C2:C10)"
@@ -223,7 +223,7 @@ fn parse_policy_fail_validates_all_replacements_not_just_samples() {
 
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("fail-all.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         for row in 1..=30 {
             sheet
                 .get_cell_mut((2, row))
@@ -258,7 +258,7 @@ fn parse_policy_warn_skips_invalid_replacements_and_reports_diagnostics() {
 
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("warn-invalid.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         for row in 1..=30 {
             sheet
                 .get_cell_mut((2, row))
@@ -325,7 +325,7 @@ async fn cli_dry_run_preview_shows_expected_changes() -> Result<()> {
 
     // Verify original file is NOT modified (dry run)
     let book = umya_spreadsheet::reader::xlsx::read(&path).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
     assert_eq!(sheet.get_cell("B2").unwrap().get_formula(), "SUM(C2:C10)");
 
     Ok(())
@@ -358,7 +358,7 @@ async fn cli_in_place_writes_expected_formulas() -> Result<()> {
 
     // Verify source file IS modified
     let book = umya_spreadsheet::reader::xlsx::read(&path).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
     assert_eq!(sheet.get_cell("B2").unwrap().get_formula(), "SUM(D2:D20)");
     assert_eq!(
         sheet.get_cell("B3").unwrap().get_formula(),
@@ -372,7 +372,7 @@ async fn cli_in_place_writes_expected_formulas() -> Result<()> {
 async fn cli_in_place_fail_policy_rejects_without_mutating_source() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("inplace-fail-policy.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         for row in 1..=30 {
             sheet
                 .get_cell_mut((2, row))
@@ -440,7 +440,7 @@ async fn cli_output_mode_writes_to_target() -> Result<()> {
 
     // Source unchanged
     let book = umya_spreadsheet::reader::xlsx::read(&path).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
     assert_eq!(
         sheet.get_cell("B4").unwrap().get_formula(),
         "Sheet1!D5+Sheet1!D6"
@@ -448,7 +448,7 @@ async fn cli_output_mode_writes_to_target() -> Result<()> {
 
     // Target has the change
     let book = umya_spreadsheet::reader::xlsx::read(&target).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
     assert_eq!(
         sheet.get_cell("B4").unwrap().get_formula(),
         "Sheet2!D5+Sheet2!D6"
@@ -482,7 +482,7 @@ async fn cli_range_scoped_replace_only_modifies_target_area() -> Result<()> {
     assert_eq!(obj.get("formulas_changed").and_then(Value::as_u64), Some(1));
 
     let book = umya_spreadsheet::reader::xlsx::read(&path).unwrap();
-    let sheet = book.get_sheet_by_name("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
     assert_eq!(sheet.get_cell("B2").unwrap().get_formula(), "SUM(X1:X5)");
     assert_eq!(
         sheet.get_cell("B3").unwrap().get_formula(),

@@ -957,7 +957,7 @@ async fn row_header_projection_and_volatile_groups_preserve_canonical_capabiliti
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("canonical-rich.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
     sheet.get_cell_mut("A2").set_value("Name");
     sheet.get_cell_mut("B2").set_value("Amount");
     sheet.get_cell_mut("A3").set_value("Alpha");
@@ -1117,7 +1117,7 @@ async fn canonical_reads_reject_nonprogress_and_project_every_declared_cell_fiel
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("read-fields.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
     sheet.get_cell_mut("A1").set_value_number(42_f64);
     sheet.get_cell_mut("B1").set_formula("SUM(A1,1)");
     sheet.get_cell_mut("C1").set_value("x".repeat(90_000));
@@ -1192,7 +1192,7 @@ async fn read_cells_budget_uses_one_row_prefix_for_rows_and_exact_ranges() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("read-budget-prefix.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
     let expected = (1..=200)
         .map(|row| format!("row{row:03}-{}", "x".repeat(213)))
         .collect::<Vec<_>>();
@@ -1313,7 +1313,7 @@ async fn detailed_compact_rows_match_the_original_trace02_request_without_duplic
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("trace02-compact-rows.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
     sheet.set_name("Data");
     for (column, header) in [
         ("A", "ID"),
@@ -1465,7 +1465,7 @@ async fn analyze_styles_scan_limit_bounds_all_returned_evidence() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("style-scan-bound.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
     for row in 1..=3 {
         sheet
             .get_cell_mut(format!("A{row}"))
@@ -1514,7 +1514,7 @@ async fn profile_table_reports_resolved_region_bounds_and_header() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("profile-region-source.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
     sheet.get_cell_mut("A5").set_value("Name");
     sheet.get_cell_mut("B5").set_value("Amount");
     for row in 6..=15 {
@@ -1648,7 +1648,7 @@ async fn profile_table_normalizes_explicit_a1_and_rejects_malformed_across_surfa
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("profile-explicit-range.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
     sheet.get_cell_mut("A5").set_value("Name");
     sheet.get_cell_mut("B5").set_value("Amount");
     sheet.get_cell_mut("A15").set_value("last");
@@ -1700,7 +1700,7 @@ async fn formula_map_address_sort_is_natural_and_stable_across_cursor_pages() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("formula-map-address-order.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
     for (address, formula) in [
         ("A10", "SUM(10,1)"),
         ("A2", "MAX(2,1)"),
@@ -1744,7 +1744,7 @@ async fn formula_search_scans_all_pages_honors_range_and_uses_bound_cursor() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("formula-search.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
     for row in 1..=520 {
         sheet
             .get_cell_mut(format!("A{row}"))
@@ -1826,7 +1826,7 @@ async fn canonical_analysis_bounds_paths_paging_and_profile_provenance_are_expli
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("analysis-contracts.xlsx");
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
     sheet.get_cell_mut("A1").set_value("Header");
     for row in 2..=22 {
         sheet

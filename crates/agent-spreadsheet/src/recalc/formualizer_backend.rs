@@ -8,7 +8,7 @@ use formualizer::eval::engine::ingest::EngineLoadStream;
 use formualizer::eval::engine::{Engine, EvalConfig, FormulaParsePolicy};
 use formualizer::workbook::workbook::WBResolver;
 use formualizer::workbook::{
-    FormulaCacheUpdate, LiteralValue, SpreadsheetReader, SpreadsheetWriter, UmyaAdapter,
+    FormulaCacheUpdate, LiteralValue, SpreadsheetReader, SpreadsheetWriter, Umya3Adapter as UmyaAdapter,
 };
 use std::collections::HashSet;
 use std::path::Path;

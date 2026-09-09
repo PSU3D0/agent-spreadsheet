@@ -113,7 +113,7 @@ async fn real_io_then_error_retains_named_capture_across_edit_and_restart() {
     let journal_directory = tempfile::tempdir().unwrap();
     let journal = NativeResidentJournal::open(journal_directory.path()).unwrap();
     let mut book = umya_spreadsheet::new_file();
-    book.get_sheet_mut(&0)
+    book.get_sheet_mut(&0).ok()
         .unwrap()
         .get_cell_mut("A1")
         .set_value_number(7);

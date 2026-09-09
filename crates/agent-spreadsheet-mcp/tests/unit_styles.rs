@@ -15,7 +15,7 @@ mod support;
 async fn sheet_styles_reports_full_descriptors() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("styled.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
 
         sheet.get_cell_mut("A1").set_value("Header");
         sheet.get_cell_mut("A2").set_value_number(123.0);
@@ -27,7 +27,7 @@ async fn sheet_styles_reports_full_descriptors() -> Result<()> {
             .get_pattern_fill_mut()
             .set_pattern_type(PatternValues::Solid)
             .get_foreground_color_mut()
-            .set_argb("FF0000FF");
+            .set_argb_str("FF0000FF");
         {
             let borders = style_a1.get_borders_mut();
             borders.get_left_border_mut().set_border_style("thin");
@@ -127,7 +127,7 @@ async fn sheet_styles_reports_full_descriptors() -> Result<()> {
 async fn sheet_styles_runs_respect_scope() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("style_overview.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("a");
         sheet.get_cell_mut("B1").set_value("b");
         sheet.get_cell_mut("C1").set_value("c");
@@ -194,7 +194,7 @@ async fn sheet_styles_runs_respect_scope() -> Result<()> {
 async fn sheet_styles_cells_truncates() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("style_overview_cells.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("a");
         sheet.get_cell_mut("B1").set_value("b");
         sheet.get_cell_mut("C1").set_value("c");
@@ -248,7 +248,7 @@ async fn sheet_styles_cells_truncates() -> Result<()> {
 async fn sheet_styles_truncates_large_style_counts() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("many_styles.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         for i in 0..205u32 {
             let row = i + 1;
             let addr = format!("A{row}");
@@ -258,7 +258,7 @@ async fn sheet_styles_truncates_large_style_counts() -> Result<()> {
                 .get_style_mut(addr.as_str())
                 .get_font_mut()
                 .get_color_mut()
-                .set_argb(color);
+                .set_argb_str(color);
         }
     });
 
@@ -306,7 +306,7 @@ async fn sheet_styles_truncates_large_style_counts() -> Result<()> {
 async fn sheet_styles_truncates_ranges_for_disjoint_runs() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("many_runs.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         for i in 0..51u32 {
             let row = 1 + i * 2;
             let addr = format!("A{row}");
@@ -364,7 +364,7 @@ async fn sheet_styles_truncates_ranges_for_disjoint_runs() -> Result<()> {
 async fn sheet_styles_maps_gradient_pattern_underline_borders_rotation() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("breadth.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("Breadth");
         sheet.get_cell_mut("B1").set_value("Pattern");
 
@@ -385,11 +385,11 @@ async fn sheet_styles_maps_gradient_pattern_underline_borders_rotation() -> Resu
             grad.set_degree(45.0);
             let mut stop1 = GradientStop::default();
             stop1.set_position(0.0);
-            stop1.get_color_mut().set_argb("FFFF0000");
+            stop1.get_color_mut().set_argb_str("FFFF0000");
             grad.set_gradient_stop(stop1);
             let mut stop2 = GradientStop::default();
             stop2.set_position(1.0);
-            stop2.get_color_mut().set_argb("FF00FF00");
+            stop2.get_color_mut().set_argb_str("FF00FF00");
             grad.set_gradient_stop(stop2);
         }
 
@@ -482,7 +482,7 @@ async fn sheet_styles_maps_gradient_pattern_underline_borders_rotation() -> Resu
 async fn sheet_styles_dedupes_identical_visible_formats() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("stable.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("A");
         sheet.get_cell_mut("B1").set_value("B");
         sheet.get_style_mut("A1").get_font_mut().set_bold(true);

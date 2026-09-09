@@ -105,14 +105,15 @@ pub fn styles_xml(path: &Path) -> Option<Vec<u8>> {
 /// Extract and rasterize one fixture over [`GOLDEN_RANGE`].
 pub fn render_fixture(name: &str) -> (Scene, RenderOutput) {
     let path = fixture_dir().join(format!("{name}.xlsx"));
-    let book = umya_spreadsheet::reader::xlsx::read(&path)
+    // Use the production cold import boundary; the renderer itself receives a document.
+    let book = formualizer_workbook::backends::umya3::read_document_path(&path)
         .unwrap_or_else(|error| panic!("reading {}: {error}", path.display()));
     let styles = styles_xml(&path);
     let options = RenderOptions {
         styles_xml: styles.as_deref(),
         ..RenderOptions::default()
     };
-    let sheet = book.get_sheet(&0).expect("fixture has a first sheet");
+    let sheet = book.get_sheet(&0).ok().expect("fixture has a first sheet");
     let scene = extract_scene(sheet, &book, &GOLDEN_RANGE, &options)
         .unwrap_or_else(|error| panic!("extracting {name}: {error}"));
     let output = rasterize(&scene, &RasterOptions::default())

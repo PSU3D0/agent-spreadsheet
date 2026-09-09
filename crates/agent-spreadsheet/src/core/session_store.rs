@@ -1042,7 +1042,7 @@ mod tests {
     fn create_test_base(dir: &Path) -> PathBuf {
         let base_path = dir.join("base.xlsx");
         let workbook = umya_spreadsheet::new_file();
-        umya_spreadsheet::writer::xlsx::write(&workbook, &base_path).unwrap();
+        crate::xlsx_export::write(&workbook, &base_path).unwrap();
         base_path
     }
 

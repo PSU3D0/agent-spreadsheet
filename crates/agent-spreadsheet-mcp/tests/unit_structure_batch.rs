@@ -26,7 +26,7 @@ fn recalc_state(
 async fn structure_batch_insert_rows_moves_cells() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("structure_rows.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("keep");
         sheet.get_cell_mut("A2").set_value("move");
     });
@@ -103,7 +103,7 @@ async fn structure_batch_insert_rows_moves_cells() -> Result<()> {
 async fn structure_batch_copy_range_shifts_formulas_and_copies_style() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("structure_copy_range.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value_number(1);
         sheet.get_cell_mut("B1").set_value_number(10);
         sheet.get_cell_mut("A2").set_value_number(2);
@@ -181,7 +181,7 @@ async fn structure_batch_copy_range_shifts_formulas_and_copies_style() -> Result
 async fn structure_batch_move_range_moves_and_clears_source() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("structure_move_range.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("x");
         sheet.get_style_mut("A1").get_font_mut().set_bold(true);
     });
@@ -261,7 +261,7 @@ async fn structure_batch_move_range_moves_and_clears_source() -> Result<()> {
 async fn structure_batch_copy_range_rejects_overlap() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("structure_copy_overlap.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("x");
         sheet.get_cell_mut("B2").set_value("y");
     });
@@ -322,7 +322,7 @@ async fn structure_batch_copy_range_rejects_overlap() -> Result<()> {
 async fn structure_batch_preview_stages_and_apply() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("structure_preview.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("B1").set_value("move");
     });
 
@@ -411,7 +411,7 @@ async fn structure_batch_preview_stages_and_apply() -> Result<()> {
 async fn structure_batch_preview_includes_change_count() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("structure_preview_count.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("x");
     });
 
@@ -471,12 +471,12 @@ async fn structure_batch_preview_includes_change_count() -> Result<()> {
 async fn structure_batch_rename_sheet_handles_quoted_sheet_names() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("structure_rename_quoted.xlsx", |book| {
-        let inputs = book.get_sheet_mut(&0).unwrap();
+        let inputs = book.get_sheet_mut(&0).ok().unwrap();
         inputs.set_name("My Sheet");
         inputs.get_cell_mut("A1").set_value_number(3);
 
         book.new_sheet("Calc").unwrap();
-        let calc = book.get_sheet_by_name_mut("Calc").unwrap();
+        let calc = book.get_sheet_by_name_mut("Calc").ok().unwrap();
         calc.get_cell_mut("A1")
             .set_formula("'My Sheet'!A1".to_string());
     });
@@ -754,7 +754,7 @@ async fn structure_batch_surfaces_alias_warnings_in_summary() -> Result<()> {
 async fn insert_rows_expand_adjacent_sums_single_row() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("expand_sum_single.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         // Rows 1-3: detail data
         sheet.get_cell_mut("A1").set_value_number(10);
         sheet.get_cell_mut("A2").set_value_number(20);
@@ -826,7 +826,7 @@ async fn insert_rows_expand_adjacent_sums_single_row() -> Result<()> {
 async fn insert_rows_expand_adjacent_sums_multi_row() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("expand_sum_multi.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("B1").set_value_number(1);
         sheet.get_cell_mut("B2").set_value_number(2);
         sheet.get_cell_mut("B3").set_value_number(3);
@@ -894,7 +894,7 @@ async fn insert_rows_expand_adjacent_sums_multi_row() -> Result<()> {
 async fn insert_rows_expand_adjacent_sums_counts_all_expanded_formulas() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("expand_sum_count.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value_number(1);
         sheet.get_cell_mut("A2").set_value_number(2);
         sheet.get_cell_mut("A3").set_value_number(3);
@@ -981,7 +981,7 @@ async fn insert_rows_expand_adjacent_sums_counts_all_expanded_formulas() -> Resu
 async fn insert_rows_no_expansion_when_flag_absent() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("no_expand.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value_number(10);
         sheet.get_cell_mut("A2").set_value_number(20);
         sheet.get_cell_mut("A3").set_formula("SUM(A1:A2)");
@@ -1050,7 +1050,7 @@ async fn insert_rows_no_expansion_when_flag_absent() -> Result<()> {
 async fn insert_rows_ambiguous_formula_produces_warning() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("ambiguous_sum.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value_number(10);
         sheet.get_cell_mut("A2").set_value_number(20);
         // Complex formula – not a simple SUM(Ax:Ay)
@@ -1120,7 +1120,7 @@ async fn insert_rows_ambiguous_formula_produces_warning() -> Result<()> {
 async fn clone_row_copies_template_and_expands_sums() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("clone_row.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         // Row 1: header
         sheet.get_cell_mut("A1").set_value("Label");
         sheet.get_cell_mut("B1").set_value("Amount");
@@ -1228,7 +1228,7 @@ async fn clone_row_copies_template_and_expands_sums() -> Result<()> {
 async fn clone_row_source_below_insert_point_shifts_formula_to_new_row() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("clone_row_source_below.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A5").set_value_number(7);
         sheet.get_cell_mut("B5").set_formula("A5+1");
     });
@@ -1299,7 +1299,7 @@ async fn clone_row_source_below_insert_point_shifts_formula_to_new_row() -> Resu
 async fn clone_row_without_expansion_keeps_original_sum() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("clone_row_no_expand.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value_number(10);
         sheet.get_cell_mut("A2").set_formula("SUM(A1:A1)");
     });

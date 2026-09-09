@@ -57,6 +57,14 @@ One-shot revisions are SHA-256 byte generations. The adapter verifies the file C
 
 Use `await asp.dispose()` at host shutdown to stop new commands, drain accepted work and release resident owner slots. See the SDK README for executable examples and request-ID usage.
 
+## Umya 3 import compatibility
+
+All native and portable document imports use the same Formualizer compatibility reader for published Umya 3.1.0's border-colour parsing bug. It restores colours directly into the authoritative document at cold import; no XML repair state survives and no warm-loop serialization is added. Renderer fixtures use this same production import boundary; scene and pixel goldens remain unchanged.
+
+The paired cold writer corrects Umya's colour-blind style deduplication by repairing emitted font/fill/border colour definitions and cell, row, column and conditional-format style references from the authoritative document. **Theme/indexed/RGB identity and tint are retained; theme colours are not flattened.** This performs one ordinary Umya serialization followed by ZIP/XML projection correction, without parsing a workbook or rebuilding an evaluator. The temporary correction tables are discarded after export. Unspecified row height is emitted as the existing renderer's 15-point default, avoiding upstream's conflicting fallback. This targeted workaround does not promise support for OOXML metadata that Umya already omits.
+
+The import reader rejects invalid repair metadata and bounds input/expanded parts to 256 MiB, aggregate declared expansion to 1 GiB, archive entries to 65,536, each style table to 100,000 entries and XML depth to 128. File and stream imports use one bounded input snapshot.
+
 ## Validation
 
 The generated-runtime integration harness exercises actual WASM, just-bash and Node workers, including positive numeric oracles, warm-loop counters, exact retries, VFS isolation, history/approvals/checkpoints, native workbook/pixel goldens, exports and cleanup beyond the owner cap. Separate fault tests cover worker death, concurrent/failed cleanup, capability-discovery recovery and coordinated VFS publication.

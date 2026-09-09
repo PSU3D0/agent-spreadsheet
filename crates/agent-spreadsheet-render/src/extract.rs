@@ -13,7 +13,7 @@
 //! * Nothing recalculates. A formula cell without a cached value renders empty
 //!   and raises `formulas_unevaluated` once per sheet.
 
-use umya_spreadsheet::{Spreadsheet, Worksheet, structs::drawing::Theme};
+use umya_spreadsheet::{Workbook as Spreadsheet, Worksheet, structs::drawing::Theme};
 
 use crate::color;
 use crate::metrics::{
@@ -199,7 +199,7 @@ pub fn extract(
             .get_sheets_views()
             .get_sheet_view_list()
             .first()
-            .map(|view| *view.get_show_grid_lines())
+            .map(|view| view.get_show_grid_lines())
             .unwrap_or(true)
     });
     if show_gridlines {
@@ -355,11 +355,11 @@ fn build_column_tracks(
     // office2pdf's `> 0` guards: umya reports 0 for an absent attribute, a
     // width Excel never writes.
     let declared_default = {
-        let value = *properties.get_default_column_width();
+        let value = properties.get_default_column_width();
         (value > 0.0).then_some(value)
     };
     let base = {
-        let value = *properties.get_base_column_width();
+        let value = properties.get_base_column_width();
         (value > 0).then_some(value)
     };
     let default_pt = metrics::default_column_width_pt(declared_default, base, unit_pt);
@@ -370,13 +370,13 @@ fn build_column_tracks(
         let dimension = sheet.get_column_dimension_by_number(&index);
         let (width_pt, hidden) = match dimension {
             Some(dimension) => {
-                let width = *dimension.get_width();
+                let width = dimension.get_width();
                 let width_pt = if width > 0.0 {
                     metrics::column_width_to_pt(width, unit_pt)
                 } else {
                     default_pt
                 };
-                (width_pt, *dimension.get_hidden())
+                (width_pt, dimension.get_hidden())
             }
             None => (default_pt, false),
         };
@@ -408,7 +408,7 @@ fn build_row_tracks(
 ) -> Vec<Track> {
     let properties = sheet.get_sheet_format_properties();
     let default_pt = {
-        let value = *properties.get_default_row_height();
+        let value = properties.get_default_row_height();
         if value > 0.0 {
             value
         } else {
@@ -419,9 +419,9 @@ fn build_row_tracks(
     let mut y = 0.0f32;
     for index in bounds.first_row..=bounds.last_row {
         let dimension = sheet.get_row_dimension(&index);
-        let hidden = dimension.map(|d| *d.get_hidden()).unwrap_or(false);
-        let recorded = dimension.map(|d| *d.get_height()).filter(|h| *h > 0.0);
-        let custom = dimension.map(|d| *d.get_custom_height()).unwrap_or(false);
+        let hidden = dimension.map(|d| d.get_hidden()).unwrap_or(false);
+        let recorded = dimension.map(|d| d.get_height()).filter(|h| *h > 0.0);
+        let custom = dimension.map(|d| d.get_custom_height()).unwrap_or(false);
         let base_px = (recorded.unwrap_or(default_pt) as f32) * PX_PER_PT * scale;
         // A recorded height with `customHeight` is the user's; anything else
         // is Excel auto-fitting the row to its tallest content, which is what
@@ -495,22 +495,22 @@ fn merges(sheet: &Worksheet) -> Vec<Merge> {
         .map(|range| {
             let first_col = range
                 .get_coordinate_start_col()
-                .map(|c| *c.get_num())
+                .map(|c| c.get_num())
                 .unwrap_or(1);
             let first_row = range
                 .get_coordinate_start_row()
-                .map(|c| *c.get_num())
+                .map(|c| c.get_num())
                 .unwrap_or(1);
             Merge {
                 first_col,
                 first_row,
                 last_col: range
                     .get_coordinate_end_col()
-                    .map(|c| *c.get_num())
+                    .map(|c| c.get_num())
                     .unwrap_or(first_col),
                 last_row: range
                     .get_coordinate_end_row()
-                    .map(|c| *c.get_num())
+                    .map(|c| c.get_num())
                     .unwrap_or(first_row),
             }
         })
@@ -605,15 +605,15 @@ fn plan_cells(
             let font = style.get_font();
             let (bold, italic, underline, strike, size_pt, font_color, family) = match font {
                 Some(font) => (
-                    *font.get_bold(),
-                    *font.get_italic(),
+                    font.get_bold(),
+                    font.get_italic(),
                     !matches!(
                         font.get_font_underline().get_val(),
                         umya_spreadsheet::UnderlineValues::None
                     ),
-                    *font.get_strikethrough(),
+                    font.get_strikethrough(),
                     {
-                        let size = *font.get_size();
+                        let size = font.get_size();
                         if size > 0.0 { size } else { normal.size_pt }
                     },
                     color::resolve(font.get_color(), theme).unwrap_or(Rgba::BLACK),
@@ -659,10 +659,10 @@ fn plan_cells(
                         V::Top => VAlign::Top,
                         _ => VAlign::Bottom,
                     };
-                    if *alignment.get_text_rotation() != 0 {
+                    if alignment.get_text_rotation() != 0 {
                         scene.warn(Warning::TextRotationOmitted);
                     }
-                    (horizontal, vertical, *alignment.get_wrap_text())
+                    (horizontal, vertical, alignment.get_wrap_text())
                 }
                 None => (None, VAlign::Bottom, false),
             };
@@ -758,7 +758,7 @@ fn edge_of(border: &umya_spreadsheet::Border, theme: Option<&Theme>, scale: f32)
     Some(Edge {
         width_px: width_pt * PX_PER_PT * scale,
         dash: metrics::border_style_to_line_style(style),
-        color: color::resolve(border.get_color(), theme).unwrap_or(Rgba::BLACK),
+        color: border.color().as_ref().and_then(|value| color::resolve(value, theme)).unwrap_or(Rgba::BLACK),
     })
 }
 

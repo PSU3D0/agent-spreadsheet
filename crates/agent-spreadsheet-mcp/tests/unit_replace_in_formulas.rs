@@ -23,7 +23,7 @@ fn recalc_state(
 
 fn create_formula_workbook(workspace: &support::TestWorkspace, name: &str) -> std::path::PathBuf {
     workspace.create_workbook(name, |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("Label");
         sheet.get_cell_mut("B1").set_value("Value");
         sheet

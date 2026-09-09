@@ -32,7 +32,7 @@ async fn first_workbook_id(state: Arc<AppState>) -> Result<WorkbookId> {
 async fn recalculate_uses_formualizer_backend_and_updates_formula_cache() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("formualizer_recalc.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value_number(10);
         let out = sheet.get_cell_mut("A2");
         out.set_formula("A1*2");
@@ -85,7 +85,7 @@ async fn recalculate_uses_formualizer_backend_and_updates_formula_cache() -> Res
         .expect("fork registry")
         .get_fork(&fork.fork_id)?;
     let saved = umya_spreadsheet::reader::xlsx::read(&fork_ctx.work_path)?;
-    let sheet = saved.get_sheet_by_name("Sheet1").expect("Sheet1 exists");
+    let sheet = saved.get_sheet_by_name("Sheet1").ok().expect("Sheet1 exists");
     assert_eq!(sheet.get_cell("A2").expect("A2 exists").get_value(), "22");
 
     Ok(())
@@ -95,7 +95,7 @@ async fn recalculate_uses_formualizer_backend_and_updates_formula_cache() -> Res
 async fn recalculate_one_pass_updates_non_last_sheet_formula_chains() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("formualizer_one_pass_multisheet.xlsx", |book| {
-        let sheet1 = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet1 = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet1.get_cell_mut("A1").set_value_number(10);
         for (addr, formula) in [
             ("A2", "A1+10"),
@@ -109,7 +109,7 @@ async fn recalculate_one_pass_updates_non_last_sheet_formula_chains() -> Result<
         }
 
         book.new_sheet("Sheet2").expect("add Sheet2");
-        let sheet2 = book.get_sheet_by_name_mut("Sheet2").unwrap();
+        let sheet2 = book.get_sheet_by_name_mut("Sheet2").ok().unwrap();
         sheet2.get_cell_mut("A1").set_value_number(10);
         for (addr, formula) in [
             ("A2", "A1+10"),
@@ -159,7 +159,7 @@ async fn recalculate_one_pass_updates_non_last_sheet_formula_chains() -> Result<
 
     for sheet_name in ["Sheet1", "Sheet2"] {
         let sheet = saved
-            .get_sheet_by_name(sheet_name)
+            .get_sheet_by_name(sheet_name).ok()
             .unwrap_or_else(|| panic!("{sheet_name} exists"));
         assert_eq!(sheet.get_cell("A3").expect("A3 exists").get_value(), "30");
         assert_eq!(sheet.get_cell("A4").expect("A4 exists").get_value(), "31");
@@ -173,7 +173,7 @@ async fn recalculate_one_pass_updates_non_last_sheet_formula_chains() -> Result<
 async fn recalculate_populates_eval_errors() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("formualizer_eval_errors.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_formula("UNKNOWNFN(1)");
         sheet.get_cell_mut("A2").set_formula("A3+1");
         sheet.get_cell_mut("A3").set_formula("A2+1");
@@ -216,7 +216,7 @@ async fn recalculate_populates_eval_errors() -> Result<()> {
 async fn recalculate_timeout_can_cancel_long_eval() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("formualizer_timeout.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value_number(1);
         for row in 2..=30_000u32 {
             sheet

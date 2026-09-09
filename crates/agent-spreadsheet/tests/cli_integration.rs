@@ -13,7 +13,7 @@ fn write_fixture(path: &Path) {
     let mut workbook = umya_spreadsheet::new_file();
     {
         let sheet = workbook
-            .get_sheet_by_name_mut("Sheet1")
+            .get_sheet_by_name_mut("Sheet1").ok()
             .expect("default sheet exists");
         sheet.get_cell_mut("A1").set_value("Name");
         sheet.get_cell_mut("B1").set_value("Amount");
@@ -32,7 +32,7 @@ fn write_fixture(path: &Path) {
     workbook.new_sheet("Summary").expect("add summary sheet");
     {
         let summary = workbook
-            .get_sheet_by_name_mut("Summary")
+            .get_sheet_by_name_mut("Summary").ok()
             .expect("summary sheet exists");
         summary.get_cell_mut("A1").set_value("Flag");
         summary.get_cell_mut("B1").set_value("Ready");
@@ -45,7 +45,7 @@ fn write_trace_pagination_fixture(path: &Path) {
     let mut workbook = umya_spreadsheet::new_file();
     {
         let sheet = workbook
-            .get_sheet_by_name_mut("Sheet1")
+            .get_sheet_by_name_mut("Sheet1").ok()
             .expect("default sheet exists");
         sheet.get_cell_mut("A1").set_value_number(1.0);
         for row in 1..=18 {
@@ -62,7 +62,7 @@ fn write_phase1_read_surface_fixture(path: &Path) {
     let mut workbook = umya_spreadsheet::new_file();
     {
         let sheet = workbook
-            .get_sheet_by_name_mut("Sheet1")
+            .get_sheet_by_name_mut("Sheet1").ok()
             .expect("default sheet exists");
         sheet.get_cell_mut("A1").set_value("Name");
         sheet.get_cell_mut("B1").set_value("Amount");
@@ -92,14 +92,14 @@ fn write_phase1_read_surface_fixture(path: &Path) {
     workbook.new_sheet("Summary").expect("add summary sheet");
     {
         let summary = workbook
-            .get_sheet_by_name_mut("Summary")
+            .get_sheet_by_name_mut("Summary").ok()
             .expect("summary sheet exists");
         summary.get_cell_mut("A1").set_value("Flag");
         summary.get_cell_mut("B1").set_value("Ready");
     }
 
     let sheet1 = workbook
-        .get_sheet_by_name_mut("Sheet1")
+        .get_sheet_by_name_mut("Sheet1").ok()
         .expect("sheet1 exists");
     sheet1
         .add_defined_name("Sales_Amount", "Sheet1!$B$2:$B$4")
@@ -108,7 +108,7 @@ fn write_phase1_read_surface_fixture(path: &Path) {
         .add_defined_name("Sales_First", "Sheet1!$A$2")
         .expect("defined name Sales_First");
     let summary = workbook
-        .get_sheet_by_name_mut("Summary")
+        .get_sheet_by_name_mut("Summary").ok()
         .expect("summary exists");
     summary
         .add_defined_name("Meta_Flag", "Summary!$A$1")
@@ -121,7 +121,7 @@ fn write_formula_parse_failure_fixture(path: &Path) {
     let mut workbook = umya_spreadsheet::new_file();
     {
         let sheet = workbook
-            .get_sheet_by_name_mut("Sheet1")
+            .get_sheet_by_name_mut("Sheet1").ok()
             .expect("default sheet exists");
         sheet.get_cell_mut("A1").set_value("Input");
         sheet.get_cell_mut("B1").set_value("Result");
@@ -142,7 +142,7 @@ fn write_workbook_short_id_column_fixture(path: &Path) {
     let mut workbook = umya_spreadsheet::new_file();
     {
         let sheet = workbook
-            .get_sheet_by_name_mut("Sheet1")
+            .get_sheet_by_name_mut("Sheet1").ok()
             .expect("default sheet exists");
         sheet.get_cell_mut("A1").set_value("workbook_short_id");
         sheet.get_cell_mut("B1").set_value("Name");
@@ -1172,7 +1172,7 @@ fn cli_verify_accepts_quoted_sheet_targets() {
     let mut workbook = umya_spreadsheet::new_file();
     workbook.new_sheet("Q1 Actuals").expect("sheet");
     workbook
-        .get_sheet_by_name_mut("Q1 Actuals")
+        .get_sheet_by_name_mut("Q1 Actuals").ok()
         .expect("q1 actuals exists")
         .get_cell_mut("B1")
         .set_value("Ready");
@@ -1244,7 +1244,7 @@ fn cli_verify_targets_only_preserves_explicit_empty_error_arrays() {
 
     let mut baseline = umya_spreadsheet::new_file();
     baseline
-        .get_sheet_by_name_mut("Sheet1")
+        .get_sheet_by_name_mut("Sheet1").ok()
         .expect("sheet1 exists")
         .get_cell_mut("B1")
         .set_value("Ready");
@@ -1252,7 +1252,7 @@ fn cli_verify_targets_only_preserves_explicit_empty_error_arrays() {
 
     let mut current = baseline.clone();
     current
-        .get_sheet_by_name_mut("Sheet1")
+        .get_sheet_by_name_mut("Sheet1").ok()
         .expect("sheet1 exists")
         .get_cell_mut("B1")
         .set_value("Done");
@@ -1318,7 +1318,7 @@ fn cli_verify_reports_target_deltas_error_provenance_and_named_range_deltas() {
     let mut baseline = umya_spreadsheet::new_file();
     {
         let sheet = baseline
-            .get_sheet_by_name_mut("Sheet1")
+            .get_sheet_by_name_mut("Sheet1").ok()
             .expect("sheet1 exists");
         sheet.get_cell_mut("A1").set_value("Name");
         sheet.get_cell_mut("B1").set_value("Amount");
@@ -1340,7 +1340,7 @@ fn cli_verify_reports_target_deltas_error_provenance_and_named_range_deltas() {
     baseline.new_sheet("Summary").expect("summary");
     {
         let summary = baseline
-            .get_sheet_by_name_mut("Summary")
+            .get_sheet_by_name_mut("Summary").ok()
             .expect("summary exists");
         summary.get_cell_mut("A1").set_value("Flag");
         summary.get_cell_mut("B1").set_value("Ready");
@@ -1350,13 +1350,13 @@ fn cli_verify_reports_target_deltas_error_provenance_and_named_range_deltas() {
     let mut current = baseline.clone();
     {
         let summary = current
-            .get_sheet_by_name_mut("Summary")
+            .get_sheet_by_name_mut("Summary").ok()
             .expect("summary exists");
         summary.get_cell_mut("B1").set_value("Done");
     }
     {
         let sheet = current
-            .get_sheet_by_name_mut("Sheet1")
+            .get_sheet_by_name_mut("Sheet1").ok()
             .expect("sheet1 exists");
         sheet.get_cell_mut("B2").set_value_number(11.0);
         let c2 = sheet.get_cell_mut("C2");
@@ -1446,7 +1446,7 @@ fn cli_verify_reports_target_deltas_error_provenance_and_named_range_deltas() {
     assert_eq!(named[0]["name"], "AmountRef");
     assert_eq!(named[0]["change"], "added");
     assert!(named[0].get("before_refers_to").is_none() || named[0]["before_refers_to"].is_null());
-    assert_eq!(named[0]["after_refers_to"], "'Sheet1'!$B$3");
+    assert_eq!(named[0]["after_refers_to"], "Sheet1!$B$3");
 }
 
 #[test]
@@ -1636,7 +1636,7 @@ fn cli_phase1_scan_volatiles_skips_unparsable_formulas_instead_of_failing() {
     let mut workbook = umya_spreadsheet::new_file();
     {
         let sheet = workbook
-            .get_sheet_by_name_mut("Sheet1")
+            .get_sheet_by_name_mut("Sheet1").ok()
             .expect("default sheet exists");
         sheet.get_cell_mut("A1").set_value("Input");
         sheet.get_cell_mut("B1").set_value("Result");
@@ -1687,7 +1687,7 @@ fn cli_formula_map_skips_unparsable_formulas_instead_of_failing() {
     let mut workbook = umya_spreadsheet::new_file();
     {
         let sheet = workbook
-            .get_sheet_by_name_mut("Sheet1")
+            .get_sheet_by_name_mut("Sheet1").ok()
             .expect("default sheet exists");
         sheet.get_cell_mut("A1").set_value("Input");
         sheet.get_cell_mut("B1").set_value("Result");
@@ -3782,7 +3782,7 @@ fn cli_range_values_dense_encoding_rolls_up_repeated_values() {
 
     let mut workbook = umya_spreadsheet::new_file();
     let sheet = workbook
-        .get_sheet_by_name_mut("Sheet1")
+        .get_sheet_by_name_mut("Sheet1").ok()
         .expect("default sheet exists");
     for row in 1..=3 {
         for col in ["A", "B", "C", "D", "E", "F"] {
@@ -4189,7 +4189,7 @@ fn cli_transform_batch_in_place_applies_atomically() {
     assert_json_path_eq(&payload, "target_path", file);
 
     let book = umya_spreadsheet::reader::xlsx::read(&workbook_path).expect("read workbook");
-    let sheet = book.get_sheet_by_name("Sheet1").expect("sheet exists");
+    let sheet = book.get_sheet_by_name("Sheet1").ok().expect("sheet exists");
     assert_eq!(sheet.get_cell("B2").expect("B2 exists").get_value(), "44");
 }
 
@@ -4227,7 +4227,7 @@ fn cli_transform_batch_output_and_force_modes_apply_with_overwrite_checks() {
 
     let source_book = umya_spreadsheet::reader::xlsx::read(&source_path).expect("read source");
     let source_sheet = source_book
-        .get_sheet_by_name("Sheet1")
+        .get_sheet_by_name("Sheet1").ok()
         .expect("sheet exists");
     assert_eq!(
         source_sheet
@@ -4239,7 +4239,7 @@ fn cli_transform_batch_output_and_force_modes_apply_with_overwrite_checks() {
 
     let output_book = umya_spreadsheet::reader::xlsx::read(&output_path).expect("read output");
     let output_sheet = output_book
-        .get_sheet_by_name("Sheet1")
+        .get_sheet_by_name("Sheet1").ok()
         .expect("sheet exists");
     assert_eq!(
         output_sheet
@@ -4276,7 +4276,7 @@ fn cli_transform_batch_output_and_force_modes_apply_with_overwrite_checks() {
 
     let overwritten = umya_spreadsheet::reader::xlsx::read(&output_path).expect("read output");
     let overwritten_sheet = overwritten
-        .get_sheet_by_name("Sheet1")
+        .get_sheet_by_name("Sheet1").ok()
         .expect("sheet exists");
     assert_eq!(
         overwritten_sheet
@@ -4723,7 +4723,7 @@ fn phase_a_apply_formula_pattern_positive_dry_run_and_output_target_only() {
     let source_book =
         umya_spreadsheet::reader::xlsx::read(&source_path).expect("read source workbook");
     let source_sheet = source_book
-        .get_sheet_by_name("Sheet1")
+        .get_sheet_by_name("Sheet1").ok()
         .expect("source sheet");
     assert_eq!(
         source_sheet
@@ -4736,7 +4736,7 @@ fn phase_a_apply_formula_pattern_positive_dry_run_and_output_target_only() {
     let output_book =
         umya_spreadsheet::reader::xlsx::read(&output_path).expect("read output workbook");
     let output_sheet = output_book
-        .get_sheet_by_name("Sheet1")
+        .get_sheet_by_name("Sheet1").ok()
         .expect("output sheet");
     assert_eq!(
         output_sheet
@@ -4773,7 +4773,7 @@ fn phase_a_apply_formula_pattern_clears_formula_cache_for_touched_cells() {
     let mut workbook = umya_spreadsheet::new_file();
     {
         let sheet = workbook
-            .get_sheet_by_name_mut("Sheet1")
+            .get_sheet_by_name_mut("Sheet1").ok()
             .expect("default sheet exists");
         sheet.get_cell_mut("A1").set_value("Name");
         sheet.get_cell_mut("B1").set_value("Amount");
@@ -4804,7 +4804,7 @@ fn phase_a_apply_formula_pattern_clears_formula_cache_for_touched_cells() {
     assert!(output.status.success(), "stderr: {:?}", output.stderr);
 
     let book = umya_spreadsheet::reader::xlsx::read(&workbook_path).expect("read workbook");
-    let sheet = book.get_sheet_by_name("Sheet1").expect("sheet exists");
+    let sheet = book.get_sheet_by_name("Sheet1").ok().expect("sheet exists");
     let c2 = sheet.get_cell("C2").expect("C2 exists");
     assert_eq!(c2.get_formula().replace(' ', ""), "B2*3");
     assert_eq!(c2.get_value(), "", "expected formula cache to be cleared");
@@ -4875,7 +4875,7 @@ fn phase_a_apply_formula_pattern_output_force_overwrite_semantics() {
 
     let output_book = umya_spreadsheet::reader::xlsx::read(&output_path).expect("read output");
     let output_sheet = output_book
-        .get_sheet_by_name("Sheet1")
+        .get_sheet_by_name("Sheet1").ok()
         .expect("sheet exists");
     assert_eq!(
         output_sheet
@@ -5175,8 +5175,8 @@ fn phase_b_structure_batch_positive_in_place_renames_sheet() {
     assert!(payload["changed"].as_bool().unwrap_or(false));
 
     let book = umya_spreadsheet::reader::xlsx::read(&workbook_path).expect("read workbook");
-    assert!(book.get_sheet_by_name("Dashboard").is_some());
-    assert!(book.get_sheet_by_name("Summary").is_none());
+    assert!(book.get_sheet_by_name("Dashboard").ok().is_some());
+    assert!(book.get_sheet_by_name("Summary").ok().is_none());
 }
 
 #[test]
@@ -5228,12 +5228,12 @@ fn phase_b_structure_batch_positive_dry_run_and_output_target_only() {
     assert!(payload["changed"].as_bool().unwrap_or(false));
 
     let source_book = umya_spreadsheet::reader::xlsx::read(&source_path).expect("read source");
-    assert!(source_book.get_sheet_by_name("Summary").is_some());
-    assert!(source_book.get_sheet_by_name("Dashboard").is_none());
+    assert!(source_book.get_sheet_by_name("Summary").ok().is_some());
+    assert!(source_book.get_sheet_by_name("Dashboard").ok().is_none());
 
     let output_book = umya_spreadsheet::reader::xlsx::read(&output_path).expect("read output");
-    assert!(output_book.get_sheet_by_name("Dashboard").is_some());
-    assert!(output_book.get_sheet_by_name("Summary").is_none());
+    assert!(output_book.get_sheet_by_name("Dashboard").ok().is_some());
+    assert!(output_book.get_sheet_by_name("Summary").ok().is_none());
 }
 
 #[test]
@@ -5292,8 +5292,8 @@ fn phase_b_structure_batch_output_force_overwrite_semantics() {
     assert!(forced.status.success(), "stderr: {:?}", forced.stderr);
 
     let output_book = umya_spreadsheet::reader::xlsx::read(&output_path).expect("read output");
-    assert!(output_book.get_sheet_by_name("Board").is_some());
-    assert!(output_book.get_sheet_by_name("Summary").is_none());
+    assert!(output_book.get_sheet_by_name("Board").ok().is_some());
+    assert!(output_book.get_sheet_by_name("Summary").ok().is_none());
 }
 
 #[test]
@@ -5346,9 +5346,9 @@ fn phase_b_column_size_batch_positive_output_mutates_target_only() {
     let output_book =
         umya_spreadsheet::reader::xlsx::read(&output_path).expect("read output workbook");
     let output_sheet = output_book
-        .get_sheet_by_name("Sheet1")
+        .get_sheet_by_name("Sheet1").ok()
         .expect("sheet exists");
-    let width = *output_sheet
+    let width = output_sheet
         .get_column_dimension("A")
         .expect("A column")
         .get_width();
@@ -5384,9 +5384,9 @@ fn phase_b_column_size_batch_accepts_per_op_sheet_name_shape() {
     let output_book =
         umya_spreadsheet::reader::xlsx::read(&output_path).expect("read output workbook");
     let output_sheet = output_book
-        .get_sheet_by_name("Sheet1")
+        .get_sheet_by_name("Sheet1").ok()
         .expect("sheet exists");
-    let width = *output_sheet
+    let width = output_sheet
         .get_column_dimension("A")
         .expect("A column")
         .get_width();
@@ -5504,9 +5504,9 @@ fn phase_b_column_size_batch_output_force_overwrite_semantics() {
     let without_force_book =
         umya_spreadsheet::reader::xlsx::read(&output_path).expect("read output without force");
     let without_force_sheet = without_force_book
-        .get_sheet_by_name("Sheet1")
+        .get_sheet_by_name("Sheet1").ok()
         .expect("sheet exists");
-    let without_force_width = *without_force_sheet
+    let without_force_width = without_force_sheet
         .get_column_dimension("A")
         .expect("A column")
         .get_width();
@@ -5525,9 +5525,9 @@ fn phase_b_column_size_batch_output_force_overwrite_semantics() {
 
     let forced_book = umya_spreadsheet::reader::xlsx::read(&output_path).expect("read output");
     let forced_sheet = forced_book
-        .get_sheet_by_name("Sheet1")
+        .get_sheet_by_name("Sheet1").ok()
         .expect("sheet exists");
-    let forced_width = *forced_sheet
+    let forced_width = forced_sheet
         .get_column_dimension("A")
         .expect("A column")
         .get_width();
@@ -5572,12 +5572,12 @@ fn phase_b_sheet_layout_batch_positive_dry_run_and_in_place() {
     assert!(in_place.status.success(), "stderr: {:?}", in_place.stderr);
 
     let book = umya_spreadsheet::reader::xlsx::read(&workbook_path).expect("read workbook");
-    let sheet = book.get_sheet_by_name("Sheet1").expect("sheet exists");
+    let sheet = book.get_sheet_by_name("Sheet1").ok().expect("sheet exists");
     let views = sheet.get_sheets_views().get_sheet_view_list();
     let view = views.first().expect("sheet view");
     let pane = view.get_pane().expect("pane");
-    assert_eq!(*pane.get_horizontal_split(), 1.0);
-    assert_eq!(*pane.get_vertical_split(), 1.0);
+    assert_eq!(pane.get_horizontal_split(), 1.0);
+    assert_eq!(pane.get_vertical_split(), 1.0);
     assert_eq!(pane.get_top_left_cell().to_string(), "B2");
     assert_eq!(
         view.get_top_left_cell(),
@@ -5602,7 +5602,7 @@ fn phase_b_sheet_layout_batch_clears_preexisting_sheet_view_top_left_cell() {
 
     {
         let mut book = umya_spreadsheet::reader::xlsx::read(&workbook_path).expect("read workbook");
-        let sheet = book.get_sheet_by_name_mut("Sheet1").expect("sheet");
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().expect("sheet");
         let view = sheet
             .get_sheet_views_mut()
             .get_sheet_view_list_mut()
@@ -5630,7 +5630,7 @@ fn phase_b_sheet_layout_batch_clears_preexisting_sheet_view_top_left_cell() {
     assert!(in_place.status.success(), "stderr: {:?}", in_place.stderr);
 
     let book = umya_spreadsheet::reader::xlsx::read(&workbook_path).expect("read workbook");
-    let sheet = book.get_sheet_by_name("Sheet1").expect("sheet exists");
+    let sheet = book.get_sheet_by_name("Sheet1").ok().expect("sheet exists");
     let view = sheet
         .get_sheets_views()
         .get_sheet_view_list()
@@ -5680,7 +5680,7 @@ fn phase_b_sheet_layout_batch_positive_output_mutates_target_only() {
 
     let output_book = umya_spreadsheet::reader::xlsx::read(&output_path).expect("read output");
     let output_sheet = output_book
-        .get_sheet_by_name("Sheet1")
+        .get_sheet_by_name("Sheet1").ok()
         .expect("sheet exists");
     let view = output_sheet
         .get_sheets_views()
@@ -5741,7 +5741,7 @@ fn phase_b_sheet_layout_batch_output_force_overwrite_semantics() {
     let without_force_book =
         umya_spreadsheet::reader::xlsx::read(&output_path).expect("read output without force");
     let without_force_sheet = without_force_book
-        .get_sheet_by_name("Sheet1")
+        .get_sheet_by_name("Sheet1").ok()
         .expect("sheet exists");
     let without_force_pane = without_force_sheet
         .get_sheets_views()
@@ -5764,7 +5764,7 @@ fn phase_b_sheet_layout_batch_output_force_overwrite_semantics() {
 
     let forced_book = umya_spreadsheet::reader::xlsx::read(&output_path).expect("read output");
     let forced_sheet = forced_book
-        .get_sheet_by_name("Sheet1")
+        .get_sheet_by_name("Sheet1").ok()
         .expect("sheet exists");
     let forced_pane = forced_sheet
         .get_sheets_views()
@@ -6120,7 +6120,7 @@ fn phase_c_rules_batch_positive_in_place_sets_validation() {
     assert!(payload["changed"].as_bool().unwrap_or(false));
 
     let book = umya_spreadsheet::reader::xlsx::read(&workbook_path).expect("read workbook");
-    let sheet = book.get_sheet_by_name("Sheet1").expect("sheet exists");
+    let sheet = book.get_sheet_by_name("Sheet1").ok().expect("sheet exists");
     let dvs = sheet.get_data_validations().expect("data validations");
     let list = dvs.get_data_validation_list();
     assert_eq!(list.len(), 1);
@@ -6181,7 +6181,7 @@ fn phase_c_rules_batch_positive_dry_run_and_output_target_only() {
 
     let output_book = umya_spreadsheet::reader::xlsx::read(&output_path).expect("read output");
     let output_sheet = output_book
-        .get_sheet_by_name("Sheet1")
+        .get_sheet_by_name("Sheet1").ok()
         .expect("sheet exists");
     let dvs = output_sheet
         .get_data_validations()
@@ -6248,7 +6248,7 @@ fn phase_c_rules_batch_output_force_overwrite_semantics() {
 
     let output_book = umya_spreadsheet::reader::xlsx::read(&output_path).expect("read output");
     let output_sheet = output_book
-        .get_sheet_by_name("Sheet1")
+        .get_sheet_by_name("Sheet1").ok()
         .expect("sheet exists");
     let dvs = output_sheet
         .get_data_validations()
@@ -6442,7 +6442,7 @@ fn cli_copy_edit_diff_are_stateless_and_persisted() {
 
     let book = umya_spreadsheet::reader::xlsx::read(&modified).expect("read modified");
     let sheet = book
-        .get_sheet_by_name("Sheet1")
+        .get_sheet_by_name("Sheet1").ok()
         .expect("modified sheet exists");
     assert_eq!(sheet.get_cell("B2").expect("B2 exists").get_value(), "11");
     assert_eq!(
@@ -6767,7 +6767,7 @@ fn cli_append_region_dry_run_reports_footer_aware_plan() {
 
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().expect("sheet1");
         sheet.get_cell_mut("A1").set_value("Name");
         sheet.get_cell_mut("B1").set_value("Amount");
         sheet.get_cell_mut("A2").set_value("Alice");
@@ -6847,7 +6847,7 @@ fn cli_append_region_output_inserts_before_footer_and_expands_sum() {
 
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().expect("sheet1");
         sheet.get_cell_mut("A1").set_value("Name");
         sheet.get_cell_mut("B1").set_value("Amount");
         sheet.get_cell_mut("A2").set_value("Alice");
@@ -6892,7 +6892,7 @@ fn cli_append_region_output_inserts_before_footer_and_expands_sum() {
     assert_eq!(payload["changed"], true);
 
     let book = umya_spreadsheet::reader::xlsx::read(&output_path).expect("read output workbook");
-    let sheet = book.get_sheet_by_name("Sheet1").expect("sheet1 exists");
+    let sheet = book.get_sheet_by_name("Sheet1").ok().expect("sheet1 exists");
     assert_eq!(sheet.get_cell("A4").expect("A4").get_value(), "Cara");
     assert_eq!(sheet.get_cell("B4").expect("B4").get_value(), "30");
     assert_eq!(sheet.get_cell("A5").expect("A5").get_value(), "Total");
@@ -6910,7 +6910,7 @@ fn cli_append_region_detects_formula_footer_even_with_blank_label_cell() {
 
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().expect("sheet1");
         sheet.get_cell_mut("A1").set_value("Name");
         sheet.get_cell_mut("B1").set_value("Amount");
         sheet.get_cell_mut("A2").set_value("Alice");
@@ -6965,7 +6965,7 @@ fn cli_append_region_from_csv_skips_header_and_handles_quotes_blanks_and_crlf() 
 
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().expect("sheet1");
         sheet.get_cell_mut("A1").set_value("Name");
         sheet.get_cell_mut("B1").set_value("Amount");
         sheet.get_cell_mut("C1").set_value("Notes");
@@ -7016,7 +7016,7 @@ fn cli_append_region_from_csv_skips_header_and_handles_quotes_blanks_and_crlf() 
     assert_eq!(payload["target_range"], "A4:C5");
 
     let book = umya_spreadsheet::reader::xlsx::read(&output_path).expect("read output workbook");
-    let sheet = book.get_sheet_by_name("Sheet1").expect("sheet1 exists");
+    let sheet = book.get_sheet_by_name("Sheet1").ok().expect("sheet1 exists");
     assert_eq!(sheet.get_cell("A4").expect("A4").get_value(), "Cara, Jr");
     assert_eq!(sheet.get_cell("B4").expect("B4").get_value(), "30");
     assert!(
@@ -7093,7 +7093,7 @@ fn cli_append_region_supports_table_name_targeting() {
 
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().expect("sheet1");
         sheet.get_cell_mut("A1").set_value("Name");
         sheet.get_cell_mut("B1").set_value("Amount");
         sheet.get_cell_mut("A2").set_value("Alice");
@@ -7128,7 +7128,7 @@ fn cli_append_region_supports_table_name_targeting() {
     assert_eq!(payload["target_range"], "A4:B4");
 
     let book = umya_spreadsheet::reader::xlsx::read(&output_path).expect("read output workbook");
-    let sheet = book.get_sheet_by_name("Sheet1").expect("sheet1 exists");
+    let sheet = book.get_sheet_by_name("Sheet1").ok().expect("sheet1 exists");
     assert_eq!(sheet.get_cell("A4").expect("A4").get_value(), "Cara");
     assert_eq!(sheet.get_cell("B4").expect("B4").get_value(), "30");
     let table = sheet
@@ -7184,7 +7184,7 @@ fn cli_append_region_append_at_end_policy_bypasses_detected_footer() {
 
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().expect("sheet1");
         sheet.get_cell_mut("A1").set_value("Name");
         sheet.get_cell_mut("B1").set_value("Amount");
         sheet.get_cell_mut("A2").set_value("Alice");
@@ -7252,7 +7252,7 @@ fn cli_append_region_before_footer_policy_requires_detected_footer() {
 
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().expect("sheet1");
         sheet.get_cell_mut("A1").set_value("Name");
         sheet.get_cell_mut("B1").set_value("Amount");
         sheet.get_cell_mut("A2").set_value("Alice");
@@ -7303,7 +7303,7 @@ fn cli_clone_template_row_dry_run_reports_targets_and_confidence() {
 
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().expect("sheet1");
         sheet.get_cell_mut("A1").set_value("Item");
         sheet.get_cell_mut("B1").set_value("Input");
         sheet.get_cell_mut("C1").set_value("Calc");
@@ -7351,7 +7351,7 @@ fn cli_clone_template_row_strict_merge_policy_fails_on_crossing_merge() {
 
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().expect("sheet1");
         sheet.get_cell_mut("A1").set_value("Header");
         sheet.get_cell_mut("A2").set_value("Alpha");
         sheet.get_cell_mut("B2").set_value_number(10.0);
@@ -7391,7 +7391,7 @@ fn cli_clone_template_row_output_preserves_horizontal_merge_and_validation() {
 
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().expect("sheet1");
         sheet.get_cell_mut("A1").set_value("Name");
         sheet.get_cell_mut("B1").set_value("Input");
         sheet.get_cell_mut("C1").set_value("Calc");
@@ -7434,7 +7434,7 @@ fn cli_clone_template_row_output_preserves_horizontal_merge_and_validation() {
     assert_eq!(payload["inserted_row_range"], "3:4");
 
     let book = umya_spreadsheet::reader::xlsx::read(&output_path).expect("read output workbook");
-    let sheet = book.get_sheet_by_name("Sheet1").expect("sheet1 exists");
+    let sheet = book.get_sheet_by_name("Sheet1").ok().expect("sheet1 exists");
     assert_eq!(sheet.get_cell("A3").expect("A3").get_value(), "Alpha");
     assert_eq!(sheet.get_cell("B4").expect("B4").get_value(), "10");
     let merge_ranges: Vec<String> = sheet
@@ -7461,7 +7461,7 @@ fn cli_clone_row_band_dry_run_reports_blocks_and_targets() {
 
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().expect("sheet1");
         sheet.get_cell_mut("A1").set_value("Item");
         sheet.get_cell_mut("B1").set_value("Input");
         sheet.get_cell_mut("C1").set_value("Calc");
@@ -7510,7 +7510,7 @@ fn cli_clone_row_band_strict_merge_policy_fails_on_crossing_merge() {
 
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().expect("sheet1");
         sheet.get_cell_mut("A1").set_value("Header");
         sheet.get_cell_mut("A2").set_value("Alpha");
         sheet.get_cell_mut("A3").set_value("Beta");
@@ -7550,7 +7550,7 @@ fn cli_clone_row_band_output_preserves_merges_validations_and_row_heights() {
 
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().expect("sheet1");
         sheet.get_cell_mut("A1").set_value("Name");
         sheet.get_cell_mut("B1").set_value("Input");
         sheet.get_cell_mut("C1").set_value("Calc");
@@ -7605,7 +7605,7 @@ fn cli_clone_row_band_output_preserves_merges_validations_and_row_heights() {
     assert_eq!(payload["inserted_blocks"][1]["row_range"], "6:7");
 
     let book = umya_spreadsheet::reader::xlsx::read(&output_path).expect("read output workbook");
-    let sheet = book.get_sheet_by_name("Sheet1").expect("sheet1 exists");
+    let sheet = book.get_sheet_by_name("Sheet1").ok().expect("sheet1 exists");
     assert_eq!(sheet.get_cell("A4").expect("A4").get_value(), "Alpha");
     assert_eq!(sheet.get_cell("A5").expect("A5").get_value(), "Beta");
     assert_eq!(
@@ -7632,11 +7632,11 @@ fn cli_clone_row_band_output_preserves_merges_validations_and_row_heights() {
     assert!(merge_ranges.contains(&"A4:A5".to_string()));
     assert!(merge_ranges.contains(&"A6:A7".to_string()));
     assert_eq!(
-        sheet.get_row_dimension(&4).map(|row| *row.get_height()),
+        sheet.get_row_dimension(&4).map(|row| row.get_height()),
         Some(28.0)
     );
     assert_eq!(
-        sheet.get_row_dimension(&5).map(|row| *row.get_height()),
+        sheet.get_row_dimension(&5).map(|row| row.get_height()),
         Some(32.0)
     );
     let validations = sheet.get_data_validations().expect("validations");
@@ -7665,7 +7665,7 @@ fn cli_diff_groups_multi_digit_row_runs_by_coordinates_not_lexicographic_order()
 
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().expect("sheet1");
         for row in 2..=12u32 {
             sheet.get_cell_mut((2, row)).set_value_number(row as i32);
         }
@@ -7799,7 +7799,7 @@ fn cli_edit_output_writes_target_only() {
 
     let output_book = umya_spreadsheet::reader::xlsx::read(&output_path).expect("read output");
     let output_sheet = output_book
-        .get_sheet_by_name("Sheet1")
+        .get_sheet_by_name("Sheet1").ok()
         .expect("output sheet exists");
     assert_eq!(output_sheet.get_cell("B2").expect("B2").get_value(), "17");
     assert_eq!(
@@ -8192,13 +8192,13 @@ fn cli_structure_batch_rename_with_malformed_formula_warn_mode() {
         let mut workbook = umya_spreadsheet::new_file();
         {
             let sheet = workbook
-                .get_sheet_by_name_mut("Sheet1")
+                .get_sheet_by_name_mut("Sheet1").ok()
                 .expect("default sheet");
             sheet.get_cell_mut("A1").set_value("Hello");
         }
         workbook.new_sheet("Sheet2").expect("add Sheet2");
         {
-            let sheet = workbook.get_sheet_by_name_mut("Sheet2").expect("Sheet2");
+            let sheet = workbook.get_sheet_by_name_mut("Sheet2").ok().expect("Sheet2");
             sheet.get_cell_mut("A1").set_value_number(10.0);
             sheet.get_cell_mut("B1").set_formula("SUM(\"Sheet1!A1:A10)");
         }
@@ -8246,13 +8246,13 @@ fn cli_structure_batch_rename_with_malformed_formula_fail_mode() {
         let mut workbook = umya_spreadsheet::new_file();
         {
             let sheet = workbook
-                .get_sheet_by_name_mut("Sheet1")
+                .get_sheet_by_name_mut("Sheet1").ok()
                 .expect("default sheet");
             sheet.get_cell_mut("A1").set_value("Hello");
         }
         workbook.new_sheet("Sheet2").expect("add Sheet2");
         {
-            let sheet = workbook.get_sheet_by_name_mut("Sheet2").expect("Sheet2");
+            let sheet = workbook.get_sheet_by_name_mut("Sheet2").ok().expect("Sheet2");
             sheet.get_cell_mut("A1").set_value_number(10.0);
             sheet.get_cell_mut("B1").set_formula("SUM(\"Sheet1!A1:A10)");
         }
@@ -8297,14 +8297,14 @@ fn cli_structure_batch_insert_rows_with_malformed_formula_warn_mode() {
         let mut workbook = umya_spreadsheet::new_file();
         {
             let sheet = workbook
-                .get_sheet_by_name_mut("Sheet1")
+                .get_sheet_by_name_mut("Sheet1").ok()
                 .expect("default sheet");
             sheet.get_cell_mut("A1").set_value_number(1.0);
             sheet.get_cell_mut("A2").set_value_number(2.0);
         }
         workbook.new_sheet("Sheet2").expect("add Sheet2");
         {
-            let sheet = workbook.get_sheet_by_name_mut("Sheet2").expect("Sheet2");
+            let sheet = workbook.get_sheet_by_name_mut("Sheet2").ok().expect("Sheet2");
             sheet.get_cell_mut("A1").set_formula("SUM(\"Sheet1!A1:A10)");
             sheet.get_cell_mut("B1").set_formula("Sheet1!A1+1");
         }
@@ -8351,13 +8351,13 @@ fn cli_structure_batch_rename_defined_name_malformed_formula_warn_diagnostics() 
         let mut workbook = umya_spreadsheet::new_file();
         {
             let sheet = workbook
-                .get_sheet_by_name_mut("Sheet1")
+                .get_sheet_by_name_mut("Sheet1").ok()
                 .expect("default sheet");
             sheet.get_cell_mut("A1").set_value_number(42.0);
         }
         let workbook_scoped_bad_range = {
             let sheet = workbook
-                .get_sheet_by_name_mut("Sheet1")
+                .get_sheet_by_name_mut("Sheet1").ok()
                 .expect("default sheet");
             sheet
                 .add_defined_name("BadRange", "=SUM(\"abc)")
@@ -8452,7 +8452,7 @@ fn cli_structure_batch_copy_range_with_malformed_formula_warn_mode_diagnostics()
         let mut workbook = umya_spreadsheet::new_file();
         {
             let sheet = workbook
-                .get_sheet_by_name_mut("Sheet1")
+                .get_sheet_by_name_mut("Sheet1").ok()
                 .expect("default sheet");
             sheet.get_cell_mut("A1").set_value_number(1.0);
             sheet.get_cell_mut("A2").set_value_number(2.0);
@@ -8503,7 +8503,7 @@ fn cli_structure_batch_copy_range_with_malformed_formula_fail_mode_aborts() {
         let mut workbook = umya_spreadsheet::new_file();
         {
             let sheet = workbook
-                .get_sheet_by_name_mut("Sheet1")
+                .get_sheet_by_name_mut("Sheet1").ok()
                 .expect("default sheet");
             sheet.get_cell_mut("A1").set_value_number(1.0);
             sheet.get_cell_mut("B1").set_formula("SUM(A1:A2");
@@ -8758,7 +8758,7 @@ fn transform_batch_fill_range_formula_clears_cache() {
     // Create workbook with a formula cell that has a stale cached result
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").expect("sheet");
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().expect("sheet");
         sheet.get_cell_mut("A1").set_value_number(10.0);
         sheet.get_cell_mut("A2").set_value_number(20.0);
         let b1 = sheet.get_cell_mut("B1");
@@ -8785,7 +8785,7 @@ fn transform_batch_fill_range_formula_clears_cache() {
 
     // Read back and verify cache is cleared
     let book = umya_spreadsheet::reader::xlsx::read(&workbook_path).expect("read");
-    let sheet = book.get_sheet_by_name("Sheet1").expect("sheet");
+    let sheet = book.get_sheet_by_name("Sheet1").ok().expect("sheet");
     let b1 = sheet.get_cell("B1").expect("B1");
     assert_eq!(b1.get_formula().replace(' ', ""), "A1+100");
     assert_eq!(
@@ -8811,7 +8811,7 @@ fn transform_batch_replace_in_range_formula_clears_cache() {
 
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").expect("sheet");
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().expect("sheet");
         let a1 = sheet.get_cell_mut("A1");
         a1.set_formula("SUM(B1:B10)");
         a1.get_cell_value_mut().set_formula_result_default("500"); // stale cache
@@ -8834,7 +8834,7 @@ fn transform_batch_replace_in_range_formula_clears_cache() {
     );
 
     let book = umya_spreadsheet::reader::xlsx::read(&workbook_path).expect("read");
-    let sheet = book.get_sheet_by_name("Sheet1").expect("sheet");
+    let sheet = book.get_sheet_by_name("Sheet1").ok().expect("sheet");
     let a1 = sheet.get_cell("A1").expect("A1");
     assert!(
         a1.get_formula().contains("AVERAGE"),
@@ -8854,7 +8854,7 @@ fn edit_batch_formula_clears_cache() {
 
     let mut workbook = umya_spreadsheet::new_file();
     {
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").expect("sheet");
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().expect("sheet");
         let a1 = sheet.get_cell_mut("A1");
         a1.set_formula("B1+C1");
         a1.get_cell_value_mut()
@@ -8867,7 +8867,7 @@ fn edit_batch_formula_clears_cache() {
     assert!(output.status.success(), "stderr: {:?}", output.stderr);
 
     let book = umya_spreadsheet::reader::xlsx::read(&workbook_path).expect("read");
-    let sheet = book.get_sheet_by_name("Sheet1").expect("sheet");
+    let sheet = book.get_sheet_by_name("Sheet1").ok().expect("sheet");
     let a1 = sheet.get_cell("A1").expect("A1");
     assert_eq!(a1.get_formula().replace(' ', ""), "SUM(B1:B5)");
     assert_eq!(
@@ -8955,7 +8955,7 @@ fn write_complex_grid_fixture(path: &Path) {
     let mut workbook = umya_spreadsheet::new_file();
     {
         let sheet = workbook
-            .get_sheet_by_name_mut("Sheet1")
+            .get_sheet_by_name_mut("Sheet1").ok()
             .expect("default sheet exists");
 
         sheet.get_cell_mut("A1").set_value("Quarterly Report");
@@ -9594,7 +9594,7 @@ fn cli_update_name_scope_only_keeps_existing_refers_to() {
     assert!(output.status.success(), "stderr: {:?}", output.stderr);
     let payload = parse_stdout_json(&output);
     assert_eq!(payload["name"], "ScopeOnlyName");
-    assert_eq!(payload["refers_to"], "'Sheet1'!$A$1:$B$2");
+    assert_eq!(payload["refers_to"], "Sheet1!$A$1:$B$2");
     assert_eq!(payload["scope_kind"], "sheet");
     assert_eq!(payload["scope_sheet_name"], "Sheet1");
     assert!(payload["previous_refers_to"].is_string());
@@ -9961,7 +9961,7 @@ fn cli_recalculate_parse_output_and_force_flags() {
 
 fn write_sum_fixture(path: &Path) {
     let mut workbook = umya_spreadsheet::new_file();
-    let sheet = workbook.get_sheet_by_name_mut("Sheet1").unwrap();
+    let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().unwrap();
     sheet.get_cell_mut("A1").set_value_number(10.0);
     sheet.get_cell_mut("A2").set_value_number(20.0);
     sheet.get_cell_mut("A3").set_value_number(30.0);
@@ -9997,7 +9997,7 @@ fn cli_structure_batch_insert_rows_expand_adjacent_sums() {
     );
 
     let book = umya_spreadsheet::reader::xlsx::read(&wb).expect("read workbook");
-    let sheet = book.get_sheet_by_name("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
     // Subtotal shifted to row 5; formula expanded to include new row 4.
     let formula = sheet.get_cell("A5").unwrap().get_formula().to_string();
     assert_eq!(
@@ -10016,7 +10016,7 @@ fn cli_structure_batch_clone_row_in_place() {
     // Build fixture: header, template row, subtotal
     {
         let mut workbook = umya_spreadsheet::new_file();
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("Header");
         sheet.get_cell_mut("B1").set_value_number(100.0);
         sheet.get_cell_mut("A2").set_value("Total");
@@ -10049,7 +10049,7 @@ fn cli_structure_batch_clone_row_in_place() {
     assert!(payload["changed"].as_bool().unwrap_or(false));
 
     let book = umya_spreadsheet::reader::xlsx::read(&wb).expect("read workbook");
-    let sheet = book.get_sheet_by_name("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
 
     // Cloned rows at 2 and 3 should copy template values.
     let a2 = sheet.get_cell("A2").unwrap().get_value().to_string();
@@ -10075,7 +10075,7 @@ fn cli_end_to_end_budget_cloning_and_appending() {
     // 1. Build initial budget template
     {
         let mut workbook = umya_spreadsheet::new_file();
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("Dept: Marketing");
 
         sheet.get_cell_mut("A2").set_value("Item");
@@ -10187,7 +10187,7 @@ fn cli_end_to_end_budget_cloning_and_appending() {
     );
 
     let final_book = umya_spreadsheet::reader::xlsx::read(&wb).unwrap();
-    let final_sheet = final_book.get_sheet_by_name("Sheet1").unwrap();
+    let final_sheet = final_book.get_sheet_by_name("Sheet1").ok().unwrap();
 
     for i in 1..=14 {
         let a = final_sheet

@@ -26,7 +26,7 @@ fn has_headers(ctx: &WorkbookContext, sheet: &str, region_idx: usize) -> bool {
 fn wide_data_table_detected_as_data() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("wide.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
 
         let headers: Vec<String> = (0..25).map(|i| format!("Col{}", i + 1)).collect();
         let header_refs: Vec<&str> = headers.iter().map(|s| s.as_str()).collect();
@@ -46,7 +46,7 @@ fn wide_data_table_detected_as_data() {
 fn config_plus_data_detects_multiple_regions() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("mixed.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
 
         fill_key_value(
             sheet,
@@ -92,7 +92,7 @@ fn config_plus_data_detects_multiple_regions() {
 fn sparse_noisy_data_has_low_confidence() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("sparse.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
 
         fill_sparse(
             sheet,
@@ -140,7 +140,7 @@ fn sparse_noisy_data_has_low_confidence() {
 fn headerless_list() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("list.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
 
         let items = ["Apple", "Banana", "Cherry", "Date", "Elderberry"];
         for (i, item) in items.iter().enumerate() {
@@ -171,7 +171,7 @@ fn headerless_list() {
 fn far_out_cell_caps_regions_and_preserves_metrics() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("far_out.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
 
         let headers: Vec<String> = (1..=10).map(|i| format!("H{}", i)).collect();
         let header_refs: Vec<&str> = headers.iter().map(|s| s.as_str()).collect();
@@ -204,7 +204,7 @@ fn huge_width_sparse_sheet_caps_with_fallback_region() {
     let workspace = support::TestWorkspace::new();
     let width = 520u32;
     let path = workspace.create_workbook("wide_sparse.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
 
         let headers: Vec<String> = (1..=width).map(|i| format!("H{}", i)).collect();
         let header_refs: Vec<&str> = headers.iter().map(|s| s.as_str()).collect();
@@ -242,7 +242,7 @@ fn huge_width_sparse_sheet_caps_with_fallback_region() {
 fn styled_sparse_sheet_tracks_style_tags_without_values() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("styled_sparse.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         set_header_style(sheet, "B2:D2");
         apply_date_format(sheet, "C4:C4");
     });

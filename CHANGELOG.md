@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Migrated the document and rendering layers to published Umya 3.1 and Formualizer 0.9.1, removing the unpublished Umya Git-patch dependency.
+- Added shared cold-import and export repair for upstream border-colour loss and colour-selector hash collisions. Theme/indexed/RGB identity is retained; no workbook reimport or serialization is added to warm edit/recalculate loops.
+
 - Added shared resident spreadsheet sessions across native CLI/MCP and the WASM SDK, retaining the document and Formualizer evaluator during ordinary edit/recalculate/read loops.
 - Added genuine just-bash resident commands with VFS-scoped handles, explicit XLSX/artifact export, request reconciliation, history, checkpoints, staged approvals and host cleanup.
 - Added native journal-backed ownership, automatic private-host startup, revision CAS, original request outcomes and generation-pinned export recovery.

@@ -11,7 +11,7 @@ mod support;
 async fn read_table_uses_region_header_hint_and_range_offsets() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("region_header.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         // leave some blank rows to force trim; header on row 5
         sheet.get_cell_mut("A5").set_value("ColA");
         sheet.get_cell_mut("B5").set_value("ColB");
@@ -90,7 +90,7 @@ async fn read_table_uses_region_header_hint_and_range_offsets() -> Result<()> {
 async fn read_table_handles_multi_row_headers_and_filters() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("multi_headers.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("Group");
         sheet.get_cell_mut("B1").set_value("Group");
         sheet.get_cell_mut("A2").set_value("X");
@@ -155,7 +155,7 @@ async fn read_table_handles_multi_row_headers_and_filters() -> Result<()> {
 async fn read_table_expands_merged_headers_and_in_filters() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("merged.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("Q1");
         sheet.add_merge_cells("A1:B1");
         sheet.get_cell_mut("A2").set_value("Name");
@@ -227,7 +227,7 @@ async fn read_table_expands_merged_headers_and_in_filters() -> Result<()> {
 async fn read_table_large_range_stops_after_limit_and_counts() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("large.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("X");
         sheet.get_cell_mut("B1").set_value("Y");
         for row in 2..=200 {
@@ -283,7 +283,7 @@ async fn read_table_large_range_stops_after_limit_and_counts() -> Result<()> {
 async fn read_table_handles_huge_sheet_sampling() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("huge.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("Idx");
         sheet.get_cell_mut("B1").set_value("Value");
         for row in 2..=10001 {
@@ -339,7 +339,7 @@ async fn read_table_handles_huge_sheet_sampling() -> Result<()> {
 async fn read_table_handles_empty_header_cells_in_multi_row() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("empty_headers.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("Category");
         sheet.get_cell_mut("A2").set_value("Sub");
         sheet.get_cell_mut("B1").set_value("Values");
@@ -391,7 +391,7 @@ async fn read_table_handles_empty_header_cells_in_multi_row() -> Result<()> {
 async fn read_table_filter_contains_case_insensitive() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("contains.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("Name");
         sheet.get_cell_mut("A2").set_value("Apple Pie");
         sheet.get_cell_mut("A3").set_value("Banana Bread");
@@ -443,7 +443,7 @@ async fn read_table_filter_contains_case_insensitive() -> Result<()> {
 async fn read_table_resolves_excel_table_by_name() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("with_table.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("B2").set_value("ID");
         sheet.get_cell_mut("C2").set_value("Amount");
         sheet.get_cell_mut("B3").set_value_number(1);

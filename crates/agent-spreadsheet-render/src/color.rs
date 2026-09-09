@@ -13,8 +13,9 @@
 //! white. Indexing the colour map off that getter paints every unstyled font
 //! white on white, which is what an openpyxl `<font><b val="1"/></font>` (no
 //! `<color>` at all) produced. Presence therefore has to be probed through
-//! `get_argb_with_theme`, whose internal `has_value()` checks are the only
-//! access to that information.
+//! public source-preserving setters and equality: reselecting the current
+//! source leaves the value unchanged only when that source was present.
+//! This also distinguishes explicitly transparent RGB from an absent colour.
 //!
 //! What this module keeps from doing its own resolution is the fix the bake-off
 //! asked for: an *indexed* colour carrying a `tint` gets the tint applied,
@@ -28,12 +29,17 @@ const HLS_MAX: f64 = 255.0;
 
 /// Resolve a style colour to RGBA, or `None` when the colour is unset.
 pub fn resolve(color: &umya_spreadsheet::Color, theme: Option<&Theme>) -> Option<Rgba> {
-    // `get_argb()` is the indexed palette entry when `indexed` is set, the
-    // literal `rgb` attribute when that is set, and "" otherwise.
-    let direct = color.get_argb();
-    if !direct.is_empty() {
-        let base = Rgba::from_argb_hex(direct)?;
-        let tint = *color.get_tint();
+    // Umya 3 returns transparent black for an absent RGB value. Preserve the
+    // distinction from explicitly transparent RGB without inspecting private
+    // fields: selecting the same source leaves the public value unchanged.
+    let direct = color.argb();
+    let mut rgb_probe = color.clone();
+    rgb_probe.set_argb(direct);
+    if direct != Default::default() || rgb_probe == *color {
+        // Spreadsheet style colours are opaque, matching from_argb_hex and
+        // the pre-3.x renderer; OOXML producers commonly write an unused 00 alpha.
+        let base = Rgba(direct.r, direct.g, direct.b, 255);
+        let tint = color.tint();
         // umya returns here without ever looking at `tint`. We do not.
         return Some(if tint == 0.0 {
             base
@@ -44,10 +50,14 @@ pub fn resolve(color: &umya_spreadsheet::Color, theme: Option<&Theme>) -> Option
     // No indexed and no literal rgb: either a theme slot, or nothing at all.
     // `get_argb_with_theme` distinguishes the two and applies the tint itself
     // on the theme path, so it is not reapplied here.
-    let resolved = color.get_argb_with_theme(theme?);
-    if resolved.is_empty() {
+    let mut theme_probe = color.clone();
+    theme_probe.set_theme_index(color.theme_index());
+    if theme_probe != *color {
         return None;
     }
+    let theme = theme?;
+    theme.theme_elements().color_scheme().color_map().get(color.theme_index() as usize)?;
+    let resolved = color.argb_with_theme(theme);
     Rgba::from_argb_hex(&resolved)
 }
 

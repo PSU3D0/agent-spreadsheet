@@ -134,7 +134,7 @@ impl FormulaGraph {
             include_names: true,
         };
 
-        for cell in sheet.get_cell_collection() {
+        for cell in sheet.cells() {
             if !cell.is_formula() {
                 continue;
             }

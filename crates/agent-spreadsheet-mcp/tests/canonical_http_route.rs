@@ -65,7 +65,7 @@ impl Drop for RunningServer {
 
 fn fixture(workspace: &support::TestWorkspace) {
     workspace.create_workbook("route.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut((1, 1)).set_value("Name".to_string());
         sheet.get_cell_mut((2, 1)).set_value("Amount".to_string());
         sheet.get_cell_mut((1, 2)).set_value("Alpha".to_string());

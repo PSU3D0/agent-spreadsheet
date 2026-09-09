@@ -120,12 +120,12 @@ fn rich_text_flattened() {
     font.set_bold(true);
     bold.set_run_properties(font);
     rich.set_rich_text_elements(vec![plain, bold]);
-    book.get_sheet_mut(&0)
+    book.get_sheet_mut(&0).ok()
         .unwrap()
         .get_cell_mut("A1")
         .set_rich_text(rich);
 
-    let sheet = book.get_sheet(&0).unwrap();
+    let sheet = book.get_sheet(&0).ok().unwrap();
     let scene = extract_scene(
         sheet,
         &book,

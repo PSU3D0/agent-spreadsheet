@@ -11,10 +11,10 @@ pub fn tag_cell(cell: &Cell) -> Option<(String, StyleTagging)> {
     let mut tags = Vec::new();
 
     if let Some(font) = style.get_font() {
-        if *font.get_bold() {
+        if font.get_bold() {
             tags.push("header".to_string());
         }
-        if *font.get_italic() {
+        if font.get_italic() {
             tags.push("emphasis".to_string());
         }
     }

@@ -9,7 +9,7 @@ use crate::support::mcp::{McpTestClient, call_tool, extract_json};
 async fn test_sheet_styles_reports_descriptors_in_docker() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace().create_workbook("styles.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("Header");
         let style_a1 = sheet.get_style_mut("A1");
         style_a1.get_font_mut().set_bold(true);
@@ -55,7 +55,7 @@ async fn test_sheet_styles_truncates_large_style_counts_in_docker() -> Result<()
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("many_styles.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
             for i in 0..205u32 {
                 let row = i + 1;
                 let addr = format!("A{row}");
@@ -99,7 +99,7 @@ async fn test_sheet_styles_reports_runs_in_docker() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("styles_overview.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
             sheet.get_cell_mut("A1").set_value("a");
             sheet.get_cell_mut("B1").set_value("b");
             sheet.get_cell_mut("C1").set_value("c");

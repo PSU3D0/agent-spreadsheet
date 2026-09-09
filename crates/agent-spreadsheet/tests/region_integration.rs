@@ -5,7 +5,7 @@ use agent_spreadsheet_mcp::tools::{
     FindValueParams, ListWorkbooksParams, ReadTableParams, SheetOverviewParams, find_value,
     list_workbooks, read_table, sheet_overview,
 };
-use umya_spreadsheet::Spreadsheet;
+use umya_spreadsheet::Workbook as Spreadsheet;
 
 mod support;
 
@@ -105,7 +105,7 @@ async fn sheet_overview_reports_regions_and_tools_scope_to_region() -> Result<()
 }
 
 fn build_regioned_workbook(book: &mut Spreadsheet) {
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
     // Left table
     sheet.get_cell_mut("A1").set_value("Month");
     sheet.get_cell_mut("B1").set_value("Value");

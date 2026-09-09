@@ -30,7 +30,7 @@ fn recalc_state(
 async fn style_batch_merge_set_clear_semantics() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("style.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("x");
         let style = sheet.get_style_mut("A1");
         style.get_font_mut().set_bold(true);
@@ -39,7 +39,7 @@ async fn style_batch_merge_set_clear_semantics() -> Result<()> {
             .get_pattern_fill_mut()
             .set_pattern_type(umya_spreadsheet::PatternValues::Solid)
             .get_foreground_color_mut()
-            .set_argb("FF0000FF");
+            .set_argb_str("FF0000FF");
     });
 
     let state = recalc_state(&workspace);
@@ -164,7 +164,7 @@ async fn style_batch_merge_set_clear_semantics() -> Result<()> {
 async fn style_batch_preview_stages_and_apply() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("preview.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("x");
     });
 
@@ -258,7 +258,7 @@ async fn style_batch_preview_stages_and_apply() -> Result<()> {
 async fn style_batch_overlap_ordering_last_wins() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("overlap.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         for addr in ["A1", "B1", "C1", "A2"] {
             sheet.get_cell_mut(addr).set_value("x");
         }
@@ -358,11 +358,11 @@ async fn style_batch_overlap_ordering_last_wins() -> Result<()> {
 async fn style_batch_nested_null_clear_only_subfield() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("null_clear.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("x");
         let style = sheet.get_style_mut("A1");
         style.get_font_mut().set_bold(true);
-        style.get_font_mut().get_color_mut().set_argb("FFFF0000");
+        style.get_font_mut().get_color_mut().set_argb_str("FFFF0000");
     });
 
     let state = recalc_state(&workspace);
@@ -440,7 +440,7 @@ async fn style_batch_nested_null_clear_only_subfield() -> Result<()> {
 async fn style_batch_region_target_resolves() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("region.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("H1");
         sheet.get_cell_mut("B1").set_value("H2");
         sheet.get_cell_mut("C1").set_value("H3");
@@ -534,7 +534,7 @@ async fn style_batch_region_target_resolves() -> Result<()> {
 async fn style_batch_idempotent_noop_counts_and_no_diff() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("noop.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("x");
         sheet.get_style_mut("A1").get_font_mut().set_bold(true);
     });
@@ -622,7 +622,7 @@ async fn style_batch_idempotent_noop_counts_and_no_diff() -> Result<()> {
 async fn style_batch_preserves_conditional_formats() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("cf.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value_number(1);
 
         let mut cf = ConditionalFormatting::default();
@@ -641,7 +641,7 @@ async fn style_batch_preserves_conditional_formats() -> Result<()> {
             .get_pattern_fill_mut()
             .set_pattern_type(PatternValues::Solid)
             .get_foreground_color_mut()
-            .set_argb("FFFFFF00");
+            .set_argb_str("FFFFFF00");
         rule.set_style(style);
 
         cf.add_conditional_collection(rule);
@@ -714,7 +714,7 @@ async fn style_batch_preserves_conditional_formats() -> Result<()> {
 async fn style_batch_number_format_shorthand_applies_and_is_idempotent() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("numfmt.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value_number(123.45);
         sheet.get_cell_mut("B1").set_value_number(0.25);
         sheet.get_cell_mut("C1").set_value_number(45123.0);

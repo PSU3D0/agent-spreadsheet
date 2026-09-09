@@ -7,9 +7,6 @@ members = [
 ]
 resolver = "2"
 
-[patch.crates-io]
-umya-spreadsheet = { git = "https://github.com/PSU3D0/umya-spreadsheet.git", rev = "4b64d65daf19bba79800951cd38920d7eb95320c" }
-
 # WASM-only size profile. Native `release` is deliberately left at cargo defaults
 # so GitHub release binary builds keep their current build time and unwinding
 # behaviour. Cargo does not support per-target profiles, so the size settings

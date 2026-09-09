@@ -58,7 +58,7 @@ fn ops(values: Vec<serde_json::Value>) -> Vec<MutateOpInput> {
 async fn mutate_batch_apply_routes_one_op_from_each_family() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("mutate_all_families.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value_number(1);
         sheet.get_cell_mut("A2").set_value_number(2);
         sheet
@@ -208,7 +208,7 @@ async fn mutate_batch_apply_routes_one_op_from_each_family() -> Result<()> {
 async fn mutate_batch_groups_consecutive_same_family_ops() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("mutate_grouping.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("x");
     });
 
@@ -268,7 +268,7 @@ async fn mutate_batch_groups_consecutive_same_family_ops() -> Result<()> {
 async fn mutate_batch_preview_stages_and_does_not_mutate() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("mutate_preview.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("keep");
     });
 
@@ -352,7 +352,7 @@ async fn mutate_batch_preview_stages_and_does_not_mutate() -> Result<()> {
 async fn mutate_batch_rejects_unknown_kind_before_applying_anything() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("mutate_bad_kind.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("keep");
     });
 
@@ -407,7 +407,7 @@ async fn mutate_batch_rejects_unknown_kind_before_applying_anything() -> Result<
 async fn mutate_batch_runtime_failure_reports_index_and_prior_applied_state() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("mutate_runtime_fail.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("x");
     });
 
@@ -473,7 +473,7 @@ async fn mutate_batch_runtime_failure_reports_index_and_prior_applied_state() ->
 async fn edit_batch_preview_stages_and_does_not_mutate() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("edit_preview.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value("keep");
     });
 

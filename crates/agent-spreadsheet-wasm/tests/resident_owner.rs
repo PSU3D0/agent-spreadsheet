@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 #[tokio::test(flavor = "current_thread")]
 async fn actual_adapter_retains_one_owner_across_positive_edits_and_original_retries() {
     let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
     sheet.get_cell_mut("A1").set_value_number(1);
     sheet.get_cell_mut("B1").set_formula("A1*3");
     let mut bytes = Vec::new();

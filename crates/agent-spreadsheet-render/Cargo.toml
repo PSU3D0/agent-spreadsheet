@@ -14,7 +14,7 @@ categories = ["graphics", "rendering"]
 # No filesystem, process, tokio, MCP, image or Typst dependency. This crate must
 # compile for wasm32-unknown-unknown.
 [dependencies]
-umya-spreadsheet = "2.3.2"
+umya-spreadsheet = "=3.1.0"
 tiny-skia = { version = "0.12", default-features = false, features = ["std", "simd"] }
 png = "0.18"
 ab_glyph = "0.2"
@@ -28,10 +28,11 @@ thiserror = "1.0"
 # `RUSTFLAGS=--cfg getrandom_backend="wasm_js"`). Both mirror what
 # `agent-spreadsheet` already declares.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-umya-spreadsheet = { version = "2.3.2", features = ["js"] }
+getrandom04 = { package = "getrandom", version = "0.4", features = ["wasm_js"] }
 getrandom = { version = "0.3", features = ["wasm_js"] }
 
 [dev-dependencies]
+formualizer-workbook = { version = "0.9.1", default-features = false, features = ["umya3"] }
 serde_json = "1.0"
 sha2 = "0.10"
 # Test-only: goldens hash the *decoded* pixels, not the PNG container. See

@@ -97,13 +97,13 @@ fn basic_diff_workbooks(original: &Path, modified: &Path) -> Result<BasicDiffRes
 fn collect_cells(
     path: &Path,
 ) -> Result<std::collections::BTreeMap<(String, String), CellSnapshot>> {
-    let book = umya_spreadsheet::reader::xlsx::read(path)
+    let book = crate::xlsx_import::read(path)
         .with_context(|| format!("failed to read workbook '{}'", path.display()))?;
     let mut cells = std::collections::BTreeMap::new();
 
     for sheet in book.get_sheet_collection() {
         let sheet_name = sheet.get_name().to_string();
-        for cell in sheet.get_cell_collection() {
+        for cell in sheet.cells() {
             let address = cell.get_coordinate().get_coordinate().to_string();
             let value = cell.get_value().to_string();
             let formula = if cell.is_formula() {

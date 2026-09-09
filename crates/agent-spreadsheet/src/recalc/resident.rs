@@ -13,7 +13,7 @@ use crate::core::session::{
 use crate::model::{EvaluationCoverage, EvaluationFreshness, EvaluationSource};
 use crate::utils::hash_bytes_sha256_hex;
 use anyhow::{Result, anyhow};
-use formualizer::workbook::{SpreadsheetReader, UmyaAdapter};
+use formualizer::workbook::{SpreadsheetReader, Umya3Adapter as UmyaAdapter};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -191,7 +191,7 @@ impl ResidentWorkbook {
         &self.document
     }
 
-    pub(crate) fn spreadsheet(&self) -> &umya_spreadsheet::Spreadsheet {
+    pub(crate) fn spreadsheet(&self) -> &umya_spreadsheet::Workbook {
         self.document.spreadsheet()
     }
 
@@ -204,7 +204,7 @@ impl ResidentWorkbook {
         let sheet = self
             .document
             .spreadsheet()
-            .get_sheet_by_name(sheet_name)
+            .get_sheet_by_name(sheet_name).ok()
             .ok_or_else(|| anyhow!("sheet '{sheet_name}' not found"))?;
         Ok(sheet.get_cell((column, row)).map(materialize_umya_cell))
     }
@@ -247,7 +247,7 @@ impl ResidentWorkbook {
             let sheet = self
                 .document
                 .spreadsheet_mut()
-                .get_sheet_by_name_mut(&effect.sheet_name)
+                .get_sheet_by_name_mut(&effect.sheet_name).ok()
                 .ok_or_else(|| anyhow!("sheet '{}' not found", effect.sheet_name))?;
             assign_materialized_cell(
                 sheet.get_cell_mut((effect.column, effect.row)),
@@ -352,10 +352,10 @@ impl ResidentWorkbook {
         for sheet in self.document.spreadsheet().get_sheet_collection() {
             let values = evaluated.read_sheet(sheet.get_name())
                 .map_err(|error| anyhow!("external calculation sheet missing: {error}"))?;
-            for cell in sheet.get_cell_collection().into_iter().filter(|cell| cell.is_formula()) {
+            for cell in sheet.cells().into_iter().filter(|cell| cell.is_formula()) {
                 let coordinate = cell.get_coordinate();
-                let row = *coordinate.get_row_num();
-                let col = *coordinate.get_col_num();
+                let row = coordinate.get_row_num();
+                let col = coordinate.get_col_num();
                 let value = values.cells.get(&(row, col)).and_then(|cell| cell.value.clone())
                     .ok_or_else(|| anyhow!("external calculation omitted cache {}!R{row}C{col}", sheet.get_name()))?;
                 errors += u64::from(matches!(value, formualizer::workbook::LiteralValue::Error(_)));
@@ -806,19 +806,19 @@ mod tests {
 
     fn formula_fixture() -> Vec<u8> {
         let mut book = umya_spreadsheet::new_file();
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value_number(1.0);
         sheet.get_cell_mut("B1").set_formula("A1*2");
         let mut bytes = Vec::new();
-        umya_spreadsheet::writer::xlsx::write_writer(&book, &mut bytes).unwrap();
+        crate::xlsx_export::write_writer(&book, &mut bytes).unwrap();
         bytes
     }
 
     fn cached_b1(resident: &ResidentWorkbook) -> String {
         let bytes = resident.document.to_bytes().unwrap();
         let book =
-            umya_spreadsheet::reader::xlsx::read_reader(std::io::Cursor::new(bytes), true).unwrap();
-        book.get_sheet_by_name("Sheet1")
+            crate::xlsx_import::read_reader(std::io::Cursor::new(bytes), true).unwrap();
+        book.get_sheet_by_name("Sheet1").ok()
             .unwrap()
             .get_cell("B1")
             .unwrap()

@@ -26,7 +26,7 @@ fn startup_scan_discovers_workspace_workbooks() {
 async fn server_tool_handlers_return_json() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("simple.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut((1, 1)).set_value("Name".to_string());
         sheet.get_cell_mut((2, 1)).set_value("Value".to_string());
         sheet.get_cell_mut((1, 2)).set_value("Alpha".to_string());
@@ -106,7 +106,7 @@ async fn server_tool_handlers_return_json() -> Result<()> {
 async fn response_size_guard_rejects_large_payloads() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     let _path = workspace.create_workbook("oversize.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         for row in 1..=25u32 {
             sheet
                 .get_cell_mut((1u32, row))

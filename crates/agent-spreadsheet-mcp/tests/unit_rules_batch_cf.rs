@@ -27,7 +27,7 @@ fn recalc_state(
 async fn rules_batch_add_conditional_format_persists_and_is_idempotent() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("cf.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value_number(1);
         sheet.get_cell_mut("A2").set_value_number(-1);
     });
@@ -152,7 +152,7 @@ async fn rules_batch_add_conditional_format_persists_and_is_idempotent() -> Resu
 async fn rules_batch_conditional_format_preview_then_apply_staged_change() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("cf_preview.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value_number(1);
     });
 
@@ -237,7 +237,7 @@ async fn rules_batch_conditional_format_preview_then_apply_staged_change() -> Re
 async fn rules_batch_set_and_clear_conditional_formats() -> Result<()> {
     let workspace = support::TestWorkspace::new();
     workspace.create_workbook("cf_set_clear.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value_number(1);
         sheet.get_cell_mut("A2").set_value_number(-1);
     });

@@ -41,7 +41,7 @@ fn config(path: &Path) -> Arc<ServerConfig> {
 fn workbook_bytes() -> Vec<u8> {
     let mut book = umya_spreadsheet::new_file();
     book.new_sheet("Data").unwrap();
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
     sheet.get_cell_mut("A1").set_value("Name");
     sheet.get_cell_mut("B1").set_value("Amount");
     sheet.get_cell_mut("A2").set_value("Ada");

@@ -31,7 +31,7 @@ fn build_workbook_list_respects_filters() {
 fn workbook_context_caches_sheet_metrics() {
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("metrics.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         for row in 1..=3 {
             for col in 1..=3 {
                 sheet
@@ -91,7 +91,7 @@ fn date_cells_return_iso_format() {
 
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("dates.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         let cell = sheet.get_cell_mut("A1");
         cell.set_value_number(45597.0);
         cell.get_style_mut()
@@ -110,7 +110,7 @@ fn date_cells_return_iso_format() {
     });
 
     let book = umya_spreadsheet::reader::xlsx::read(&path).expect("read");
-    let sheet = book.get_sheet_by_name("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
 
     let val_a1 = cell_to_value(sheet.get_cell("A1").unwrap());
     assert!(
@@ -140,7 +140,7 @@ fn excel_serial_date_conversion_edge_cases() {
 
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("edge_dates.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
 
         let cell = sheet.get_cell_mut("A1");
         cell.set_value_number(1.0);
@@ -164,7 +164,7 @@ fn excel_serial_date_conversion_edge_cases() {
     });
 
     let book = umya_spreadsheet::reader::xlsx::read(&path).expect("read");
-    let sheet = book.get_sheet_by_name("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name("Sheet1").ok().unwrap();
 
     let val_a1 = cell_to_value(sheet.get_cell("A1").unwrap());
     assert!(
@@ -187,7 +187,7 @@ fn formula_graph_extracts_precedents() {
 
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("formulas.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         sheet.get_cell_mut("A1").set_value_number(10.0);
         sheet.get_cell_mut("A2").set_value_number(20.0);
         sheet.get_cell_mut("B1").set_formula("A1+A2");
@@ -248,7 +248,7 @@ fn large_range_dependents_found_via_containment() {
 
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("large_range.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         for row in 1..=600 {
             sheet.get_cell_mut((1, row)).set_value_number(row as f64);
         }
@@ -349,7 +349,7 @@ fn dependents_are_deduplicated() {
 
     let workspace = support::TestWorkspace::new();
     let path = workspace.create_workbook("dedup.xlsx", |book| {
-        let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         for row in 1..=10 {
             sheet.get_cell_mut((1, row)).set_value_number(row as f64);
         }

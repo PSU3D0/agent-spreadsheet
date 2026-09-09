@@ -52,10 +52,12 @@ parking_lot = "0.12"
 lru = "0.12"
 ahash = "0.8"
 smallvec = "1.13"
-umya-spreadsheet = "2.3.2"
+umya-spreadsheet = "=3.1.0"
 ovba = "0.7.1"
 formualizer-parse = { version = "3.1.1" }
-formualizer = { version = "0.9.0", default-features = false, features = ["eval", "workbook", "umya", "common"], optional = true }
+# Cold document I/O compatibility is required even when calculation is disabled.
+formualizer-workbook = { version = "0.9.1", default-features = false, features = ["umya3"] }
+formualizer = { version = "0.9.1", default-features = false, features = ["eval", "workbook", "umya3", "common"], optional = true }
 web-time = "1.1"
 walkdir = { version = "2.5", optional = true }
 globset = { version = "0.4", optional = true }
@@ -90,9 +92,9 @@ reqwest = { version = "0.12", default-features = false, features = ["json"], opt
 tokio = { version = "1.37", features = ["rt-multi-thread", "fs", "signal", "net", "process"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-umya-spreadsheet = { version = "2.3.2", features = ["js"] }
+getrandom04 = { package = "getrandom", version = "0.4", features = ["wasm_js"] }
 getrandom = { version = "0.3", features = ["wasm_js"] }
-formualizer = { version = "0.9.0", default-features = false, features = ["js-runtime"], optional = true }
+formualizer = { version = "0.9.1", default-features = false, features = ["js-runtime"], optional = true }
 
 [features]
 # Native consumers get the historical surface: recalc + CLI arg parsing + a

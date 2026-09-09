@@ -585,7 +585,7 @@ fn collect_error_cells(
     for sheet_name in sheet_names {
         let sheet_errors = workbook.with_sheet(&sheet_name, |sheet| {
             let mut items = Vec::new();
-            for cell in sheet.get_cell_collection() {
+            for cell in sheet.cells() {
                 let raw = cell.get_value();
                 let is_typed_error =
                     cell.get_data_type() == "e" || (cell.is_formula() && is_error_text(&raw));

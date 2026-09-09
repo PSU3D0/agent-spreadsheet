@@ -3,7 +3,7 @@ use agent_spreadsheet as agent_spreadsheet_mcp;
 use agent_spreadsheet_mcp::tools::{
     ListWorkbooksParams, WorkbookSummaryParams, list_workbooks, workbook_summary,
 };
-use umya_spreadsheet::Spreadsheet;
+use umya_spreadsheet::Workbook as Spreadsheet;
 
 mod support;
 
@@ -60,7 +60,7 @@ async fn workbook_summary_reports_regions_and_entry_points() -> Result<()> {
 }
 
 fn build_summary_workbook(book: &mut Spreadsheet) {
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
     sheet.get_cell_mut("A1").set_value("Name");
     sheet.get_cell_mut("B1").set_value("Value");
     sheet.get_cell_mut("A2").set_value("Alpha");

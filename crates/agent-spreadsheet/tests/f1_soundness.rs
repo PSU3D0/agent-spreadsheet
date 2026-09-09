@@ -211,7 +211,7 @@ async fn verify_evaluates_errors_and_detects_same_address_changes() -> Result<()
     let changed_path = temp.path().join("changed-errors.xlsx");
     let mut changed = umya_spreadsheet::reader::xlsx::read(fixture("real_errors.xlsx"))?;
     changed
-        .get_sheet_by_name_mut("Sheet1")
+        .get_sheet_by_name_mut("Sheet1").ok()
         .unwrap()
         .get_cell_mut("A1")
         .set_formula("UNKNOWNFN(2)")

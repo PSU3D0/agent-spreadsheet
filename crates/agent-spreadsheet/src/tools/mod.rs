@@ -45,7 +45,7 @@ fn sheet_has_formula_in_bounds(sheet: &umya_spreadsheet::Worksheet, bounds: &[Ce
     if bounds.is_empty() {
         return false;
     }
-    for cell in sheet.get_cell_collection() {
+    for cell in sheet.cells() {
         if !cell.is_formula() {
             continue;
         }
@@ -1585,7 +1585,7 @@ pub fn parse_scope_kind_optional(scope: Option<&str>) -> Result<Option<NamedRang
 
 #[cfg(feature = "recalc")]
 fn resolve_sheet_index_on_book(
-    book: &umya_spreadsheet::Spreadsheet,
+    book: &umya_spreadsheet::Workbook,
     sheet_name: &str,
 ) -> Result<u32> {
     for (idx, sheet) in book.get_sheet_collection().iter().enumerate() {
@@ -1605,7 +1605,7 @@ pub(crate) fn define_name_in_file(
     scope_kind: NamedRangeScope,
     scope_sheet_name: Option<&str>,
 ) -> Result<()> {
-    let mut book = umya_spreadsheet::reader::xlsx::read(path)
+    let mut book = crate::xlsx_import::read(path)
         .with_context(|| format!("failed to read workbook '{}'", path.display()))?;
 
     match scope_kind {
@@ -1614,14 +1614,14 @@ pub(crate) fn define_name_in_file(
                 .ok_or_else(|| anyhow!("scope_sheet_name required for sheet scope"))?;
             let sheet_index = resolve_sheet_index_on_book(&book, sn)?;
             let sheet = book
-                .get_sheet_by_name_mut(sn)
+                .get_sheet_by_name_mut(sn).ok()
                 .ok_or_else(|| anyhow!("sheet '{}' not found", sn))?;
             sheet
                 .add_defined_name(name.to_string(), refers_to.to_string())
                 .map_err(|e| anyhow!("failed to add defined name: {e}"))?;
             // Set local_sheet_id on the just-added entry.
             let sheet = book
-                .get_sheet_by_name_mut(sn)
+                .get_sheet_by_name_mut(sn).ok()
                 .ok_or_else(|| anyhow!("sheet '{}' disappeared", sn))?;
             if let Some(last) = sheet.get_defined_names_mut().last_mut()
                 && last.get_name() == name
@@ -1638,14 +1638,14 @@ pub(crate) fn define_name_in_file(
                 .map(|s| s.get_name().to_string())
                 .ok_or_else(|| anyhow!("workbook has no sheets"))?;
             let sheet = book
-                .get_sheet_by_name_mut(&first_sheet)
+                .get_sheet_by_name_mut(&first_sheet).ok()
                 .ok_or_else(|| anyhow!("sheet '{}' not found", first_sheet))?;
             sheet
                 .add_defined_name(name.to_string(), refers_to.to_string())
                 .map_err(|e| anyhow!("failed to add defined name: {e}"))?;
             // Move the just-added entry from sheet-level to workbook-level.
             let sheet = book
-                .get_sheet_by_name_mut(&first_sheet)
+                .get_sheet_by_name_mut(&first_sheet).ok()
                 .ok_or_else(|| anyhow!("sheet disappeared"))?;
             let entry = sheet.get_defined_names_mut().pop();
             if let Some(entry) = entry {
@@ -1654,7 +1654,7 @@ pub(crate) fn define_name_in_file(
         }
     }
 
-    umya_spreadsheet::writer::xlsx::write(&book, path)?;
+    crate::xlsx_export::write(&book, path)?;
     Ok(())
 }
 
@@ -1667,7 +1667,7 @@ pub(crate) fn update_name_in_file(
     scope_kind: Option<NamedRangeScope>,
     scope_sheet_name: Option<&str>,
 ) -> Result<(String, NamedRangeScope, Option<String>)> {
-    let mut book = umya_spreadsheet::reader::xlsx::read(path)
+    let mut book = crate::xlsx_import::read(path)
         .with_context(|| format!("failed to read workbook '{}'", path.display()))?;
 
     let mut found = false;
@@ -1705,7 +1705,7 @@ pub(crate) fn update_name_in_file(
             {
                 continue;
             }
-            if let Some(sheet) = book.get_sheet_by_name_mut(sn) {
+            if let Some(sheet) = book.get_sheet_by_name_mut(sn).ok() {
                 for defined in sheet.get_defined_names_mut().iter_mut() {
                     if defined.get_name() == name {
                         previous_refers_to = defined.get_address();
@@ -1742,7 +1742,7 @@ pub(crate) fn update_name_in_file(
                     .map(|sheet| sheet.get_name().to_string())
                     .ok_or_else(|| anyhow!("workbook has no sheets"))?;
                 let sheet = book
-                    .get_sheet_by_name_mut(&first_sheet)
+                    .get_sheet_by_name_mut(&first_sheet).ok()
                     .ok_or_else(|| anyhow!("sheet disappeared"))?;
                 sheet
                     .add_defined_name(name.to_string(), new_addr.to_string())
@@ -1758,7 +1758,7 @@ pub(crate) fn update_name_in_file(
                     .ok_or_else(|| anyhow!("sheet-scoped name has no sheet"))?;
                 let sheet_index = resolve_sheet_index_on_book(&book, sheet_name)?;
                 let sheet = book
-                    .get_sheet_by_name_mut(sheet_name)
+                    .get_sheet_by_name_mut(sheet_name).ok()
                     .ok_or_else(|| anyhow!("sheet '{}' not found", sheet_name))?;
                 sheet
                     .get_defined_names_mut()
@@ -1773,7 +1773,7 @@ pub(crate) fn update_name_in_file(
         }
     }
 
-    umya_spreadsheet::writer::xlsx::write(&book, path)?;
+    crate::xlsx_export::write(&book, path)?;
     Ok((previous_refers_to, effective_scope, effective_sheet))
 }
 
@@ -1785,7 +1785,7 @@ pub(crate) fn delete_name_in_file(
     scope_kind: Option<NamedRangeScope>,
     scope_sheet_name: Option<&str>,
 ) -> Result<bool> {
-    let mut book = umya_spreadsheet::reader::xlsx::read(path)
+    let mut book = crate::xlsx_import::read(path)
         .with_context(|| format!("failed to read workbook '{}'", path.display()))?;
 
     let mut deleted = false;
@@ -1813,7 +1813,7 @@ pub(crate) fn delete_name_in_file(
             {
                 continue;
             }
-            if let Some(sheet) = book.get_sheet_by_name_mut(sn) {
+            if let Some(sheet) = book.get_sheet_by_name_mut(sn).ok() {
                 let names = sheet.get_defined_names_mut();
                 let before_len = names.len();
                 names.retain(|d: &umya_spreadsheet::DefinedName| d.get_name() != name);
@@ -1829,7 +1829,7 @@ pub(crate) fn delete_name_in_file(
         return Err(anyhow!("named range '{}' not found", name));
     }
 
-    umya_spreadsheet::writer::xlsx::write(&book, path)?;
+    crate::xlsx_export::write(&book, path)?;
     Ok(true)
 }
 
@@ -3422,10 +3422,10 @@ fn collect_value_matches(
     let include_row_context = matches!(context_mode, FindContext::Row | FindContext::Both);
     let context_width = params.context_width.unwrap_or(3).max(1);
 
-    for cell in sheet.get_cell_collection() {
+    for cell in sheet.cells() {
         let coord = cell.get_coordinate();
-        let col = *coord.get_col_num();
-        let row = *coord.get_row_num();
+        let col = coord.get_col_num();
+        let row = coord.get_row_num();
         if col < bounds.0.0 || col > bounds.1.0 || row < bounds.0.1 || row > bounds.1.1 {
             continue;
         }
@@ -4024,7 +4024,7 @@ pub async fn workbook_style_summary(
             break;
         }
         workbook.with_sheet(sheet_name, |sheet| {
-            for cell in sheet.get_cell_collection() {
+            for cell in sheet.cells() {
                 if scanned_cells >= cell_scan_limit {
                     scan_truncated = true;
                     break;
@@ -4181,7 +4181,7 @@ pub async fn workbook_style_summary(
                     let range = cf.get_sequence_of_references().get_sqref().to_string();
                     let mut types: HashSet<String> = HashSet::new();
                     for rule in cf.get_conditional_collection() {
-                        types.insert(rule.get_type().get_value_string().to_string());
+                        types.insert(rule.get_type().value_string().to_string());
                     }
                     let mut rule_types: Vec<String> = types.into_iter().collect();
                     rule_types.sort();
@@ -4413,7 +4413,7 @@ pub(crate) async fn sheet_styles_bounded(
         let mut cells_scanned = 0_u64;
         let mut cells_in_scope = 0_u64;
 
-        for cell in sheet.get_cell_collection() {
+        for cell in sheet.cells() {
             let address = cell.get_coordinate().get_coordinate().to_string();
             let Some((col, row)) = parse_address(&address) else {
                 continue;
@@ -5682,7 +5682,7 @@ fn collect_formula_matches(
     let mut results = Vec::new();
     let mut seen = seen_so_far;
 
-    for cell in sheet.get_cell_collection() {
+    for cell in sheet.cells() {
         if !cell.is_formula() {
             continue;
         }
@@ -5706,8 +5706,8 @@ fn collect_formula_matches(
         }
 
         let coord = cell.get_coordinate();
-        let column = *coord.get_col_num();
-        let row = *coord.get_row_num();
+        let column = coord.get_col_num();
+        let row = coord.get_row_num();
 
         let context = if include_context {
             let col_start = column.saturating_sub(context_cols / 2).max(1);
@@ -6043,7 +6043,7 @@ fn collect_neighbor_details(
             continue;
         };
 
-        let cell_opt = sheet.get_cell((&col, &row));
+        let cell_opt = sheet.get_cell((col, row));
         let formula_info = lookup_formula_info(formula_lookup, &cell_ref_upper, address);
         if let Some(cell) = cell_opt {
             let value = cell_to_value(cell);
@@ -6524,8 +6524,8 @@ pub async fn execute_manifest(
     let path = &workbook_ctx.path;
 
     let workbook_bytes = std::fs::read(path)?;
-    let adapter = formualizer::workbook::UmyaAdapter::open_bytes(workbook_bytes)
-        .or_else(|_| formualizer::workbook::UmyaAdapter::open_path(path))
+    let adapter = formualizer::workbook::Umya3Adapter::open_bytes(workbook_bytes)
+        .or_else(|_| formualizer::workbook::Umya3Adapter::open_path(path))
         .map_err(|e| anyhow!("Failed to open adapter: {}", e))?;
 
     let workbook = formualizer::workbook::Workbook::from_reader(
@@ -6607,7 +6607,7 @@ pub async fn grid_export(
         let mut columns = Vec::new();
         for col_idx in min_col..=max_col {
             if let Some(dim) = sheet.get_column_dimension_by_number(&col_idx) {
-                let w = *dim.get_width();
+                let w = dim.get_width();
                 if w > 0.0 {
                     columns.push(crate::model::GridColumnHint {
                         offset: col_idx - min_col,
@@ -6634,7 +6634,7 @@ pub async fn grid_export(
         for row in min_row..=max_row {
             let mut cells = Vec::new();
             for col in min_col..=max_col {
-                if let Some(cell) = sheet.get_cell((&col, &row)) {
+                if let Some(cell) = sheet.get_cell((col, row)) {
                     let mut v = None;
                     let mut f = None;
 
@@ -6874,7 +6874,7 @@ pub async fn layout_page(
                     let (raw_width, is_default) =
                         match sheet.get_column_dimension_by_number(&col_idx) {
                             Some(dim) => {
-                                let w = *dim.get_width();
+                                let w = dim.get_width();
                                 if w > 0.0 {
                                     (w, false)
                                 } else {
@@ -6908,7 +6908,7 @@ pub async fn layout_page(
             // ── cells ────────────────────────────────────────────────────────
             let mut cell_map: HashMap<(u32, u32), LayoutCellInfo> = HashMap::new();
 
-            for cell in sheet.get_cell_collection() {
+            for cell in sheet.cells() {
                 let address = cell.get_coordinate().get_coordinate().to_string();
                 let Some((col, row)) = parse_address(&address) else {
                     continue;

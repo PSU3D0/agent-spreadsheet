@@ -16,8 +16,8 @@ use agent_spreadsheet_mcp::tools::{InspectCellsParams, ListWorkbooksParams, Shee
 
 mod support;
 
-fn build_data_workbook(book: &mut umya_spreadsheet::Spreadsheet) {
-    let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+fn build_data_workbook(book: &mut umya_spreadsheet::Workbook) {
+    let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
     for col in 1..=10u32 {
         sheet
             .get_cell_mut((col, 1))

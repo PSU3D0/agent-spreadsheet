@@ -14,7 +14,7 @@ async fn test_workbook_style_summary_reports_theme_and_conditional_formats_in_do
 {
     let test = McpTestClient::new();
     test.workspace().create_workbook("wb_styles.xlsx", |book| {
-        let sheet1 = book.get_sheet_by_name_mut("Sheet1").unwrap();
+        let sheet1 = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
         for col in ['A', 'B', 'C'] {
             let addr = format!("{col}1");
             sheet1.get_cell_mut(addr.as_str()).set_value("x");
@@ -23,7 +23,7 @@ async fn test_workbook_style_summary_reports_theme_and_conditional_formats_in_do
         sheet1.get_style_mut("D1").get_font_mut().set_bold(true);
 
         book.new_sheet("Sheet2").unwrap();
-        let sheet2 = book.get_sheet_by_name_mut("Sheet2").unwrap();
+        let sheet2 = book.get_sheet_by_name_mut("Sheet2").ok().unwrap();
         sheet2.get_cell_mut("A1").set_value_number(1);
 
         let mut cf = ConditionalFormatting::default();
@@ -83,7 +83,7 @@ async fn test_workbook_style_summary_works_on_forks_in_docker() -> Result<()> {
     let test = McpTestClient::new();
     test.workspace()
         .create_workbook("fork_styles.xlsx", |book| {
-            let sheet = book.get_sheet_by_name_mut("Sheet1").unwrap();
+            let sheet = book.get_sheet_by_name_mut("Sheet1").ok().unwrap();
             sheet.get_cell_mut("A1").set_value("x");
             sheet.get_cell_mut("A2").set_value("y");
         });

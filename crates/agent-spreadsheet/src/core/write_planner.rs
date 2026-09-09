@@ -57,7 +57,7 @@ pub fn apply_append_rows(
 }
 
 pub(crate) fn apply_append_rows_to_workbook(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     sheet_name: &str,
     region_id: Option<u32>,
     table_name: Option<&str>,
@@ -65,7 +65,7 @@ pub(crate) fn apply_append_rows_to_workbook(
     rows: Vec<Vec<Option<MatrixCell>>>,
 ) -> Result<Value> {
     let mut bytes = Vec::new();
-    umya_spreadsheet::writer::xlsx::write_writer(book, &mut bytes)?;
+    crate::xlsx_export::write_writer(book, &mut bytes)?;
     let plan = build_append_region_plan_from_bytes(
         &bytes,
         sheet_name,
@@ -109,7 +109,7 @@ pub fn apply_clone_row(
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn apply_clone_row_to_workbook(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     sheet_name: &str,
     source_row: u32,
     before: Option<u32>,
@@ -167,7 +167,7 @@ pub fn apply_clone_row_band(
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn apply_clone_row_band_to_workbook(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     sheet_name: &str,
     source_rows: &str,
     before: Option<u32>,
@@ -311,7 +311,7 @@ pub fn build_append_region_plan(
 
     let config = Arc::new(local_workbook_config(source));
     let workbook = WorkbookContext::load(&config, source)?;
-    let book = umya_spreadsheet::reader::xlsx::read(source)
+    let book = crate::xlsx_import::read(source)
         .with_context(|| format!("failed to read workbook '{}'", source.display()))?;
     build_append_region_plan_from_workbooks(
         &workbook,
@@ -328,7 +328,7 @@ pub fn build_append_region_plan(
 #[allow(clippy::too_many_arguments)]
 fn build_append_region_plan_from_workbooks(
     workbook: &WorkbookContext,
-    book: &umya_spreadsheet::Spreadsheet,
+    book: &umya_spreadsheet::Workbook,
     source: &Path,
     sheet_name: &str,
     region_id: Option<u32>,
@@ -493,7 +493,7 @@ pub fn build_append_region_plan_from_bytes(
         "session".to_string(),
         None,
     )?;
-    let book = umya_spreadsheet::reader::xlsx::read_reader(std::io::Cursor::new(bytes), true)?;
+    let book = crate::xlsx_import::read_reader(std::io::Cursor::new(bytes), true)?;
     build_append_region_plan_from_workbooks(
         &workbook,
         &book,
@@ -690,15 +690,15 @@ fn append_footer_policy_label(policy: AppendFooterPolicy) -> &'static str {
 }
 
 pub fn apply_append_region_plan_to_file(path: &Path, plan: &AppendRegionPlan) -> Result<()> {
-    let mut book = umya_spreadsheet::reader::xlsx::read(path)
+    let mut book = crate::xlsx_import::read(path)
         .with_context(|| format!("failed to read workbook '{}'", path.display()))?;
     apply_append_region_plan_to_workbook(&mut book, plan)?;
-    umya_spreadsheet::writer::xlsx::write(&book, path)
+    crate::xlsx_export::write(&book, path)
         .with_context(|| format!("failed to write workbook '{}'", path.display()))
 }
 
 pub fn apply_append_region_plan_to_workbook(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     plan: &AppendRegionPlan,
 ) -> Result<()> {
     let structure_ops = vec![StructureOp::InsertRows {
@@ -724,13 +724,13 @@ pub fn apply_append_region_plan_to_workbook(
 }
 
 fn expand_table_target_on_workbook(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     sheet_name: &str,
     table_name: &str,
     appended_rows: u32,
 ) -> Result<()> {
     let sheet = book
-        .get_sheet_by_name_mut(sheet_name)
+        .get_sheet_by_name_mut(sheet_name).ok()
         .ok_or_else(|| invalid_argument(format!("sheet '{}' was not found", sheet_name)))?;
     let table = sheet
         .get_tables_mut()
@@ -745,10 +745,10 @@ fn expand_table_target_on_workbook(
                 table_name, sheet_name
             ))
         })?;
-    let start_col = *table.get_area().0.get_col_num();
-    let start_row = *table.get_area().0.get_row_num();
-    let end_col = *table.get_area().1.get_col_num();
-    let end_row = *table.get_area().1.get_row_num();
+    let start_col = table.get_area().0.get_col_num();
+    let start_row = table.get_area().0.get_row_num();
+    let end_col = table.get_area().1.get_col_num();
+    let end_row = table.get_area().1.get_row_num();
     table.set_area(((start_col, start_row), (end_col, end_row + appended_rows)));
     Ok(())
 }
@@ -976,7 +976,7 @@ pub fn build_clone_template_row_plan(
     patch_targets: ClonePatchTargets,
     merge_policy: CloneMergePolicy,
 ) -> Result<CloneTemplateRowPlan> {
-    let book = umya_spreadsheet::reader::xlsx::read(source)
+    let book = crate::xlsx_import::read(source)
         .with_context(|| format!("failed to read workbook '{}'", source.display()))?;
     build_clone_template_row_plan_from_workbook(
         &book,
@@ -994,7 +994,7 @@ pub fn build_clone_template_row_plan(
 
 #[allow(clippy::too_many_arguments)]
 pub fn build_clone_template_row_plan_from_workbook(
-    book: &umya_spreadsheet::Spreadsheet,
+    book: &umya_spreadsheet::Workbook,
     sheet_name: &str,
     source_row: u32,
     before: Option<u32>,
@@ -1013,7 +1013,7 @@ pub fn build_clone_template_row_plan_from_workbook(
     }
     let (anchor_kind, anchor_row, insert_at_row) = resolve_clone_anchor(before, after, insert_at)?;
     let sheet = book
-        .get_sheet_by_name(sheet_name)
+        .get_sheet_by_name(sheet_name).ok()
         .ok_or_else(|| invalid_argument(format!("sheet '{}' was not found", sheet_name)))?;
 
     let template_cells = inspect_template_row_cells(sheet, source_row);
@@ -1420,11 +1420,11 @@ fn copy_supported_row_dimension(
     destination: &mut umya_spreadsheet::structs::Row,
 ) {
     destination
-        .set_height(*source.get_height())
-        .set_descent(*source.get_descent())
-        .set_thick_bot(*source.get_thick_bot())
-        .set_custom_height(*source.get_custom_height())
-        .set_hidden(*source.get_hidden())
+        .set_height(source.get_height())
+        .set_descent(source.get_descent())
+        .set_thick_bot(source.get_thick_bot())
+        .set_custom_height(source.get_custom_height())
+        .set_hidden(source.get_hidden())
         .set_style(source.get_style().clone());
 }
 
@@ -1439,17 +1439,17 @@ pub fn apply_clone_template_row_plan_to_file(
         count: plan.count,
         expand_adjacent_sums: plan.expand_adjacent_sums,
     }];
-    let mut book = umya_spreadsheet::reader::xlsx::read(path)
+    let mut book = crate::xlsx_import::read(path)
         .with_context(|| format!("failed to read workbook '{}'", path.display()))?;
     apply_structure_ops_to_workbook(&mut book, &structure_ops, FormulaParsePolicy::Warn)?;
     apply_clone_template_row_postprocess(&mut book, plan)?;
-    umya_spreadsheet::writer::xlsx::write(&book, path)
+    crate::xlsx_export::write(&book, path)
         .with_context(|| format!("failed to write workbook '{}'", path.display()))?;
     Ok(())
 }
 
 pub fn apply_clone_template_row_plan_to_workbook(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     plan: &CloneTemplateRowPlan,
 ) -> Result<()> {
     let structure_ops = vec![StructureOp::CloneRow {
@@ -1464,7 +1464,7 @@ pub fn apply_clone_template_row_plan_to_workbook(
 }
 
 fn apply_clone_template_row_postprocess(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     plan: &CloneTemplateRowPlan,
 ) -> Result<()> {
     if plan.contained_merges.is_empty()
@@ -1474,7 +1474,7 @@ fn apply_clone_template_row_postprocess(
         return Ok(());
     }
     let sheet = book
-        .get_sheet_by_name_mut(&plan.sheet_name)
+        .get_sheet_by_name_mut(&plan.sheet_name).ok()
         .ok_or_else(|| invalid_argument(format!("sheet '{}' was not found", plan.sheet_name)))?;
 
     for copy_idx in 0..plan.count {
@@ -1548,7 +1548,7 @@ pub fn build_clone_row_band_plan(
     patch_targets: ClonePatchTargets,
     merge_policy: CloneMergePolicy,
 ) -> Result<CloneRowBandPlan> {
-    let book = umya_spreadsheet::reader::xlsx::read(source)
+    let book = crate::xlsx_import::read(source)
         .with_context(|| format!("failed to read workbook '{}'", source.display()))?;
     build_clone_row_band_plan_from_workbook(
         &book,
@@ -1566,7 +1566,7 @@ pub fn build_clone_row_band_plan(
 
 #[allow(clippy::too_many_arguments)]
 pub fn build_clone_row_band_plan_from_workbook(
-    book: &umya_spreadsheet::Spreadsheet,
+    book: &umya_spreadsheet::Workbook,
     sheet_name: &str,
     source_rows: &str,
     before: Option<u32>,
@@ -1584,7 +1584,7 @@ pub fn build_clone_row_band_plan_from_workbook(
     let source_row_count = source_end_row - source_start_row + 1;
     let (anchor_kind, anchor_row, insert_at_row) = resolve_clone_anchor(before, after, insert_at)?;
     let sheet = book
-        .get_sheet_by_name(sheet_name)
+        .get_sheet_by_name(sheet_name).ok()
         .ok_or_else(|| invalid_argument(format!("sheet '{}' was not found", sheet_name)))?;
 
     let template_rows = inspect_clone_band_rows(sheet, source_start_row, source_end_row);
@@ -1972,17 +1972,17 @@ pub fn apply_clone_row_band_plan_to_file(path: &Path, plan: &CloneRowBandPlan) -
         count: plan.rows_inserted,
         expand_adjacent_sums: plan.expand_adjacent_sums,
     }];
-    let mut book = umya_spreadsheet::reader::xlsx::read(path)
+    let mut book = crate::xlsx_import::read(path)
         .with_context(|| format!("failed to read workbook '{}'", path.display()))?;
     apply_structure_ops_to_workbook(&mut book, &structure_ops, FormulaParsePolicy::Warn)?;
     apply_clone_row_band_postprocess(&mut book, plan)?;
-    umya_spreadsheet::writer::xlsx::write(&book, path)
+    crate::xlsx_export::write(&book, path)
         .with_context(|| format!("failed to write workbook '{}'", path.display()))?;
     Ok(())
 }
 
 pub fn apply_clone_row_band_plan_to_workbook(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     plan: &CloneRowBandPlan,
 ) -> Result<()> {
     let structure_ops = vec![StructureOp::InsertRows {
@@ -1996,11 +1996,11 @@ pub fn apply_clone_row_band_plan_to_workbook(
 }
 
 fn apply_clone_row_band_postprocess(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     plan: &CloneRowBandPlan,
 ) -> Result<()> {
     let sheet = book
-        .get_sheet_by_name_mut(&plan.sheet_name)
+        .get_sheet_by_name_mut(&plan.sheet_name).ok()
         .ok_or_else(|| invalid_argument(format!("sheet '{}' was not found", plan.sheet_name)))?;
 
     for block_index in 0..plan.repeat {
@@ -2080,20 +2080,20 @@ fn detect_append_footer(
     end_col: u32,
     region_end_row: u32,
 ) -> Result<AppendFooterScan> {
-    let book = umya_spreadsheet::reader::xlsx::read(source)
+    let book = crate::xlsx_import::read(source)
         .with_context(|| format!("failed to read workbook '{}'", source.display()))?;
     detect_append_footer_on_workbook(&book, sheet_name, start_col, end_col, region_end_row)
 }
 
 fn detect_append_footer_on_workbook(
-    book: &umya_spreadsheet::Spreadsheet,
+    book: &umya_spreadsheet::Workbook,
     sheet_name: &str,
     start_col: u32,
     end_col: u32,
     region_end_row: u32,
 ) -> Result<AppendFooterScan> {
     let sheet = book
-        .get_sheet_by_name(sheet_name)
+        .get_sheet_by_name(sheet_name).ok()
         .ok_or_else(|| invalid_argument(format!("sheet '{}' was not found", sheet_name)))?;
 
     let mut footer_row = None;
@@ -2300,12 +2300,12 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    fn with_sheet<F>(configure: F) -> umya_spreadsheet::Spreadsheet
+    fn with_sheet<F>(configure: F) -> umya_spreadsheet::Workbook
     where
         F: FnOnce(&mut umya_spreadsheet::Worksheet),
     {
         let mut workbook = umya_spreadsheet::new_file();
-        let sheet = workbook.get_sheet_by_name_mut("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name_mut("Sheet1").ok().expect("sheet1");
         configure(sheet);
         workbook
     }
@@ -2317,7 +2317,7 @@ mod tests {
         let tempdir = tempfile::tempdir().expect("tempdir");
         let path = tempdir.path().join(name);
         let workbook = with_sheet(configure);
-        umya_spreadsheet::writer::xlsx::write(&workbook, &path).expect("write workbook");
+        crate::xlsx_export::write(&workbook, &path).expect("write workbook");
         (tempdir, path)
     }
 
@@ -2369,7 +2369,7 @@ mod tests {
             sheet.get_cell_mut("A4").set_value("Total");
             set_formula(sheet, "B4", "SUM(B1:B3)", "100");
         });
-        let sheet = workbook.get_sheet_by_name("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name("Sheet1").ok().expect("sheet1");
 
         let reason = footer_reason_for_row(sheet, 1, 2, 4);
         assert!(
@@ -2386,7 +2386,7 @@ mod tests {
             sheet.get_cell_mut("A4").set_value("Grand Total");
             set_formula(sheet, "B4", "SUM(B1:B3)", "100");
         });
-        let sheet = workbook.get_sheet_by_name("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name("Sheet1").ok().expect("sheet1");
 
         let reason = footer_reason_for_row(sheet, 1, 2, 4);
         assert!(
@@ -2403,7 +2403,7 @@ mod tests {
             sheet.get_cell_mut("A4").set_value("Subtotal");
             set_formula(sheet, "B4", "SUM(B1:B3)", "100");
         });
-        let sheet = workbook.get_sheet_by_name("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name("Sheet1").ok().expect("sheet1");
 
         let reason = footer_reason_for_row(sheet, 1, 2, 4);
         assert!(
@@ -2420,7 +2420,7 @@ mod tests {
             sheet.get_cell_mut("A4").set_value("Footer");
             set_formula(sheet, "B4", "SUM(B1:B3)", "100");
         });
-        let sheet = workbook.get_sheet_by_name("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name("Sheet1").ok().expect("sheet1");
 
         let reason = footer_reason_for_row(sheet, 1, 2, 4);
         assert!(
@@ -2436,7 +2436,7 @@ mod tests {
         let workbook = with_sheet(|sheet| {
             set_formula(sheet, "B4", "SUM(B2:B3)", "30");
         });
-        let sheet = workbook.get_sheet_by_name("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name("Sheet1").ok().expect("sheet1");
 
         assert_eq!(
             footer_reason_for_row(sheet, 1, 2, 4).as_deref(),
@@ -2449,7 +2449,7 @@ mod tests {
         let workbook = with_sheet(|sheet| {
             set_formula(sheet, "D4", "SUM(D2:D3)", "30");
         });
-        let sheet = workbook.get_sheet_by_name("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name("Sheet1").ok().expect("sheet1");
 
         assert_eq!(
             footer_reason_for_row(sheet, 1, 4, 4).as_deref(),
@@ -2463,7 +2463,7 @@ mod tests {
             sheet.get_cell_mut("A4").set_value("  ToTaL  ");
             set_formula(sheet, "B4", "SUM(B1:B3)", "100");
         });
-        let sheet = workbook.get_sheet_by_name("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name("Sheet1").ok().expect("sheet1");
 
         let reason = footer_reason_for_row(sheet, 1, 2, 4);
         assert!(
@@ -2479,7 +2479,7 @@ mod tests {
         let workbook = with_sheet(|sheet| {
             sheet.get_cell_mut("A4").set_value("Total Revenue Plan");
         });
-        let sheet = workbook.get_sheet_by_name("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name("Sheet1").ok().expect("sheet1");
 
         assert!(footer_reason_for_row(sheet, 1, 2, 4).is_none());
     }
@@ -2490,7 +2490,7 @@ mod tests {
             sheet.get_cell_mut("A4").set_value("Total Revenue Plan");
             set_formula(sheet, "B4", "SUM(B1:B3)", "100");
         });
-        let sheet = workbook.get_sheet_by_name("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name("Sheet1").ok().expect("sheet1");
 
         let reason = footer_reason_for_row(sheet, 1, 2, 4);
         assert!(
@@ -2507,7 +2507,7 @@ mod tests {
             sheet.get_cell_mut("A4").set_value("Alice");
             set_formula(sheet, "B4", "B2+B3", "30");
         });
-        let sheet = workbook.get_sheet_by_name("Sheet1").expect("sheet1");
+        let sheet = workbook.get_sheet_by_name("Sheet1").ok().expect("sheet1");
 
         assert!(footer_reason_for_row(sheet, 1, 2, 4).is_none());
     }
@@ -2956,8 +2956,8 @@ mod tests {
         .expect("build plan");
         apply_clone_template_row_plan_to_file(&path, &plan).expect("apply plan");
 
-        let book = umya_spreadsheet::reader::xlsx::read(&path).expect("read workbook");
-        let sheet = book.get_sheet_by_name("Sheet1").expect("sheet1");
+        let book = crate::xlsx_import::read(&path).expect("read workbook");
+        let sheet = book.get_sheet_by_name("Sheet1").ok().expect("sheet1");
         assert_eq!(sheet.get_cell("A3").expect("A3").get_value(), "Alpha");
         assert_eq!(sheet.get_cell("B4").expect("B4").get_value(), "10");
         let merge_ranges: Vec<String> = sheet
@@ -3022,8 +3022,8 @@ mod tests {
         .expect("build plan");
         apply_clone_template_row_plan_to_file(&path, &plan).expect("apply plan");
 
-        let workbook = umya_spreadsheet::reader::xlsx::read(&path).expect("read workbook");
-        let sheet = workbook.get_sheet_by_name("Sheet1").expect("sheet1");
+        let workbook = crate::xlsx_import::read(&path).expect("read workbook");
+        let sheet = workbook.get_sheet_by_name("Sheet1").ok().expect("sheet1");
         let sqrefs = sheet
             .get_data_validations()
             .expect("validations")
@@ -3148,8 +3148,8 @@ mod tests {
         .expect("build plan");
         apply_clone_row_band_plan_to_file(&path, &plan).expect("apply plan");
 
-        let book = umya_spreadsheet::reader::xlsx::read(&path).expect("read workbook");
-        let sheet = book.get_sheet_by_name("Sheet1").expect("sheet1");
+        let book = crate::xlsx_import::read(&path).expect("read workbook");
+        let sheet = book.get_sheet_by_name("Sheet1").ok().expect("sheet1");
         assert_eq!(sheet.get_cell("A4").expect("A4").get_value(), "Alpha");
         assert_eq!(sheet.get_cell("A5").expect("A5").get_value(), "Beta");
         assert_eq!(
@@ -3176,11 +3176,11 @@ mod tests {
         assert!(merge_ranges.contains(&"A4:A5".to_string()));
         assert!(merge_ranges.contains(&"A6:A7".to_string()));
         assert_eq!(
-            sheet.get_row_dimension(&4).map(|row| *row.get_height()),
+            sheet.get_row_dimension(&4).map(|row| row.get_height()),
             Some(28.0)
         );
         assert_eq!(
-            sheet.get_row_dimension(&5).map(|row| *row.get_height()),
+            sheet.get_row_dimension(&5).map(|row| row.get_height()),
             Some(32.0)
         );
         let validations = sheet.get_data_validations().expect("validations");
@@ -3234,8 +3234,8 @@ mod tests {
 
         apply_clone_row_band_plan_to_file(&path, &plan).expect("apply plan");
 
-        let book = umya_spreadsheet::reader::xlsx::read(&path).expect("read workbook");
-        let sheet = book.get_sheet_by_name("Sheet1").expect("sheet1");
+        let book = crate::xlsx_import::read(&path).expect("read workbook");
+        let sheet = book.get_sheet_by_name("Sheet1").ok().expect("sheet1");
 
         // Row 4 (cloned from Row 2, offset +2)
         assert_eq!(
@@ -3311,8 +3311,8 @@ mod tests {
 
         apply_clone_row_band_plan_to_file(&path, &plan).expect("apply plan");
 
-        let book = umya_spreadsheet::reader::xlsx::read(&path).expect("read workbook");
-        let sheet = book.get_sheet_by_name("Sheet1").expect("sheet1");
+        let book = crate::xlsx_import::read(&path).expect("read workbook");
+        let sheet = book.get_sheet_by_name("Sheet1").ok().expect("sheet1");
 
         let merge_ranges: Vec<String> = sheet
             .get_merge_cells()

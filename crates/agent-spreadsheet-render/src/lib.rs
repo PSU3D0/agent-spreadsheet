@@ -184,7 +184,7 @@ pub enum RenderError {
 /// `workbook` supplies the theme colour scheme; nothing else is read from it.
 pub fn extract_scene(
     sheet: &umya_spreadsheet::Worksheet,
-    workbook: &umya_spreadsheet::Spreadsheet,
+    workbook: &umya_spreadsheet::Workbook,
     range: &RangeBounds,
     options: &RenderOptions<'_>,
 ) -> Result<Scene, RenderError> {

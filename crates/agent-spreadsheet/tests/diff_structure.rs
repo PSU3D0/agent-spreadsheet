@@ -5,7 +5,7 @@ use agent_spreadsheet_mcp::diff::{Change, calculate_changeset, names::NameDiff, 
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use umya_spreadsheet::{Spreadsheet, structs::Table};
+use umya_spreadsheet::{Workbook as Spreadsheet, structs::Table};
 use zip::write::FileOptions;
 use zip::{ZipArchive, ZipWriter};
 
@@ -142,7 +142,7 @@ fn test_table_changes() {
     // Fork: Table "Sales" resized to A1:C10
     scenario.setup(
         |book| {
-            let sheet = book.get_sheet_mut(&0).unwrap();
+            let sheet = book.get_sheet_mut(&0).ok().unwrap();
             sheet.set_name("Sheet1");
             let mut table = Table::default();
             table.set_name("Table1");
@@ -151,7 +151,7 @@ fn test_table_changes() {
             sheet.add_table(table);
         },
         |book| {
-            let sheet = book.get_sheet_mut(&0).unwrap();
+            let sheet = book.get_sheet_mut(&0).ok().unwrap();
             sheet.set_name("Sheet1");
             let mut table = Table::default();
             table.set_name("Table1");
@@ -186,11 +186,11 @@ fn test_table_addition() {
 
     scenario.setup(
         |book| {
-            let sheet = book.get_sheet_mut(&0).unwrap();
+            let sheet = book.get_sheet_mut(&0).ok().unwrap();
             sheet.set_name("Sheet1");
         },
         |book| {
-            let sheet = book.get_sheet_mut(&0).unwrap();
+            let sheet = book.get_sheet_mut(&0).ok().unwrap();
             sheet.set_name("Sheet1");
             let mut table = Table::default();
             table.set_name("NewTable");

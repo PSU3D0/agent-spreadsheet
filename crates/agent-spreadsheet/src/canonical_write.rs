@@ -1440,7 +1440,7 @@ fn parse_cell_ref(value: &str) -> Result<(u32, u32)> {
 }
 
 fn apply_grid_to_workbook(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     sheet_name: &str,
     anchor: &str,
     grid: &GridPayload,
@@ -1600,7 +1600,7 @@ fn apply_grid_to_workbook(
 }
 
 pub(crate) fn apply_write_op_to_workbook(
-    book: &mut umya_spreadsheet::Spreadsheet,
+    book: &mut umya_spreadsheet::Workbook,
     op: &WriteOp,
     policy: FormulaParsePolicy,
 ) -> Result<Value> {
@@ -1910,7 +1910,7 @@ pub(crate) fn apply_bundle_atomically_to_path(
     }
     let original_bytes = fs::read(path)?;
     let original =
-        umya_spreadsheet::reader::xlsx::read_reader(std::io::Cursor::new(&original_bytes), true)?;
+        crate::xlsx_import::read_reader(std::io::Cursor::new(&original_bytes), true)?;
     let policy = bundle
         .formula_parse_policy
         .unwrap_or(FormulaParsePolicy::Warn);
@@ -2004,7 +2004,7 @@ impl ResidentWriteSession {
     /// bound to the owner's revision. No XLSX export or reader reconstruction.
     pub fn read_view(
         &self,
-    ) -> Result<crate::workbook::WorkbookContext<&umya_spreadsheet::Spreadsheet>> {
+    ) -> Result<crate::workbook::WorkbookContext<&umya_spreadsheet::Workbook>> {
         self.ensure_usable()?;
         let view = crate::workbook::WorkbookContext::borrowed(
             self.workbook.spreadsheet(),
@@ -2439,11 +2439,11 @@ fn applied_result(index: usize, op: &WriteOp, detail: Value) -> WriteOpResult {
 }
 
 fn apply_atomic_candidate(
-    original: &umya_spreadsheet::Spreadsheet,
+    original: &umya_spreadsheet::Workbook,
     ops: &[WriteOp],
     policy: FormulaParsePolicy,
 ) -> (
-    umya_spreadsheet::Spreadsheet,
+    umya_spreadsheet::Workbook,
     Vec<WriteOpResult>,
     Option<usize>,
 ) {
@@ -2575,9 +2575,9 @@ fn canonical_response_from_prepared(
 }
 
 fn logical_workbook_sha256(bytes: &[u8]) -> Result<String> {
-    let mut book = umya_spreadsheet::reader::xlsx::read_reader(std::io::Cursor::new(bytes), true)?;
+    let mut book = crate::xlsx_import::read_reader(std::io::Cursor::new(bytes), true)?;
     for sheet in book.get_sheet_collection_mut() {
-        for cell in sheet.get_cell_collection_mut() {
+        for cell in sheet.cells_mut() {
             if cell.is_formula() {
                 cell.set_formula_result_blank();
             }
@@ -2586,9 +2586,9 @@ fn logical_workbook_sha256(bytes: &[u8]) -> Result<String> {
     Ok(crate::utils::hash_bytes_sha256_hex(&workbook_bytes(&book)?))
 }
 
-fn workbook_bytes(book: &umya_spreadsheet::Spreadsheet) -> Result<Vec<u8>> {
+fn workbook_bytes(book: &umya_spreadsheet::Workbook) -> Result<Vec<u8>> {
     let mut bytes = Vec::new();
-    umya_spreadsheet::writer::xlsx::write_writer(book, &mut bytes)?;
+    crate::xlsx_export::write_writer(book, &mut bytes)?;
     Ok(bytes)
 }
 
@@ -2620,7 +2620,7 @@ fn execute_write_transaction<B: WriteTransactionBackend>(
         risk: worst_risk(&request.ops),
     };
     let original =
-        umya_spreadsheet::reader::xlsx::read_reader(std::io::Cursor::new(&snapshot.bytes), true)?;
+        crate::xlsx_import::read_reader(std::io::Cursor::new(&snapshot.bytes), true)?;
 
     if matches!(request.mode, WriteMode::Preview | WriteMode::Stage) || request.atomic {
         let (candidate, results, failure) = apply_atomic_candidate(&original, &request.ops, policy);
@@ -3125,15 +3125,15 @@ fn prepare_common_transaction(
             if before.contains_key(&key) {
                 continue;
             }
-            let source_sheet = match source.get_sheet_by_name(&sheet_name) {
+            let source_sheet = match source.get_sheet_by_name(&sheet_name).ok() {
                 Some(sheet) => sheet,
                 None => continue,
             };
-            let original = source_sheet.get_cell((column, row)).cloned();
+            let original = source_sheet.get_cell((*column, *row)).cloned();
             before.insert(key, original.as_ref().map(materialize_umya_cell));
             if let Some(cell) = original {
                 shadow
-                    .get_sheet_by_name_mut(&sheet_name)
+                    .get_sheet_by_name_mut(&sheet_name).ok()
                     .expect("source sheet copied to shadow")
                     .set_cell(cell);
             }
@@ -3166,7 +3166,7 @@ fn prepare_common_transaction(
     ordered_before.sort_by(|((ls, lc, lr), _), ((rs, rc, rr), _)| (ls, lr, lc).cmp(&(rs, rr, rc)));
     for ((sheet_name, column, row), expected_before) in ordered_before {
         let after = shadow
-            .get_sheet_by_name(sheet_name)
+            .get_sheet_by_name(sheet_name).ok()
             .and_then(|sheet| sheet.get_cell((*column, *row)))
             .map(materialize_umya_cell);
         if let Some(change) = prepared_cell_change(
@@ -5305,12 +5305,12 @@ mod durable_calculation_failure_tests {
     #[tokio::test]
     async fn failed_retained_evaluation_poison_requires_durable_recovery() {
         let mut book = umya_spreadsheet::new_file();
-        book.get_sheet_by_name_mut("Sheet1")
+        book.get_sheet_by_name_mut("Sheet1").ok()
             .unwrap()
             .get_cell_mut("A1")
             .set_formula("1+1");
         let mut base = Vec::new();
-        umya_spreadsheet::writer::xlsx::write_writer(&book, &mut base).unwrap();
+        crate::xlsx_export::write_writer(&book, &mut base).unwrap();
         let dir = tempfile::tempdir().unwrap();
         let journal = NativeResidentJournal::open(dir.path()).unwrap();
         let mut session = ResidentWriteSession::from_bytes("session:test", &base).unwrap();

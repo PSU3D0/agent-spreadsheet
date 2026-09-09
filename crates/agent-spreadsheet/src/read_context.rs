@@ -37,7 +37,7 @@ pub trait ReadContext: Clone + Send + Sync {
 }
 
 impl ReadContext for Arc<AppState> {
-    type Source = Arc<parking_lot::RwLock<umya_spreadsheet::Spreadsheet>>;
+    type Source = Arc<parking_lot::RwLock<umya_spreadsheet::Workbook>>;
     fn config(&self) -> Arc<ServerConfig> {
         self.as_ref().config()
     }
@@ -83,11 +83,11 @@ impl ReadContext for Arc<AppState> {
 
 #[derive(Clone)]
 pub struct BorrowedReadContext<'a> {
-    pub view: Arc<WorkbookContext<&'a umya_spreadsheet::Spreadsheet>>,
+    pub view: Arc<WorkbookContext<&'a umya_spreadsheet::Workbook>>,
     pub config: Arc<ServerConfig>,
 }
 impl<'a> ReadContext for BorrowedReadContext<'a> {
-    type Source = &'a umya_spreadsheet::Spreadsheet;
+    type Source = &'a umya_spreadsheet::Workbook;
     fn config(&self) -> Arc<ServerConfig> {
         self.config.clone()
     }
