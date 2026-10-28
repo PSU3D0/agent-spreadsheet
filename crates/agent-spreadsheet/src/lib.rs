@@ -48,6 +48,10 @@ pub mod session_history;
 pub mod resident_export;
 pub mod state;
 pub mod styles;
+#[cfg(feature = "recalc-formualizer")]
+pub mod stateless_edit;
+#[cfg(feature = "recalc-formualizer")]
+pub mod stateless_read;
 pub mod tools;
 pub mod types;
 pub mod utils;

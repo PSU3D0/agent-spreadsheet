@@ -1,7 +1,16 @@
 //! Byte-session bindings over the shared resident document, evaluator and journal.
 mod compat;
+mod edit_xlsx;
+mod inspect_xlsx;
+pub use inspect_xlsx::{ReadError,ReadReport};
+pub use edit_xlsx::{EditXlsxError, EditXlsxMetadata, EditXlsxOutput};
 mod runtime;
 mod storage;
+mod source_xlsx;
+pub use source_xlsx::{
+    SourceExternalLinks, SourceXlsxError, SourceXlsxErrorSummary, SourceXlsxLimits, SourceXlsxMetadata,
+    SourceXlsxOptions, SourceXlsxOutput, SourceXlsxSheetSummary, SourceXlsxSummary,
+};
 use agent_spreadsheet::{
     config::{OutputProfile, RecalcBackendKind, ServerConfig, TransportKind},
     core::session::{SessionApplySummary, SessionTransformOp},

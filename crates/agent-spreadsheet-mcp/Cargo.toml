@@ -51,8 +51,8 @@ ahash = "0.8"
 smallvec = "1.13"
 umya-spreadsheet = "=3.1.0"
 ovba = "0.7.1"
-formualizer-parse = { version = "3.1.1" }
-formualizer = { version = "0.9.1", default-features = false, features = ["workbook", "umya3"], optional = true }
+formualizer-parse = { version = "4.1.0" }
+formualizer = { version = "0.13.0", default-features = false, features = ["workbook", "umya3"], optional = true }
 walkdir = "2.5"
 globset = "0.4"
 rand = "0.8"

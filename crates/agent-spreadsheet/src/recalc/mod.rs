@@ -12,6 +12,8 @@ pub mod macro_uri;
 mod pooled;
 #[cfg(feature = "recalc-formualizer")]
 mod resident;
+#[cfg(feature = "recalc-formualizer")]
+pub mod source_xlsx;
 #[cfg(feature = "recalc-libreoffice")]
 mod screenshot;
 
@@ -29,6 +31,8 @@ pub use fire_and_forget::FireAndForgetExecutor;
 pub use formualizer_backend::{EvaluatorCounters, FormualizerBackend, recalculate_bytes_sync};
 #[cfg(feature = "recalc-formualizer")]
 pub use resident::{CalculationStamp, ExportStamp, ResidentRevision, ResidentWorkbook};
+#[cfg(feature = "recalc-formualizer")]
+pub use source_xlsx::recalculate_source_xlsx_bytes;
 #[cfg(feature = "recalc-formualizer")]
 pub(crate) use resident::{
     ResidentCalculationEffect, ResidentMaterializedCell, ResidentMaterializedValue,

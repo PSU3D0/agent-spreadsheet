@@ -26,6 +26,33 @@ Workspace discovery, fork/checkpoint/history lifecycle, LibreOffice rendering, S
 
 The older named bindings remain for compatibility. New integrations should use `executeOperation`; `exportWorkbook` and `disposeSession` own the adapter lifecycle.
 
+## Original-source XLSX cache recalculation
+
+Call this before `createSession` when repairing source-package caches. It sends the supplied bytes directly to Formualizer's strict source API, without importing/saving through Umya or allocating a session. Resident editing and canonical session recalculation keep their existing contracts.
+
+```js
+const repaired = recalculateSourceXlsx(originalBytes, JSON.stringify({
+  errorLocationLimit: 3,
+  externalLinks: "cached",
+  limits: { maxFormulaCells: 200000, maxColumns: 1024 }
+}));
+const outputBytes = repaired.bytes; // Uint8Array, separately from metadata
+const metadata = JSON.parse(repaired.metadataJson);
+repaired.free(); // releases the Rust result allocation
+```
+
+The synchronous binding returns bytes only on success. A current package is returned byte-for-byte; changed caches preserve unrelated package members. `metadata.summary` contains exact `evaluated` and `errors` totals, per-sheet totals, `errorSummary` counts and sampled `locations`/`messages` with `locationsTruncated`, and `unknownFunctions`. Excel error values are successful data (`status: "errors_found"`), separate from a thrown admission/parse/unsupported/cancellation/operational error. Failures throw `{code,message}` with the upstream reason and return no result bytes. Physical `cacheCellsChanged` and `worksheetPartsChanged` are distinct from engine deltas; `clockNowUtc` is the effective RFC3339 clock and `externalLinksUsed` counts cached links read.
+
+Options are strict camelCase JSON: unknown fields fail. `errorLocationLimit` controls sampling only; `externalLinks` accepts `"cached"` (default) or `"refuse"`. Neither refreshes external links. `limits` accepts all upstream bounds: `maxInputBytes`, `maxEntries`, `maxExpandedBytes`, `maxWorksheetBytes`, `maxFormulaCells`, `maxOutputBytes`, `maxXmlDepth`, `maxCells`, `maxColumns`. Omitted values use upstream defaults (currently 64 MiB input/output, 10,000 entries, 256 MiB expanded, 128 MiB per worksheet, 100,000 formulas, XML depth 128, 8,000,000 cells, 256 columns, 20 sampled locations per error kind). These are configurable admission bounds, not universal engine capacity. The adapter independently caps input/output at 64 MiB and options JSON at 1 MiB. Its inherited output guard is applied to the effective upstream output limit before package construction: raising maxOutputBytes cannot bypass that adapter ceiling. This is an adapter capacity guard, not a universal Node/WASM or engine limit.
+
+JS uses upstream default EvalConfig with the ambient clock and default seed. Custom evaluation configuration, fixed clock/timezone/seed and cancellation tokens are unavailable through this synchronous JS binding; supplying such options fails instead of ignoring them. A host may terminate its worker to interrupt execution. Native Rust callers use `agent_spreadsheet::recalc::source_xlsx::recalculate_source_xlsx_bytes(&bytes, XlsxRecalculateOptions)` with the full upstream EvalConfig, cancellation token and limits. This byte API performs no shared-file publication or CAS; the caller owns publication.
+
+## Stateless batch editing
+
+Compact requests skip full package diff construction: edit.change_count is null and edit.diff_exact is false. With details:true, the existing canonical diff summary is computed and all existing per-op facts are returned; explicit details may be larger and are not silently dropped at a fixed receipt ceiling. Existing operation/payload and workbook host bounds remain.
+
+`editXlsx(originalBytes, requestJson, recalcOptionsJson?)` returns the same typed-byte result with separate metadataJson and free() lifetime. Request fields are existing canonical `ops`, `recalculate: "auto" | "never" | "always"` (auto default), optional `details` and `formula_parse_policy`. No resource IDs or caller revisions are needed. Edits are atomic; failed edits/requested strict recalc return no result bytes. Never and presentation-only Auto avoid evaluator construction; their cache state stays unknown. XML loading and necessary formula translation/validation still occur. Selected calculation uses the strict source helper on the edited rich document; original-package preservation is not promised across editing. Existing source recalc JSON options/adapter ceilings apply. Native entrypoint is `agent_spreadsheet::stateless_edit::edit_xlsx_bytes` with full upstream options. See the plugin stateless-edits reference for canonical request examples and compact receipt fields.
+
 ## Limits
 
 Limits are checked before workbook bytes are copied into WASM or parsed and before parameter JSON is parsed:
@@ -47,3 +74,9 @@ cargo clippy -p agent-spreadsheet-wasm --all-targets -- -D warnings
 ```
 
 The browser test requires a configured WebDriver/browser environment. The Node test uses `wasm-bindgen-test-runner`.
+
+## Stateless source inspection and engine navigation
+
+Development source bindings add `inspectXlsx(inputBytes, requestJson)` and `traceXlsx(inputBytes, requestJson)`. Both return `ReadXlsxResult` with `metadataJson` and `free()`; no workbook bytes are exported. The native `SessionApi::inspect_xlsx/trace_xlsx` returns typed ReadReport/ReadError. Strict unknown fields fail with plain JS code/message errors.
+
+Inspection reports native source values and separately labeled unverified formula caches. Trace uses the native Workbook importer and engine reports without evaluation or a source-cache overlay; NeverEvaluated/null is distinct from source blankness. Default engine max_depth0 materializes root links/direct-neighbor boundary snapshots with Elided/unexplored facts intact. Literal larger limits, details, fingerprint-bound coordinate/materialized-node pages and reroot requests are supported. Native table/external import gaps remain explicit; no whole-graph completeness certification is made. The plugin's references/stateless-inspection.md documents requests, paging, costs and lifetime. These bindings require an explicitly selected matching development runtime; registry0.16 remains unchanged.

@@ -1288,7 +1288,34 @@ fn swap_temp(temp: crate::hostfs::NamedTempFile, target: &Path) -> Result<()> {
     Ok(())
 }
 
+
+// Test-only scoped proof: compact stateless edits must not stream full package diffs.
+#[cfg(test)]
+pub(crate) mod diff_test_guard {
+    use std::cell::Cell;
+    thread_local! { static FORBIDDEN: Cell<bool> = const { Cell::new(false) }; }
+    pub(crate) struct Guard(bool);
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            FORBIDDEN.with(|flag| flag.set(self.0));
+        }
+    }
+    pub(crate) fn forbid() -> Guard {
+        Guard(FORBIDDEN.with(|flag| flag.replace(true)))
+    }
+    pub(crate) fn assert_allowed() {
+        FORBIDDEN.with(|flag| {
+            assert!(
+                !flag.get(),
+                "full package diff forbidden in compact stateless test"
+            );
+        });
+    }
+}
+
 fn diff_bytes(before: &[u8], after: &[u8]) -> Result<WriteDiff> {
+    #[cfg(test)]
+    diff_test_guard::assert_allowed();
     let changes = crate::diff::calculate_changeset_bytes(before, after, None)?;
     changes_to_write_diff(changes)
 }
@@ -1946,6 +1973,8 @@ pub struct ResidentWriteSession {
 
 impl ResidentWriteSession {
     pub fn from_bytes(resource_id: impl Into<String>, bytes: &[u8]) -> Result<Self> {
+        #[cfg(test)]
+        crate::stateless_edit::construction_guard::assert_allowed();
         let resource_id = resource_id.into();
         let parsed: ResourceId = serde_json::from_value(json!(resource_id.clone()))?;
         if !parsed.as_str().starts_with("session:") {
@@ -2596,6 +2625,14 @@ fn execute_write_transaction<B: WriteTransactionBackend>(
     backend: &mut B,
     request: WriteRequest,
 ) -> Result<WriteResponseData> {
+    execute_write_transaction_with_diff(backend, request, true)
+}
+
+fn execute_write_transaction_with_diff<B: WriteTransactionBackend>(
+    backend: &mut B,
+    request: WriteRequest,
+    compute_diff: bool,
+) -> Result<WriteResponseData> {
     validate_request(&request)?;
     backend.validate_resource(&request.resource_id)?;
     if request.mode == WriteMode::Stage && !backend.supports_stage() {
@@ -2651,7 +2688,18 @@ fn execute_write_transaction<B: WriteTransactionBackend>(
         }
 
         let candidate_bytes = workbook_bytes(&candidate)?;
-        let diff = diff_bytes(&snapshot.bytes, &candidate_bytes)?;
+        let diff = if compute_diff {
+            diff_bytes(&snapshot.bytes, &candidate_bytes)?
+        } else {
+            // Internal compact stateless result; its public receipt reports an unknown count.
+            WriteDiff {
+                change_count: 0,
+                exact: false,
+                precision: "not_computed".to_string(),
+                changes: Vec::new(),
+                effects: Vec::new(),
+            }
+        };
         let (revision_after, change_id) = match request.mode {
             WriteMode::Preview => (snapshot.revision.clone(), None),
             WriteMode::Stage => {
@@ -3250,7 +3298,7 @@ fn prepare_common_transaction(
     })
 }
 
-fn calculation_effect_for_ops<'a>(
+pub(crate) fn calculation_effect_for_ops<'a>(
     mut ops: impl Iterator<Item = &'a WriteOp>,
 ) -> crate::recalc::ResidentCalculationEffect {
     if ops.all(|op| {
@@ -4881,6 +4929,26 @@ pub async fn execute_durable_write_on_resident<
     request: WriteRequest,
 ) -> Result<WriteResponseData> {
     execute_durable_prepared_on_resident(session, storage, request_id, request, None).await
+}
+
+/// Atomic stateless editing can omit the unrequested full package diff.
+/// Existing canonical entrypoints always retain their diff behavior.
+pub(crate) fn execute_stateless_write_on_bytes(
+    bytes: &[u8],
+    current_revision: &str,
+    request: WriteRequest,
+    compute_diff: bool,
+) -> Result<(WriteResponseData, Option<Vec<u8>>)> {
+    if !request.atomic || request.mode != WriteMode::Apply {
+        bail!("stateless edits require atomic apply");
+    }
+    let mut backend = ByteSessionBackend {
+        bytes,
+        revision: current_revision,
+        committed: None,
+    };
+    let response = execute_write_transaction_with_diff(&mut backend, request, compute_diff)?;
+    Ok((response, backend.committed))
 }
 
 pub fn execute_write_on_bytes(

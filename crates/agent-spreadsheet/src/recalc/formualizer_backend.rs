@@ -84,6 +84,8 @@ pub(crate) struct EvaluatorEvaluation {
 
 impl RetainedEvaluator {
     pub(crate) fn ingest(adapter: &mut UmyaAdapter) -> Result<Self> {
+        #[cfg(test)]
+        crate::stateless_edit::construction_guard::assert_allowed();
         let eval_config = EvalConfig {
             defer_graph_building: true,
             formula_parse_policy: FormulaParsePolicy::CoerceToError,

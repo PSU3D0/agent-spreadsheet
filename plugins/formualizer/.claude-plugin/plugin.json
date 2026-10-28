@@ -1,0 +1,11 @@
+{
+  "name": "formualizer",
+  "displayName": "Formualizer",
+  "version": "0.1.0-alpha.1",
+  "description": "Prototype local spreadsheet read and export transport using the pinned agent-spreadsheet WASM runtime.",
+  "author": {
+    "name": "Formualizer",
+    "url": "https://github.com/PSU3D0/agent-spreadsheet"
+  },
+  "license": "Apache-2.0"
+}

@@ -54,10 +54,12 @@ ahash = "0.8"
 smallvec = "1.13"
 umya-spreadsheet = "=3.1.0"
 ovba = "0.7.1"
-formualizer-parse = { version = "3.1.1" }
+formualizer-parse = { version = "4.1.0" }
 # Cold document I/O compatibility is required even when calculation is disabled.
-formualizer-workbook = { version = "0.9.1", default-features = false, features = ["umya3"] }
-formualizer = { version = "0.9.1", default-features = false, features = ["eval", "workbook", "umya3", "common"], optional = true }
+formualizer-workbook = { version = "0.13.0", default-features = false, features = ["umya3"] }
+# Runtime features are independent in 0.13: retain ambient TODAY/NOW behavior
+# on native and JS hosts, and compile the source-package recalc API explicitly.
+formualizer = { version = "0.13.0", default-features = false, features = ["eval", "workbook", "umya3", "common", "system-clock", "xlsx-recalc"], optional = true }
 web-time = "1.1"
 walkdir = { version = "2.5", optional = true }
 globset = { version = "0.4", optional = true }
@@ -94,7 +96,7 @@ tokio = { version = "1.37", features = ["rt-multi-thread", "fs", "signal", "net"
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom04 = { package = "getrandom", version = "0.4", features = ["wasm_js"] }
 getrandom = { version = "0.3", features = ["wasm_js"] }
-formualizer = { version = "0.9.1", default-features = false, features = ["js-runtime"], optional = true }
+formualizer = { version = "0.13.0", default-features = false, features = ["js-runtime"], optional = true }
 
 [features]
 # Native consumers get the historical surface: recalc + CLI arg parsing + a
