@@ -68,8 +68,8 @@ export async function recalculateFile(runtime, input, optionsJson, output) {
     throw new Error("Runtime does not export recalculateSourceXlsx. Registry 0.16.0 lacks this binding; select --dev-runtime LOCAL_LOADER.mjs built with matching source glue/WASM. No session fallback is available.");
   }
   const receipt = await byteFile(input, output, bytes => runtime.recalculateSourceXlsx(bytes, optionsJson));
-  const { bytes_unchanged, ...rest } = receipt;
-  return { ...rest, current: bytes_unchanged };
+  // Legacy current means byte identity only; it makes no freshness claim.
+  return { ...receipt, bytesUnchanged: receipt.bytes_unchanged, current: receipt.bytes_unchanged };
 }
 
 export async function editFile(runtime, input, requestJson, output, recalcOptionsJson) {

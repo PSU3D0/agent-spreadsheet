@@ -1,4 +1,4 @@
-//! Atomic file-in/edit/optional-strict-recalc/file-out, without resident ownership.
+//! Atomic file-in/edit/optional-source-recalc/file-out, without resident ownership.
 use crate::canonical_write::{
     WriteMode, WriteOp, WriteOpResult, WriteOpStatus, WriteRequest, WriteResponseData,
     calculation_effect_for_ops, execute_stateless_write_on_bytes,
@@ -43,6 +43,9 @@ pub struct EditCalculationReceipt {
     pub reason: &'static str,
     pub recommendation: &'static str,
     pub cache_state: &'static str,
+    pub attempted: bool,
+    pub completed: bool,
+    pub artifact_available: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -60,6 +63,11 @@ pub struct StatelessEditReceipt {
 pub enum EditedArtifact {
     Document(Vec<u8>),
     Recalculated(XlsxRecalculateResult),
+    Deferred {
+        bytes: Vec<u8>,
+        reason: crate::recalc::source_xlsx::CalculationDeferredReason,
+        context: String,
+    },
 }
 
 #[derive(Debug)]
@@ -70,7 +78,7 @@ pub struct StatelessEditResult {
 impl StatelessEditResult {
     pub fn bytes(&self) -> &[u8] {
         match &self.artifact {
-            EditedArtifact::Document(bytes) => bytes,
+            EditedArtifact::Document(bytes) | EditedArtifact::Deferred { bytes, .. } => bytes,
             EditedArtifact::Recalculated(result) => &result.bytes,
         }
     }
@@ -92,7 +100,7 @@ pub enum StatelessEditError {
 }
 
 /// Apply existing canonical ops atomically in a fresh rich document, optionally
-/// repairing its caches with the strict source API. No file publication or CAS.
+/// repairing its caches with the selected source profile. No file publication or CAS.
 ///
 /// Rich editing may rewrite/drop unsupported original content. Strict package
 /// preservation applies only to subsequent recalculation of the edited bytes.
@@ -101,14 +109,40 @@ pub fn edit_xlsx_bytes(
     request: StatelessEditRequest,
     recalc_options: XlsxRecalculateOptions,
 ) -> Result<StatelessEditResult, StatelessEditError> {
-    edit_with_recalculator(input, request, |edited| {
+    if let Some(policy) = &recalc_options.calculation {
+        policy.validate()?;
+    }
+    let allow_deferred = recalc_options.profile
+        == crate::recalc::source_xlsx::XlsxRecalculateProfile::Workbook
+        && !recalc_options.require_complete;
+    let output_limit = recalc_options.limits.max_output_bytes;
+    let result = edit_with_recalculator_policy(input, request, allow_deferred, |edited| {
         recalculate_source_xlsx_bytes(edited, recalc_options)
-    })
+    })?;
+    if result.bytes().len() > output_limit {
+        return Err(IoError::LoadBudgetExceeded {
+            backend: "xlsx".into(),
+            sheet: String::new(),
+            message: "edited output exceeds maxOutputBytes".into(),
+        }
+        .into());
+    }
+    Ok(result)
 }
 
+#[cfg(test)]
 fn edit_with_recalculator(
     input: &[u8],
     request: StatelessEditRequest,
+    recalculate: impl FnOnce(&[u8]) -> Result<XlsxRecalculateResult, IoError>,
+) -> Result<StatelessEditResult, StatelessEditError> {
+    edit_with_recalculator_policy(input, request, false, recalculate)
+}
+
+fn edit_with_recalculator_policy(
+    input: &[u8],
+    request: StatelessEditRequest,
+    allow_deferred: bool,
     recalculate: impl FnOnce(&[u8]) -> Result<XlsxRecalculateResult, IoError>,
 ) -> Result<StatelessEditResult, StatelessEditError> {
     let preserving = matches!(
@@ -181,10 +215,24 @@ fn edit_with_recalculator(
     };
     let edited = committed.unwrap_or_else(|| input.to_vec());
     let artifact = if selected {
-        EditedArtifact::Recalculated(recalculate(&edited)?)
+        match recalculate(&edited) {
+            Ok(result) => EditedArtifact::Recalculated(result),
+            Err(IoError::CalculationDeferred { reason, context }) if allow_deferred => {
+                EditedArtifact::Deferred {
+                    bytes: edited,
+                    reason,
+                    context,
+                }
+            }
+            Err(error) => return Err(error.into()),
+        }
     } else {
         EditedArtifact::Document(edited)
     };
+    let partial = matches!(&artifact, EditedArtifact::Recalculated(result)
+        if result.coverage == crate::recalc::source_xlsx::SourceCalculationCoverage::Partial);
+    let completed = matches!(&artifact, EditedArtifact::Recalculated(_));
+    let deferred = matches!(&artifact, EditedArtifact::Deferred { .. });
     Ok(StatelessEditResult {
         artifact,
         receipt: StatelessEditReceipt {
@@ -194,10 +242,21 @@ fn edit_with_recalculator(
             diff_exact: request.details && diff.exact,
             calculation: EditCalculationReceipt {
                 requested: request.recalculate,
-                performed: selected,
+                performed: completed,
+                attempted: selected,
+                completed,
+                artifact_available: true,
                 reason,
                 recommendation: if preserving { "unknown" } else { "recalculate" },
-                cache_state: if selected { "recalculated" } else { "unknown" },
+                cache_state: if partial {
+                    "partial"
+                } else if completed {
+                    "recalculated"
+                } else if deferred {
+                    "deferred"
+                } else {
+                    "unknown"
+                },
             },
             details: request.details.then_some(results),
         },
@@ -299,6 +358,93 @@ mod tests {
         }).is_err());
         crate::canonical_write::diff_test_guard::assert_allowed();
         construction_guard::assert_allowed();
+    }
+
+    #[test]
+    fn only_typed_deferred_can_preserve_edited_bytes() {
+        use crate::recalc::source_xlsx::CalculationDeferredReason;
+        for allowed in [false, true] {
+            let request = serde_json::from_value(serde_json::json!({
+                "recalculate":"always","ops":[{"kind":"set_cells","sheet_name":"Sheet1","cells":{"A1":{"kind":"value","value":30}}}]
+            })).unwrap();
+            let result = edit_with_recalculator_policy(&fixture(), request, allowed, |_| {
+                Err(IoError::CalculationDeferred {
+                    reason: CalculationDeferredReason::IterativeInitialStateUnverified,
+                    context: "test cycle".into(),
+                })
+            });
+            if allowed {
+                let result = result.unwrap();
+                assert!(matches!(result.artifact, EditedArtifact::Deferred { .. }));
+                assert!(result.receipt.calculation.attempted);
+                assert!(!result.receipt.calculation.completed);
+                assert!(!result.receipt.calculation.performed);
+                assert_eq!(result.receipt.calculation.cache_state, "deferred");
+                let book = umya_spreadsheet::reader::xlsx::read_reader(
+                    std::io::Cursor::new(result.bytes()),
+                    true,
+                )
+                .unwrap();
+                assert_eq!(
+                    book.sheet_by_name("Sheet1")
+                        .unwrap()
+                        .cell("A1")
+                        .unwrap()
+                        .value(),
+                    "30"
+                );
+            } else {
+                assert!(result.is_err());
+            }
+        }
+        for error in [
+            IoError::InvalidOptions {
+                field: "calculation".into(),
+                message: "bad option".into(),
+            },
+            IoError::Backend {
+                backend: "xlsx".into(),
+                message: "corrupt package".into(),
+            },
+            IoError::Unsupported {
+                feature: "output failure".into(),
+                context: "refused".into(),
+            },
+            IoError::LoadBudgetExceeded {
+                backend: "xlsx".into(),
+                sheet: String::new(),
+                message: "resource limit".into(),
+            },
+            IoError::Engine(formualizer::common::ExcelError::new(
+                formualizer::common::ExcelErrorKind::Cancelled,
+            )),
+            IoError::Io(std::io::Error::other("output write failed")),
+        ] {
+            let request = serde_json::from_value(serde_json::json!({
+                "recalculate":"always","ops":[{"kind":"set_cells","sheet_name":"Sheet1","cells":{"A1":{"kind":"value","value":30}}}]
+            })).unwrap();
+            assert!(
+                edit_with_recalculator_policy(&fixture(), request, true, |_| Err(error)).is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn skipped_edits_validate_policy_without_constructing_engine() {
+        let _guard = construction_guard::forbid();
+        let mut options = XlsxRecalculateOptions::workbook();
+        options.calculation.as_mut().unwrap().max_elapsed_ms = Some(0);
+        for mode in ["never", "auto"] {
+            let request = serde_json::from_value(serde_json::json!({
+                "recalculate":mode,"ops":[{"kind":"style","sheet_name":"Sheet1","target":{"kind":"range","range":"A1"},"patch":{"font":{"bold":true}}}]
+            })).unwrap();
+            assert!(matches!(
+                edit_xlsx_bytes(&fixture(), request, options.clone()),
+                Err(StatelessEditError::Recalculate(
+                    IoError::InvalidOptions { .. }
+                ))
+            ));
+        }
     }
 
     #[test]

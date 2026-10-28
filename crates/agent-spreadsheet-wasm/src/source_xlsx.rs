@@ -1,21 +1,33 @@
 //! Direct source-byte recalc, independent of session storage and materialization.
 use crate::{MAX_PARAMS_JSON_BYTES, MAX_WORKBOOK_BYTES, SessionApi};
 use agent_spreadsheet::recalc::source_xlsx::{
-    ExternalLinkPolicy, IoError, XlsxRecalculateLimits, XlsxRecalculateOptions,
+    CalculationDeferredReason, ExternalLinkPolicy, IoError, ResolvedSourceCalculation,
+    SourceCalculationCoverage, SourceCalculationPolicy, SourceCoverageScope,
+    SourceOperationDiagnostics, XlsxRecalculateOptions, XlsxRecalculateProfile,
     XlsxRecalculateResult, recalculate_source_xlsx_bytes,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-/// JS-facing options intentionally omit EvalConfig and cancellation. Omitted
-/// fields use upstream defaults. Unknown fields (including unsupported runtime
-/// options) are errors, never silently ignored.
+/// JS-facing portable source policy; file-facing defaults select workbook.
+/// Raw EvalConfig and cancellation are native-only. Unknown fields are errors.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "camelCase")]
 pub struct SourceXlsxOptions {
+    pub profile: SourceProfile,
+    pub calculation: Option<SourceCalculationPolicy>,
+    pub require_complete: bool,
     pub limits: SourceXlsxLimits,
     pub error_location_limit: Option<usize>,
     pub external_links: Option<SourceExternalLinks>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceProfile {
+    Strict,
+    #[default]
+    Workbook,
 }
 
 #[derive(Debug, Deserialize)]
@@ -42,8 +54,21 @@ pub struct SourceXlsxLimits {
 }
 
 impl SourceXlsxOptions {
-    pub(crate) fn into_upstream(self) -> XlsxRecalculateOptions {
-        let mut limits = XlsxRecalculateLimits::default();
+    pub(crate) fn into_upstream(self) -> Result<XlsxRecalculateOptions, SourceXlsxError> {
+        let mut options = match self.profile {
+            SourceProfile::Strict => XlsxRecalculateOptions::default(),
+            SourceProfile::Workbook => XlsxRecalculateOptions::workbook(),
+        };
+        options.require_complete = self.require_complete;
+        if let Some(policy) = self.calculation {
+            options.calculation = Some(policy);
+        }
+        if let Some(policy) = &options.calculation {
+            policy
+                .validate()
+                .map_err(|error| SourceXlsxError::InvalidOptions(error.to_string()))?;
+        }
+        let mut limits = options.limits.clone();
         macro_rules! apply {
             ($($field:ident),* $(,)?) => {
                 $(if let Some(value) = self.limits.$field { limits.$field = value; })*
@@ -63,10 +88,7 @@ impl SourceXlsxOptions {
         // Preserve the adapter host ceiling before upstream constructs output.
         // A raised source limit cannot bypass this existing adapter guard.
         limits.max_output_bytes = limits.max_output_bytes.min(MAX_WORKBOOK_BYTES);
-        let mut options = XlsxRecalculateOptions {
-            limits,
-            ..Default::default()
-        };
+        options.limits = limits;
         if let Some(limit) = self.error_location_limit {
             options.error_location_limit = limit;
         }
@@ -76,7 +98,7 @@ impl SourceXlsxOptions {
                 SourceExternalLinks::Refuse => ExternalLinkPolicy::Refuse,
             };
         }
-        options
+        Ok(options)
     }
 }
 
@@ -95,6 +117,8 @@ impl SourceXlsxError {
         match self {
             Self::InvalidOptions(_) => "INVALID_ARGUMENT",
             Self::HostLimit { .. } => "HOST_LIMIT_EXCEEDED",
+            Self::Recalculate(IoError::InvalidOptions { .. }) => "INVALID_ARGUMENT",
+            Self::Recalculate(IoError::CalculationDeferred { .. }) => "CALCULATION_DEFERRED",
             Self::Recalculate(IoError::Unsupported { .. }) => "UNSUPPORTED",
             Self::Recalculate(IoError::FormulaParser { .. }) => "FORMULA_PARSE_ERROR",
             Self::Recalculate(IoError::LoadBudgetExceeded { .. }) => "LIMIT_EXCEEDED",
@@ -134,14 +158,37 @@ pub struct SourceXlsxSummary {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceXlsxMetadata {
-    pub summary: SourceXlsxSummary,
-    pub formula_cells: usize,
+    pub summary: Option<SourceXlsxSummary>,
+    pub formula_cells: Option<usize>,
     /// Physical cache patches, not engine dirty deltas.
-    pub cache_cells_changed: usize,
-    pub worksheet_parts_changed: usize,
+    pub cache_cells_changed: Option<usize>,
+    pub worksheet_parts_changed: Option<usize>,
     /// RFC3339 UTC timestamp from upstream; null if upstream supplies none.
     pub clock_now_utc: Option<String>,
-    pub external_links_used: usize,
+    pub external_links_used: Option<usize>,
+    pub calculation: Option<ResolvedSourceCalculation>,
+    pub coverage: SourceArtifactCoverage,
+    pub coverage_scope: SourceCoverageScope,
+    pub caches_invalidated: Option<usize>,
+    pub operation_diagnostics: Option<SourceOperationDiagnostics>,
+    pub attempted: bool,
+    pub completed: bool,
+    pub artifact_available: bool,
+    pub bytes_unchanged: bool,
+    pub deferred_reason: Option<&'static str>,
+    pub deferred_context: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum SourceArtifactCoverage {
+    Calculated(SourceCalculationCoverage),
+    Deferred(DeferredCoverage),
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeferredCoverage {
+    Deferred,
 }
 
 /// Deliberately not Serialize: workbook bytes travel separately from metadata.
@@ -157,7 +204,7 @@ impl From<XlsxRecalculateResult> for SourceXlsxOutput {
         Self {
             bytes: result.bytes,
             metadata: SourceXlsxMetadata {
-                summary: SourceXlsxSummary {
+                summary: Some(SourceXlsxSummary {
                     status: summary.status.as_str().to_owned(),
                     evaluated: summary.evaluated,
                     errors: summary.errors,
@@ -190,12 +237,59 @@ impl From<XlsxRecalculateResult> for SourceXlsxOutput {
                         })
                         .collect(),
                     unknown_functions: summary.unknown_functions,
-                },
-                formula_cells: result.formula_cells,
-                cache_cells_changed: result.cache_cells_changed,
-                worksheet_parts_changed: result.worksheet_parts_changed,
+                }),
+                formula_cells: Some(result.formula_cells),
+                cache_cells_changed: Some(result.cache_cells_changed),
+                worksheet_parts_changed: Some(result.worksheet_parts_changed),
                 clock_now_utc: result.clock_now_utc.map(|clock| clock.to_rfc3339()),
-                external_links_used: result.external_links_used,
+                external_links_used: Some(result.external_links_used),
+                calculation: result.calculation,
+                coverage: SourceArtifactCoverage::Calculated(result.coverage),
+                coverage_scope: result.coverage_scope,
+                caches_invalidated: Some(result.caches_invalidated),
+                operation_diagnostics: Some(result.operation_diagnostics),
+                attempted: true,
+                completed: true,
+                artifact_available: true,
+                // Set by the entrypoint against its original input, never inferred from patch counts.
+                bytes_unchanged: false,
+                deferred_reason: None,
+                deferred_context: None,
+            },
+        }
+    }
+}
+
+impl SourceXlsxOutput {
+    pub(crate) fn deferred(
+        bytes: Vec<u8>,
+        reason: CalculationDeferredReason,
+        context: String,
+    ) -> Self {
+        Self {
+            bytes,
+            metadata: SourceXlsxMetadata {
+                summary: None,
+                formula_cells: None,
+                cache_cells_changed: None,
+                worksheet_parts_changed: None,
+                clock_now_utc: None,
+                external_links_used: None,
+                calculation: None,
+                coverage: SourceArtifactCoverage::Deferred(DeferredCoverage::Deferred),
+                coverage_scope: SourceCoverageScope::None,
+                caches_invalidated: None,
+                operation_diagnostics: None,
+                attempted: true,
+                completed: false,
+                artifact_available: true,
+                bytes_unchanged: false,
+                deferred_reason: Some(match reason {
+                    CalculationDeferredReason::IterativeInitialStateUnverified => {
+                        "iterative_initial_state_unverified"
+                    }
+                }),
+                deferred_context: Some(context),
             },
         }
     }
@@ -216,12 +310,14 @@ mod tests {
                 },
                 ..Default::default()
             }
-            .into_upstream();
+            .into_upstream()
+            .unwrap();
             assert_eq!(options.limits.max_output_bytes, requested.min(ceiling));
         }
         assert!(
             SourceXlsxOptions::default()
                 .into_upstream()
+                .unwrap()
                 .limits
                 .max_output_bytes
                 <= ceiling
@@ -252,12 +348,30 @@ impl SessionApi {
             }
             None => SourceXlsxOptions::default(),
         };
-        let result = recalculate_source_xlsx_bytes(source, options.into_upstream())?;
+        let options = options.into_upstream()?;
+        let allow_deferred =
+            options.profile == XlsxRecalculateProfile::Workbook && !options.require_complete;
+        let output_limit = options.limits.max_output_bytes;
+        let mut result = match recalculate_source_xlsx_bytes(source, options) {
+            Ok(result) => SourceXlsxOutput::from(result),
+            Err(IoError::CalculationDeferred { reason, context }) if allow_deferred => {
+                SourceXlsxOutput::deferred(source.to_vec(), reason, context)
+            }
+            Err(error) => return Err(error.into()),
+        };
+        if result.bytes.len() > output_limit {
+            return Err(SourceXlsxError::Recalculate(IoError::LoadBudgetExceeded {
+                backend: "xlsx".into(),
+                sheet: String::new(),
+                message: "artifact exceeds maxOutputBytes".into(),
+            }));
+        }
+        result.metadata.bytes_unchanged = result.bytes == source;
         if result.bytes.len() > MAX_WORKBOOK_BYTES {
             return Err(SourceXlsxError::HostLimit {
                 direction: "output",
             });
         }
-        Ok(result.into())
+        Ok(result)
     }
 }

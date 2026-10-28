@@ -40,22 +40,22 @@ Top-level fields are `ops`, optional `recalculate` (auto default), optional `det
 Modes:
 - `never`: edit/export without constructing an evaluator or running calculation. Existing caches are unvalidated; rich serialization may retain, change or remove them.
 - `auto`: reuse the existing canonical operation-category classifier. Presentation/layout/rules-only batches (styles, sizing, freeze panes, zoom, gridlines, print/page settings, data validation and conditional-format settings) skip calculation. Value/formula/name/structural/import/other invalidating batches select it. This is a batch heuristic, not proof that incoming caches were current.
-- `always`: run strict recalculation after successful editing, including for style/layout-only batches.
+- `always`: run selected-profile recalculation after successful editing, including for style/layout-only batches.
 
 No-recalc still loads XML into a rich document, and structural/formula editing may parse/translate formulas when required. The compiled WASM also includes engine code. Skipping evaluation does not mean zero XML parsing, zero formula parsing or zero binary loading.
 
-When selected, calculation calls the same high-level strict byte helper on **edited document bytes**. Rich editing may rewrite/drop unsupported original content. Strict package preservation applies to subsequent recalculation relative to that edited package, not to the original uploaded file. Upstream refusals are propagated without falling back to resident calculation. Native callers retain full upstream EvalConfig/cancellation/limits; the JS `--recalc-options` JSON accepts exactly the already documented source-binding options and rejects unavailable/unknown fields even in never mode. The strict output ceiling remains capped before recalculation construction by the inherited adapter guard.
+When selected, calculation calls the same high-level source byte helper on **edited document bytes**. Rich editing may rewrite/drop unsupported original content. Strict package preservation applies to subsequent recalculation relative to that edited package, not to the original uploaded file. Upstream refusals are propagated without falling back to resident calculation. Native callers retain full upstream EvalConfig/cancellation/limits; the JS `--recalc-options` JSON accepts exactly the already documented source-binding options and rejects unavailable/unknown fields even in never mode. The output ceiling remains capped before recalculation construction by the inherited adapter guard and also applies to skipped/deferred edited output. File-facing defaults use workbook; explicit strict preserves legacy guards. Only typed CalculationDeferred in workbook mode with requireComplete:false preserves an edited artifact and reports deferred coverage; other failures remain errors. See source-runtime.md for the shared portable calculation schema.
 
 Receipt stdout includes runtime provenance, input/output/result hashes, bytes_unchanged (byte equality only) and metadata:
 - `edit`: ops_applied, op_kinds, canonical change_count/diff_exact, calculation requested/performed/reason/recommendation/cache_state.
 - Skipped calculation reports `cache_state:"unknown"`; no incoming/current-cache guarantee is invented. Invalidating categories recommend recalculation; preserving categories leave need unknown.
-- `recalculation`: present only when performed; exact summary/error/sample/clock/cache-patch metadata from the shared strict binding.
+- `recalculation`: present when attempted; shared effective settings, coverage/operation diagnostics and exact summary/error/sample/clock/cache-patch metadata. A typed deferred result has null unknown counts and no cache freshness claim. `attempted`, `completed`, and `artifact_available` are independent; `performed` stays false on deferral.
 - Default requests skip the full package diff: `change_count:null` means not computed and `diff_exact:false` makes that uncertainty explicit. Editing and optional calculation still run normally. This avoids the diff's extra ZIP/XML reads and materialized changes; rich document import/export and operation validation still occur.
 - Explicit `details:true` computes the existing canonical diff summary and returns all existing per-op typed facts. `change_count` then contains the computed count and `diff_exact` reports its precision. Details may be larger; there is no fixed 64KiB omission policy. Existing operation/payload and workbook host limits still apply. No additional setting or retrieval step is required.
 
 Native API:
 `agent_spreadsheet::stateless_edit::edit_xlsx_bytes(input, StatelessEditRequest, XlsxRecalculateOptions)`.
-The result exposes bytes() and an EditedArtifact (Document or upstream Recalculated result), plus a compact receipt. The module uses the current recalc-formualizer feature because the existing canonical_write module is coupled to resident types; no unrelated feature-gating cleanup was added.
+The result exposes bytes() and an EditedArtifact (Document, upstream Recalculated result, or typed Deferred edited bytes), plus a compact receipt. The module uses the current recalc-formualizer feature because the existing canonical_write module is coupled to resident types; no unrelated feature-gating cleanup was added.
 
 Direct byte API:
 `SessionApi::edit_xlsx(input, request_json, recalc_options_json?)`.

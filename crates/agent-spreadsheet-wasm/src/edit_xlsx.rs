@@ -71,20 +71,31 @@ impl SessionApi {
         let request: StatelessEditRequest = serde_json::from_str(request_json)
             .map_err(|error| EditXlsxError::InvalidRequest(error.to_string()))?;
         // Validate even when calculation is skipped; never silently ignore bad options.
-        let options = parse_options(recalc_options_json)?.into_upstream();
+        let options = parse_options(recalc_options_json)?.into_upstream()?;
         let output = edit_xlsx_bytes(input, request, options).map_err(|error| match error {
             StatelessEditError::Recalculate(error) => {
                 EditXlsxError::Source(SourceXlsxError::Recalculate(error))
             }
             error => EditXlsxError::Edit(error),
         })?;
-        let (bytes, recalculation) = match output.artifact {
+        let (bytes, mut recalculation) = match output.artifact {
             EditedArtifact::Document(bytes) => (bytes, None),
+            EditedArtifact::Deferred {
+                bytes,
+                reason,
+                context,
+            } => {
+                let result = SourceXlsxOutput::deferred(bytes, reason, context);
+                (result.bytes, Some(result.metadata))
+            }
             EditedArtifact::Recalculated(result) => {
                 let result = SourceXlsxOutput::from(result);
                 (result.bytes, Some(result.metadata))
             }
         };
+        if let Some(metadata) = &mut recalculation {
+            metadata.bytes_unchanged = bytes == input;
+        }
         if bytes.len() > MAX_WORKBOOK_BYTES {
             return Err(SourceXlsxError::HostLimit {
                 direction: "output",

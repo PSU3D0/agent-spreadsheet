@@ -31,10 +31,10 @@ fn direct_original_bytes_bypass_session_creation_and_keep_resident_editing_worki
         member(&output.bytes, "custom/opaque.bin"),
         member(&input, "custom/opaque.bin")
     );
-    assert_eq!(output.metadata.summary.evaluated, 1);
-    assert_eq!(output.metadata.summary.errors, 0);
-    assert_eq!(output.metadata.cache_cells_changed, 1);
-    assert_eq!(output.metadata.worksheet_parts_changed, 1);
+    assert_eq!(output.metadata.summary.as_ref().unwrap().evaluated, 1);
+    assert_eq!(output.metadata.summary.as_ref().unwrap().errors, 0);
+    assert_eq!(output.metadata.cache_cells_changed, Some(1));
+    assert_eq!(output.metadata.worksheet_parts_changed, Some(1));
     assert!(output.metadata.clock_now_utc.is_some());
     let json = serde_json::to_value(&output.metadata).unwrap();
     assert!(json.get("bytes").is_none());
@@ -42,7 +42,7 @@ fn direct_original_bytes_bypass_session_creation_and_keep_resident_editing_worki
         .recalculate_source_xlsx(&output.bytes, Some("{}"))
         .unwrap();
     assert_eq!(noop.bytes, output.bytes);
-    assert_eq!(noop.metadata.cache_cells_changed, 0);
+    assert_eq!(noop.metadata.cache_cells_changed, Some(0));
     for session in &sessions {
         assert!(api.session_metadata(session).is_ok());
     }
@@ -137,7 +137,7 @@ fn external_cached_values_and_refuse_policy_are_not_ignored() {
     let output = api
         .recalculate_source_xlsx(&input, Some(r#"{"externalLinks":"cached"}"#))
         .unwrap();
-    assert_eq!(output.metadata.external_links_used, 1);
+    assert_eq!(output.metadata.external_links_used, Some(1));
     assert!(member(&output.bytes, SHEET).contains("<v>42</v>"));
     let error = api
         .recalculate_source_xlsx(&input, Some(r#"{"externalLinks":"refuse"}"#))

@@ -3,8 +3,10 @@
 //! This path never imports a rich document or creates a resident evaluator. It
 //! keeps upstream admission/refusal semantics, separately from warm editing.
 pub use formualizer::workbook::{
-    ExternalLinkPolicy, IoError, XlsxRecalculateLimits, XlsxRecalculateOptions,
-    XlsxRecalculateResult,
+    CalculationDeferredReason, ExternalLinkPolicy, IoError, ResolvedSourceCalculation,
+    SourceCalculationCoverage, SourceCalculationPolicy, SourceCoverageScope,
+    SourceOperationDiagnostics, XlsxRecalculateLimits, XlsxRecalculateOptions,
+    XlsxRecalculateProfile, XlsxRecalculateResult,
 };
 
 /// Recalculate original source bytes, preserving untouched package members.
