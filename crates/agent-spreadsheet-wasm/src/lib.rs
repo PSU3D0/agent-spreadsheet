@@ -8,7 +8,8 @@ mod runtime;
 mod storage;
 mod source_xlsx;
 pub use source_xlsx::{
-    SourceExternalLinks, SourceXlsxError, SourceXlsxErrorSummary, SourceXlsxLimits, SourceXlsxMetadata,
+    DeferredCoverage, SourceArtifactCoverage, SourceExternalLinks, SourceProfile, SourceXlsxError,
+    SourceXlsxErrorSummary, SourceXlsxLimits, SourceXlsxMetadata,
     SourceXlsxOptions, SourceXlsxOutput, SourceXlsxSheetSummary, SourceXlsxSummary,
 };
 use agent_spreadsheet::{
