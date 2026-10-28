@@ -47,6 +47,58 @@ const sheet = "xl/worksheets/sheet1.xml";
 const input = () => syntheticWorkbook({
   [sheet]: '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1"><v>21</v></c><c r="B1"><f>A1*2</f><v>0</v></c></row></sheetData></worksheet>'
 });
+real("matching runtime returns edited iterative artifact with deferred receipt", async () => {
+  const { runtime } = await loadRuntime(selected);
+  const request = JSON.stringify({recalculate:"always",ops:[{
+    kind:"set_cells",sheet_name:"Sheet1",overwrite_formulas:true,
+    cells:{A1:{kind:"value",value:30},B1:{kind:"formula",formula:"(B1+1)/2"}}
+  }]});
+  const options = JSON.stringify({calculation:{iteration:{mode:"iterate",maxIterations:10}}});
+  const result = runtime.editXlsx(new Uint8Array(input()), request, options);
+  try {
+    const meta = JSON.parse(result.metadataJson);
+    assert.equal(meta.edit.calculation.cache_state, "deferred");
+    assert.equal(meta.edit.calculation.attempted, true);
+    assert.equal(meta.edit.calculation.completed, false);
+    assert.equal(meta.recalculation.coverage, "deferred");
+    assert.equal(meta.recalculation.formulaCells, null);
+    assert.equal(meta.recalculation.deferredReason, "iterative_initial_state_unverified");
+    const read = runtime.inspectXlsx(result.bytes,
+      JSON.stringify({selection:{kind:"cells",addresses:["Sheet1!A1"]}}));
+    try { assert.equal(JSON.parse(read.metadataJson).items[0].source_value.value, 30); }
+    finally { read.free(); }
+  } finally { result.free(); }
+  for (const extra of [{profile:"strict"},{requireComplete:true},{limits:{maxOutputBytes:1}}]) {
+    assert.throws(() => runtime.editXlsx(new Uint8Array(input()), request,
+      JSON.stringify({...extra,calculation:{iteration:{mode:"iterate"}}})));
+  }
+});
+
+real("matching source runtime carries partial diagnostics and invalidates dependent caches", async () => {
+  const { runtime } = await loadRuntime(selected);
+  const bytes = new Uint8Array(syntheticWorkbook({
+    [sheet]: '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1"><f>UNAVAILABLE_FN(1)</f><v>123</v></c><c r="B1"><f>A1+1</f><v>124</v></c><c r="C1"><f>2+2</f><v>0</v></c></row></sheetData></worksheet>'
+  }));
+  const result = runtime.recalculateSourceXlsx(bytes);
+  try {
+    const meta = JSON.parse(result.metadataJson);
+    assert.equal(meta.coverage, "partial");
+    assert.equal(meta.coverageScope, "conservative");
+    assert.equal(meta.cachesInvalidated, 2);
+    assert.equal(meta.operationDiagnostics.logicalRootCellCount, 1);
+    assert.equal(meta.completed, true);
+    const read = runtime.inspectXlsx(result.bytes,
+      JSON.stringify({selection:{kind:"cells",addresses:["Sheet1!A1","Sheet1!B1","Sheet1!C1"]}}));
+    try {
+      const items = JSON.parse(read.metadataJson).items;
+      assert.equal(items[0].stored_formula_cache?.value ?? null, null);
+      assert.equal(items[1].stored_formula_cache?.value ?? null, null);
+      assert.equal(items[2].stored_formula_cache.value.value, 4);
+    } finally { read.free(); }
+  } finally { result.free(); }
+  assert.throws(() => runtime.recalculateSourceXlsx(bytes, '{"requireComplete":true}'));
+});
+
 const editRequest = mode => JSON.stringify({ recalculate: mode, ops: [
   {kind:"style",sheet_name:"Sheet1",target:{kind:"range",range:"A1"},patch:{font:{bold:true}}}
 ] });
