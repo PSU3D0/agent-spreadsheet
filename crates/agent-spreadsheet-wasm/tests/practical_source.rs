@@ -147,6 +147,94 @@ fn partial_publication_uses_shared_outcome_and_invalidates_dependent_caches() {
 }
 
 #[test]
+fn source_flag_edits_and_shared_diagnostics_are_independent_of_samples() {
+    let api = SessionApi::new();
+    let complete = api
+        .recalculate_source_xlsx(&pack(&stale_parts()), None)
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(complete.metadata).unwrap()["calculationFlagsChanged"],
+        false
+    );
+    let input = pack(&parts(
+        "<row r=\"1\"><c r=\"A1\"><f>UNAVAILABLE_FN(1)</f><v>123</v></c><c r=\"B1\"><f>A1+1</f><v>124</v></c></row>",
+    ));
+    let result = api
+        .recalculate_source_xlsx(&input, Some(r#"{"errorLocationLimit":0}"#))
+        .unwrap();
+    let meta = serde_json::to_value(result.metadata).unwrap();
+    assert_eq!(meta["calculationFlagsChanged"], true);
+    assert_eq!(
+        meta["operationDiagnostics"]["unavailableFunctions"]["UNAVAILABLE_FN"]["cellReasonCount"],
+        1
+    );
+    // Final unavailable-result incidence is distinct from logical roots/invalidated caches.
+    assert_eq!(meta["operationDiagnostics"]["unavailableResultCells"], 0);
+    assert_eq!(meta["operationDiagnostics"]["workbookFeatures"], json!([]));
+    assert_eq!(meta["operationDiagnostics"]["samples"], json!([]));
+    assert!(
+        meta["operationDiagnostics"]["samplesTruncated"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
+    assert!(member(&result.bytes, "xl/workbook.xml").contains("fullCalcOnLoad=\"1\""));
+}
+
+#[test]
+fn precision_defer_retains_input_flags_and_explicit_external_refusal_stays_fatal() {
+    let api = SessionApi::new();
+    let mut p = stale_parts();
+    let workbook = p.get_mut("xl/workbook.xml").unwrap();
+    *workbook = workbook.replace("</workbook>", "<calcPr fullPrecision=\"0\"/></workbook>");
+    let input = pack(&p);
+    let result = api.recalculate_source_xlsx(&input, None).unwrap();
+    assert_eq!(result.bytes, input);
+    let meta = serde_json::to_value(result.metadata).unwrap();
+    assert_eq!(meta["coverage"], "deferred");
+    assert_eq!(meta["deferredReason"], "workbook_precision_unverified");
+    assert!(meta["calculationFlagsChanged"].is_null());
+    assert_eq!(meta["completed"], false);
+    let strict = api
+        .recalculate_source_xlsx(&input, Some(r#"{"profile":"strict"}"#))
+        .unwrap();
+    let strict_meta = serde_json::to_value(strict.metadata).unwrap();
+    assert_eq!(strict_meta["coverage"], "partial");
+    assert_eq!(
+        strict_meta["operationDiagnostics"]["workbookFeatures"],
+        json!(["precision_as_displayed"])
+    );
+    for options in [
+        r#"{"requireComplete":true}"#,
+        r#"{"profile":"strict","requireComplete":true}"#,
+    ] {
+        assert!(api.recalculate_source_xlsx(&input, Some(options)).is_err());
+    }
+    // Deliberate global quality gap must never hide the explicit cached-link refusal.
+    let ext = external();
+    let mut ext_parts = fixture::parts("");
+    // Reuse the exact valid external package members without a rich roundtrip.
+    for name in [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "xl/workbook.xml",
+        "xl/_rels/workbook.xml.rels",
+        SHEET,
+        "xl/externalLinks/externalLink1.xml",
+        "xl/externalLinks/_rels/externalLink1.xml.rels",
+    ] {
+        ext_parts.insert(name.into(), member(&ext, name));
+    }
+    let workbook = ext_parts.get_mut("xl/workbook.xml").unwrap();
+    *workbook = workbook.replace("</workbook>", "<calcPr fullPrecision=\"0\"/></workbook>");
+    let error = api
+        .recalculate_source_xlsx(&pack(&ext_parts), Some(r#"{"externalLinks":"refuse"}"#))
+        .unwrap_err();
+    assert_eq!(error.code(), "UNSUPPORTED");
+    assert!(error.to_string().contains("external link values"));
+}
+
+#[test]
 fn output_resource_and_corrupt_errors_never_become_deferred_artifacts() {
     let api = SessionApi::new();
     for options in [

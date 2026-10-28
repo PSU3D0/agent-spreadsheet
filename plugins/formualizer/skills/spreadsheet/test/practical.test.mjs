@@ -62,6 +62,7 @@ real("matching runtime returns edited iterative artifact with deferred receipt",
     assert.equal(meta.edit.calculation.completed, false);
     assert.equal(meta.recalculation.coverage, "deferred");
     assert.equal(meta.recalculation.formulaCells, null);
+    assert.equal(meta.recalculation.calculationFlagsChanged, null);
     assert.equal(meta.recalculation.deferredReason, "iterative_initial_state_unverified");
     const read = runtime.inspectXlsx(result.bytes,
       JSON.stringify({selection:{kind:"cells",addresses:["Sheet1!A1"]}}));
@@ -79,13 +80,19 @@ real("matching source runtime carries partial diagnostics and invalidates depend
   const bytes = new Uint8Array(syntheticWorkbook({
     [sheet]: '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1"><f>UNAVAILABLE_FN(1)</f><v>123</v></c><c r="B1"><f>A1+1</f><v>124</v></c><c r="C1"><f>2+2</f><v>0</v></c></row></sheetData></worksheet>'
   }));
-  const result = runtime.recalculateSourceXlsx(bytes);
+  const result = runtime.recalculateSourceXlsx(bytes, '{"errorLocationLimit":0}');
   try {
     const meta = JSON.parse(result.metadataJson);
     assert.equal(meta.coverage, "partial");
     assert.equal(meta.coverageScope, "conservative");
     assert.equal(meta.cachesInvalidated, 2);
     assert.equal(meta.operationDiagnostics.logicalRootCellCount, 1);
+    assert.equal(meta.calculationFlagsChanged, true);
+    assert.equal(meta.operationDiagnostics.unavailableFunctions.UNAVAILABLE_FN.cellReasonCount, 1);
+    assert.equal(meta.operationDiagnostics.unavailableResultCells, 0);
+    assert.deepEqual(meta.operationDiagnostics.workbookFeatures, []);
+    assert.deepEqual(meta.operationDiagnostics.samples, []);
+    assert.ok(meta.operationDiagnostics.samplesTruncated > 0);
     assert.equal(meta.completed, true);
     const read = runtime.inspectXlsx(result.bytes,
       JSON.stringify({selection:{kind:"cells",addresses:["Sheet1!A1","Sheet1!B1","Sheet1!C1"]}}));
@@ -96,6 +103,31 @@ real("matching source runtime carries partial diagnostics and invalidates depend
       assert.equal(items[2].stored_formula_cache.value.value, 4);
     } finally { read.free(); }
   } finally { result.free(); }
+  assert.throws(() => runtime.recalculateSourceXlsx(bytes, '{"requireComplete":true}'));
+});
+
+real("matching runtime preserves precision deferral and strict shared workbook feature", async () => {
+  const { runtime } = await loadRuntime(selected);
+  const bytes = new Uint8Array(syntheticWorkbook({
+    "xl/workbook.xml": '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets><calcPr fullPrecision="0"/></workbook>'
+  }));
+  const result = runtime.recalculateSourceXlsx(bytes);
+  try {
+    const meta = JSON.parse(result.metadataJson);
+    assert.deepEqual(result.bytes, bytes);
+    assert.equal(meta.coverage, "deferred");
+    assert.equal(meta.deferredReason, "workbook_precision_unverified");
+    assert.equal(meta.calculationFlagsChanged, null);
+    assert.equal(meta.completed, false);
+    assert.equal(meta.bytesUnchanged, true);
+  } finally { result.free(); }
+  const strict = runtime.recalculateSourceXlsx(bytes, '{"profile":"strict"}');
+  try {
+    const meta = JSON.parse(strict.metadataJson);
+    assert.equal(meta.coverage, "partial");
+    assert.deepEqual(meta.operationDiagnostics.workbookFeatures, ["precision_as_displayed"]);
+    assert.equal(typeof meta.calculationFlagsChanged, "boolean");
+  } finally { strict.free(); }
   assert.throws(() => runtime.recalculateSourceXlsx(bytes, '{"requireComplete":true}'));
 });
 
@@ -117,6 +149,7 @@ real("matching runtime preserves exact shared seed and complete coverage", async
     assert.equal(meta.artifactAvailable, true);
     assert.equal(meta.bytesUnchanged, false);
     assert.equal(meta.cachesInvalidated, 0);
+    assert.equal(meta.calculationFlagsChanged, false);
     assert.equal(typeof meta.operationDiagnostics, "object");
   } finally { result.free(); }
 });
@@ -131,6 +164,7 @@ real("matching edit runtime validates calculation in never and preserving auto",
       assert.equal(meta.edit.calculation.attempted, false);
       assert.equal(meta.edit.calculation.completed, false);
       assert.equal(meta.edit.calculation.cache_state, "unknown");
+      assert.equal(meta.recalculation, undefined);
     } finally { result.free(); }
     for (const calculation of [{maxElapsedMs:0},{iteration:{mode:"iterate",maxIterations:0}},
       {workbookSeed:9007199254740992},{unknown:1}]) {

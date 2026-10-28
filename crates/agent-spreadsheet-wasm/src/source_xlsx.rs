@@ -170,6 +170,8 @@ pub struct SourceXlsxMetadata {
     pub coverage: SourceArtifactCoverage,
     pub coverage_scope: SourceCoverageScope,
     pub caches_invalidated: Option<usize>,
+    /// Known only after source publication; skipped/deferred artifacts do not publish flag edits.
+    pub calculation_flags_changed: Option<bool>,
     pub operation_diagnostics: Option<SourceOperationDiagnostics>,
     pub attempted: bool,
     pub completed: bool,
@@ -247,6 +249,7 @@ impl From<XlsxRecalculateResult> for SourceXlsxOutput {
                 coverage: SourceArtifactCoverage::Calculated(result.coverage),
                 coverage_scope: result.coverage_scope,
                 caches_invalidated: Some(result.caches_invalidated),
+                calculation_flags_changed: Some(result.calculation_flags_changed),
                 operation_diagnostics: Some(result.operation_diagnostics),
                 attempted: true,
                 completed: true,
@@ -279,6 +282,7 @@ impl SourceXlsxOutput {
                 coverage: SourceArtifactCoverage::Deferred(DeferredCoverage::Deferred),
                 coverage_scope: SourceCoverageScope::None,
                 caches_invalidated: None,
+                calculation_flags_changed: None,
                 operation_diagnostics: None,
                 attempted: true,
                 completed: false,
@@ -287,6 +291,19 @@ impl SourceXlsxOutput {
                 deferred_reason: Some(match reason {
                     CalculationDeferredReason::IterativeInitialStateUnverified => {
                         "iterative_initial_state_unverified"
+                    }
+                    CalculationDeferredReason::KnownCoverageIncomplete => {
+                        "known_coverage_incomplete"
+                    }
+                    CalculationDeferredReason::WorkbookPrecisionUnverified => {
+                        "workbook_precision_unverified"
+                    }
+                    CalculationDeferredReason::DependencyCoverageUnavailable => {
+                        "dependency_coverage_unavailable"
+                    }
+                    CalculationDeferredReason::UnlocatedOperation => "unlocated_operation",
+                    CalculationDeferredReason::AffectedArrayCoverageUnverified => {
+                        "affected_array_coverage_unverified"
                     }
                 }),
                 deferred_context: Some(context),
