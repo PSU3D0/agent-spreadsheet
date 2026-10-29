@@ -229,6 +229,11 @@ sourceTest("maintainer runtime forwards actual modes with sample zero and comple
     assert.equal(metadata.coverage, "partial", formula);
     assert.ok(metadata.operationDiagnostics.functionModes.length, formula);
     assert.deepEqual(metadata.operationDiagnostics.samples, []);
+    assert.ok(metadata.operationDiagnostics.functionModes.some(mode =>
+      mode.verification === (formula.includes("CELL") ? "unavailable" : "unverified")), formula);
+    const displayed = sourceMetadata(runtime,bytes).operationDiagnostics.samples;
+    assert.ok(displayed.some(sample => sample.operation.kind ===
+      (formula.includes("CELL") ? "unimplemented_function_mode" : "unverified_function_mode")), formula);
     assert.throws(() => sourceMetadata(runtime, bytes, {requireComplete:true}),
       error => error.code === "CALCULATION_DEFERRED");
   }

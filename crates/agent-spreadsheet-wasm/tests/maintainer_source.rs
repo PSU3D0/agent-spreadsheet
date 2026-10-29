@@ -144,6 +144,19 @@ fn actual_modes_and_unverified_callables_are_independent_of_sample_display() {
             "{f}"
         );
         assert_eq!(meta["operationDiagnostics"]["samples"], json!([]));
+        let expected_verification = if f.contains("CELL") {
+            "unavailable"
+        } else {
+            "unverified"
+        };
+        assert!(
+            meta["operationDiagnostics"]["functionModes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|mode| mode["verification"] == expected_verification),
+            "{f}: {meta}"
+        );
         assert!(
             api.recalculate_source_xlsx(&input, Some(r#"{"requireComplete":true}"#))
                 .is_err()

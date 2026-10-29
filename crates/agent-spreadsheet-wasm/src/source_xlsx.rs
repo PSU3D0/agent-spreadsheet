@@ -291,6 +291,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn partial_limits_preserve_the_selected_constructor() {
+        assert_eq!(
+            XlsxRecalculateOptions::default().profile,
+            XlsxRecalculateProfile::Strict
+        );
+        for (profile, columns) in [("strict", 256), ("workbook", 16_384)] {
+            let json = format!(r#"{{"profile":"{profile}","limits":{{"maxOperationRoots":7}}}}"#);
+            let options = serde_json::from_str::<SourceXlsxOptions>(&json)
+                .unwrap()
+                .into_upstream()
+                .unwrap();
+            assert_eq!(options.limits.max_columns, columns);
+            assert_eq!(options.limits.max_operation_roots, 7);
+        }
+    }
+
+    #[test]
     fn adapter_output_ceiling_is_applied_before_upstream_construction() {
         let ceiling = MAX_WORKBOOK_BYTES;
         for requested in [0, 1, ceiling - 1, ceiling, ceiling + 1, u32::MAX as usize] {
