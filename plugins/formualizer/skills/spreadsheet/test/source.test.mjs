@@ -267,7 +267,9 @@ sourceTest("maintainer fatal evidence budgets never overwrite source or edited d
     "maxAffectedRegions", "maxAffectedScratchBytes", "maxOutputBytes"]) {
     const options = JSON.stringify({errorLocationLimit:0,limits:{[field]:0}});
     await assert.rejects(recalculateFile(runtime,input,options,output), error =>
-      error.code === (field === "maxOutputBytes" ? "LIMIT_EXCEEDED" : "ENGINE_ERROR"));
+      field === "maxOutputBytes"
+        ? error.code === "RECALCULATION_FAILED" && /XLSX output byte limit/.test(error.message)
+        : error.code === "ENGINE_ERROR");
     await assert.rejects(editFile(runtime,input,request,output,options));
     assert.deepEqual(await readFile(input), bytes);
     assert.equal(await readFile(output,"utf8"), "destination sentinel");
