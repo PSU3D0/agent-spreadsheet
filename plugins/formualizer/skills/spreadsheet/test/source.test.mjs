@@ -268,8 +268,12 @@ sourceTest("maintainer fatal evidence budgets never overwrite source or edited d
     assert.equal(await readFile(output,"utf8"), "destination sentinel");
     assert.equal(sourceMetadata(runtime,bytes).coverage,"partial");
   }
-  assert.throws(() => sourceMetadata(runtime,bytes,{profile:"strict",limits:{maxAffectedWork:0}}),
-    error => error.code === "ENGINE_ERROR");
+  const strict = sourceMetadata(runtime,bytes,{profile:"strict",
+    limits:{maxAffectedWork:0,maxAffectedRegions:0,maxAffectedScratchBytes:0}});
+  assert.equal(strict.coverage,"partial");
+  assert.equal(strict.operationDiagnostics.dependencyEvidence,null);
+  assert.throws(() => sourceMetadata(runtime,bytes,{profile:"strict",requireComplete:true,limits:{maxAffectedWork:0}}),
+    error => error.code === "CALCULATION_DEFERRED");
   for (const limits of [{maxOperationRoots:null},{maxOperationRoots:true},{maxOperationRoots:0.5},
     {maxOperationRoots:4294967296},{maxAffectedWork:9007199254740992}]) {
     assert.throws(() => sourceMetadata(runtime, bytes, {limits}), error => error.code === "INVALID_ARGUMENT");

@@ -57,19 +57,41 @@ fn all_new_evidence_limits_are_typed_fatal_with_zero_samples_and_recover() {
         "maxAffectedScratchBytes",
     ] {
         let options = json!({"errorLocationLimit":0,"limits":{field:0}}).to_string();
-        assert!(
-            matches!(
-                api.recalculate_source_xlsx(&input, Some(&options)),
-                Err(SourceXlsxError::Recalculate(
-                    agent_spreadsheet::recalc::source_xlsx::IoError::Engine(_)
-                ))
-            ),
-            "{field}"
-        );
+        let error = api
+            .recalculate_source_xlsx(&input, Some(&options))
+            .unwrap_err();
+        let SourceXlsxError::Recalculate(agent_spreadsheet::recalc::source_xlsx::IoError::Engine(
+            error,
+        )) = error
+        else {
+            panic!("expected typed engine resource: {field}: {error:?}");
+        };
+        use formualizer::common::{ExcelErrorExtra, ResourceExhaustionReason};
+        let ExcelErrorExtra::Resource { detail } = error.extra() else {
+            panic!("missing typed resource detail: {error:?}");
+        };
+        let expected = match field {
+            "maxOperationRoots" => ResourceExhaustionReason::OperationEvidenceRoots,
+            "maxOperationTextBytes" => ResourceExhaustionReason::OperationEvidenceTextBytes,
+            "maxAffectedWork" => ResourceExhaustionReason::WorkUnits,
+            "maxAffectedRegions" => ResourceExhaustionReason::DependencyClosureOutputItems,
+            _ => ResourceExhaustionReason::ScratchMemory,
+        };
+        assert_eq!(detail.reason, expected);
         assert!(api.recalculate_source_xlsx(&input, None).is_ok());
     }
-    let strict = r#"{"profile":"strict","limits":{"maxAffectedWork":0}}"#;
-    assert!(api.recalculate_source_xlsx(&input, Some(strict)).is_err());
+    let strict = r#"{"profile":"strict","limits":{"maxAffectedWork":0,"maxAffectedRegions":0,"maxAffectedScratchBytes":0}}"#;
+    let result = api.recalculate_source_xlsx(&input, Some(strict)).unwrap();
+    let meta = serde_json::to_value(result.metadata).unwrap();
+    assert_eq!(meta["coverage"], "partial");
+    assert!(meta["operationDiagnostics"]["dependencyEvidence"].is_null());
+    assert!(
+        api.recalculate_source_xlsx(
+            &input,
+            Some(r#"{"profile":"strict","requireComplete":true,"limits":{"maxAffectedWork":0}}"#)
+        )
+        .is_err()
+    );
 }
 
 #[test]
