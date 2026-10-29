@@ -66,7 +66,7 @@ fn all_new_evidence_limits_are_typed_fatal_with_zero_samples_and_recover() {
         else {
             panic!("expected typed engine resource: {field}: {error:?}");
         };
-        use formualizer::common::{ExcelErrorExtra, ResourceExhaustionReason};
+        use agent_spreadsheet::recalc::source_xlsx::{ExcelErrorExtra, ResourceExhaustionReason};
         let ExcelErrorExtra::Resource { detail } = error.extra() else {
             panic!("missing typed resource detail: {error:?}");
         };

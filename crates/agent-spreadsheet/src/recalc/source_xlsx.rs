@@ -2,6 +2,7 @@
 //!
 //! This path never imports a rich document or creates a resident evaluator. It
 //! keeps upstream admission/refusal semantics, separately from warm editing.
+pub use formualizer::common::{ExcelErrorExtra, ResourceExhaustionReason};
 pub use formualizer::workbook::{
     CalculationDeferredReason, ExternalLinkPolicy, IoError, ResolvedSourceCalculation,
     SourceCalculationCoverage, SourceCalculationPolicy, SourceCoverageScope,
