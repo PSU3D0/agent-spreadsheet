@@ -14,6 +14,7 @@ use std::collections::BTreeMap;
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "camelCase")]
 pub struct SourceXlsxOptions {
+    pub physical_telemetry: bool,
     pub profile: SourceProfile,
     pub calculation: Option<SourceCalculationPolicy>,
     pub require_complete: bool,
@@ -37,21 +38,8 @@ pub enum SourceExternalLinks {
     Refuse,
 }
 
-/// Every upstream admission/output bound can be overridden. The adapter also
-/// enforces its documented 64 MiB host input/output bound independently.
-#[derive(Debug, Default, Deserialize)]
-#[serde(default, deny_unknown_fields, rename_all = "camelCase")]
-pub struct SourceXlsxLimits {
-    pub max_input_bytes: Option<usize>,
-    pub max_entries: Option<usize>,
-    pub max_expanded_bytes: Option<usize>,
-    pub max_worksheet_bytes: Option<usize>,
-    pub max_formula_cells: Option<usize>,
-    pub max_output_bytes: Option<usize>,
-    pub max_xml_depth: Option<usize>,
-    pub max_cells: Option<usize>,
-    pub max_columns: Option<u32>,
-}
+/// Canonical partial limits: omissions preserve the selected profile's bounds.
+pub use agent_spreadsheet::recalc::source_xlsx::SourceRecalculateLimits as SourceXlsxLimits;
 
 impl SourceXlsxOptions {
     pub(crate) fn into_upstream(self) -> Result<XlsxRecalculateOptions, SourceXlsxError> {
@@ -69,22 +57,8 @@ impl SourceXlsxOptions {
                 .map_err(|error| SourceXlsxError::InvalidOptions(error.to_string()))?;
         }
         let mut limits = options.limits.clone();
-        macro_rules! apply {
-            ($($field:ident),* $(,)?) => {
-                $(if let Some(value) = self.limits.$field { limits.$field = value; })*
-            };
-        }
-        apply!(
-            max_input_bytes,
-            max_entries,
-            max_expanded_bytes,
-            max_worksheet_bytes,
-            max_formula_cells,
-            max_output_bytes,
-            max_xml_depth,
-            max_cells,
-            max_columns
-        );
+        self.limits.apply(&mut limits)?;
+        options.physical_telemetry = self.physical_telemetry;
         // Preserve the adapter host ceiling before upstream constructs output.
         // A raised source limit cannot bypass this existing adapter guard.
         limits.max_output_bytes = limits.max_output_bytes.min(MAX_WORKBOOK_BYTES);
@@ -319,10 +293,10 @@ mod tests {
     #[test]
     fn adapter_output_ceiling_is_applied_before_upstream_construction() {
         let ceiling = MAX_WORKBOOK_BYTES;
-        for requested in [0, 1, ceiling - 1, ceiling, ceiling + 1, usize::MAX] {
+        for requested in [0, 1, ceiling - 1, ceiling, ceiling + 1, u32::MAX as usize] {
             let options = SourceXlsxOptions {
                 limits: SourceXlsxLimits {
-                    max_output_bytes: Some(requested),
+                    max_output_bytes: Some(requested as u64),
                     ..Default::default()
                 },
                 ..Default::default()

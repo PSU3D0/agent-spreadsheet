@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { inflateRawSync } from "node:zlib";
-import { loadRuntime, recalculateFile, main } from "../scripts/run.mjs";
+import { loadRuntime, recalculateFile, editFile, main } from "../scripts/run.mjs";
 import { syntheticWorkbook } from "../scripts/synthetic.mjs";
 
 const cli = fileURLToPath(new URL("../scripts/run.mjs", import.meta.url));
@@ -210,4 +210,92 @@ sourceTest("real generated metadata retains exact error totals separately from s
   assert.equal(summary.errorSummary["#DIV/0!"].locations.length, 3);
   assert.equal(summary.errorSummary["#DIV/0!"].locationsTruncated, 198);
   assert.deepEqual(await readFile(input), original);
+});
+
+
+const modeWorkbook = formula => syntheticWorkbook({
+  [sheetName]: worksheet(`<row r="1"><c r="A1"><f>${formula}</f><v>99</v></c><c r="B1"><v>7</v></c></row>`)
+});
+function sourceMetadata(runtime, bytes, options) {
+  const result = runtime.recalculateSourceXlsx(new Uint8Array(bytes), JSON.stringify(options ?? {}));
+  try { return JSON.parse(result.metadataJson); } finally { result.free(); }
+}
+sourceTest("maintainer runtime forwards actual modes with sample zero and complete error controls", async () => {
+  const { runtime } = await loadRuntime(developmentModule);
+  for (const formula of ['CELL("format",B1)', 'IFERROR(CELL("format",B1),7)',
+    "PIVOTBY(B1,B1,B1,SUM)", "IF(TRUE,SUM,AVERAGE)", "HSTACK(SUM,AVERAGE)"]) {
+    const bytes = modeWorkbook(formula);
+    const metadata = sourceMetadata(runtime, bytes, {errorLocationLimit:0});
+    assert.equal(metadata.coverage, "partial", formula);
+    assert.ok(metadata.operationDiagnostics.functionModes.length, formula);
+    assert.deepEqual(metadata.operationDiagnostics.samples, []);
+    assert.throws(() => sourceMetadata(runtime, bytes, {requireComplete:true}),
+      error => error.code === "CALCULATION_DEFERRED");
+  }
+  for (const formula of ["1/0", "IFERROR(1/0,7)", 'CELL("invalid",B1)',
+    'IF(FALSE,CELL("format",B1),7)', 'CELL("row",B1)',
+    "IF(FALSE,IF(TRUE,SUM,AVERAGE),7)"]) {
+    assert.equal(sourceMetadata(runtime, modeWorkbook(formula), {requireComplete:true}).coverage, "complete", formula);
+  }
+});
+
+sourceTest("maintainer runtime physical counters distinguish null from measured zero", async () => {
+  const { runtime } = await loadRuntime(developmentModule);
+  const bytes = modeWorkbook("1+1");
+  assert.equal(sourceMetadata(runtime, bytes).operationDiagnostics.physicalFunctionDispatches, null);
+  const measured = sourceMetadata(runtime, bytes, {physicalTelemetry:true}).operationDiagnostics;
+  assert.equal(measured.physicalFunctionDispatches, 0);
+  assert.equal(measured.physicalUnavailableObservations, 0);
+  const unavailable = sourceMetadata(runtime, modeWorkbook("MISSING_FN(1)"), {physicalTelemetry:true}).operationDiagnostics;
+  assert.ok(unavailable.physicalUnavailableObservations > 0);
+});
+
+sourceTest("maintainer fatal evidence budgets never overwrite source or edited destinations and recover", async t => {
+  const { runtime } = await loadRuntime(developmentModule);
+  const directory = await temporary(t), input = join(directory, "input.xlsx"), output = join(directory, "output.xlsx");
+  const bytes = modeWorkbook("MISSING_FN(1)");
+  await writeFile(input, bytes);
+  await writeFile(output, "destination sentinel");
+  const request = JSON.stringify({recalculate:"always",ops:[{kind:"set_cells",sheet_name:"Sheet1",
+    overwrite_formulas:true,cells:{A1:{kind:"formula",formula:"MISSING_FN(1)"}}}]});
+  for (const field of ["maxOperationRoots", "maxOperationTextBytes", "maxAffectedWork",
+    "maxAffectedRegions", "maxAffectedScratchBytes", "maxOutputBytes"]) {
+    const options = JSON.stringify({errorLocationLimit:0,limits:{[field]:0}});
+    await assert.rejects(recalculateFile(runtime,input,options,output), error =>
+      error.code === (field === "maxOutputBytes" ? "LIMIT_EXCEEDED" : "ENGINE_ERROR"));
+    await assert.rejects(editFile(runtime,input,request,output,options));
+    assert.deepEqual(await readFile(input), bytes);
+    assert.equal(await readFile(output,"utf8"), "destination sentinel");
+    assert.equal(sourceMetadata(runtime,bytes).coverage,"partial");
+  }
+  assert.throws(() => sourceMetadata(runtime,bytes,{profile:"strict",limits:{maxAffectedWork:0}}),
+    error => error.code === "ENGINE_ERROR");
+  for (const limits of [{maxOperationRoots:null},{maxOperationRoots:true},{maxOperationRoots:0.5},
+    {maxOperationRoots:4294967296},{maxAffectedWork:9007199254740992}]) {
+    assert.throws(() => sourceMetadata(runtime, bytes, {limits}), error => error.code === "INVALID_ARGUMENT");
+  }
+});
+
+sourceTest("maintainer independent dynamic scalar and spill survive written byte reopen", async t => {
+  const { runtime } = await loadRuntime(developmentModule);
+  const directory = await temporary(t), input = join(directory,"in.xlsx"), output = join(directory,"out.xlsx");
+  await writeFile(input, syntheticWorkbook({[sheetName]:worksheet(
+    '<row r="1"><c r="A1"><f>MISSING_FN(1)</f><v>99</v></c><c r="B1"><f>INDIRECT("A1")</f><v>88</v></c><c r="D1"><v>7</v></c><c r="E1"><f>INDIRECT("D1")</f><v>66</v></c><c r="F1"><f>E1+1</f><v>55</v></c></row><row r="3"><c r="D3"><v>7</v></c><c r="E3"><f>INDIRECT("D3:D4")</f><v>44</v></c></row><row r="4"><c r="D4"><v>8</v></c></row>'
+  )}));
+  const receipt = await recalculateFile(runtime,input,"{}",output);
+  assert.equal(receipt.metadata.coverage,"partial");
+  assert.equal(receipt.metadata.operationDiagnostics.dependencyEvidence.unknownFacts,0);
+  assert.equal(receipt.metadata.operationDiagnostics.dependencyEvidence.semanticReadsUnattested,true);
+  const reopened = await readFile(output), xml = member(reopened,sheetName);
+  assert.match(xml, /<f>INDIRECT\("D1"\)<\/f><v>7<\/v>/);
+  assert.match(xml, /<f>E1\+1<\/f><v>8<\/v>/);
+  const read = runtime.inspectXlsx(new Uint8Array(reopened), JSON.stringify({
+    selection:{kind:"cells",addresses:["Sheet1!A1","Sheet1!B1","Sheet1!E1","Sheet1!F1","Sheet1!E3","Sheet1!E4"]}
+  }));
+  try {
+    const items = JSON.parse(read.metadataJson).items;
+    assert.equal(items[0].stored_formula_cache?.value ?? null,null);
+    assert.equal(items[1].stored_formula_cache?.value ?? null,null);
+    assert.deepEqual(items.slice(2).map(item => item.stored_formula_cache?.value?.value ?? item.source_value?.value),[7,8,7,8]);
+  } finally { read.free(); }
 });

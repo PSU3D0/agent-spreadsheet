@@ -5,8 +5,8 @@
 pub use formualizer::workbook::{
     CalculationDeferredReason, ExternalLinkPolicy, IoError, ResolvedSourceCalculation,
     SourceCalculationCoverage, SourceCalculationPolicy, SourceCoverageScope,
-    SourceOperationDiagnostics, XlsxRecalculateLimits, XlsxRecalculateOptions,
-    XlsxRecalculateProfile, XlsxRecalculateResult,
+    SourceOperationDiagnostics, SourceRecalculateLimits, XlsxRecalculateLimits,
+    XlsxRecalculateOptions, XlsxRecalculateProfile, XlsxRecalculateResult,
 };
 
 /// Recalculate original source bytes, preserving untouched package members.
