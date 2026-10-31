@@ -1,6 +1,6 @@
 [package]
 name = "agent-spreadsheet"
-version = "0.16.0"
+version = "0.17.0"
 edition = "2024"
 description = "Core spreadsheet automation primitives — shared types, edit normalization, and session traits for agent-facing surfaces"
 authors = ["Frankie Colson"]
@@ -54,12 +54,12 @@ ahash = "0.8"
 smallvec = "1.13"
 umya-spreadsheet = "=3.1.0"
 ovba = "0.7.1"
-formualizer-parse = { version = "4.1.0" }
+formualizer-parse = { version = "4.2.0" }
 # Cold document I/O compatibility is required even when calculation is disabled.
-formualizer-workbook = { version = "0.13.0", default-features = false, features = ["umya3"] }
+formualizer-workbook = { version = "0.14.0", default-features = false, features = ["umya3"] }
 # Runtime features are independent in 0.13: retain ambient TODAY/NOW behavior
 # on native and JS hosts, and compile the source-package recalc API explicitly.
-formualizer = { version = "0.13.0", default-features = false, features = ["eval", "workbook", "umya3", "common", "system-clock", "xlsx-recalc"], optional = true }
+formualizer = { version = "0.14.0", default-features = false, features = ["eval", "workbook", "umya3", "common", "system-clock", "xlsx-recalc"], optional = true }
 web-time = "1.1"
 walkdir = { version = "2.5", optional = true }
 globset = { version = "0.4", optional = true }
@@ -80,7 +80,7 @@ base64 = { version = "0.22", optional = true }
 async-trait = { version = "0.1", optional = true }
 uuid = { version = "1.10", features = ["v4", "js"], optional = true }
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
-agent-spreadsheet-render = { version = "0.16.0", path = "../agent-spreadsheet-render", optional = true }
+agent-spreadsheet-render = { version = "0.17.0", path = "../agent-spreadsheet-render", optional = true }
 quick-xml = { version = "0.31", optional = true }
 xxhash-rust = { version = "0.8", features = ["xxh64"], optional = true }
 tempfile = { version = "3.10", optional = true }
@@ -96,7 +96,7 @@ tokio = { version = "1.37", features = ["rt-multi-thread", "fs", "signal", "net"
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom04 = { package = "getrandom", version = "0.4", features = ["wasm_js"] }
 getrandom = { version = "0.3", features = ["wasm_js"] }
-formualizer = { version = "0.13.0", default-features = false, features = ["js-runtime"], optional = true }
+formualizer = { version = "0.14.0", default-features = false, features = ["js-runtime"], optional = true }
 
 [features]
 # Native consumers get the historical surface: recalc + CLI arg parsing + a
