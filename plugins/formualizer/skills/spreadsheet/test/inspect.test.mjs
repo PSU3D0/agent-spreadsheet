@@ -8,9 +8,9 @@ import { fileURLToPath } from "node:url";
 import { syntheticWorkbook } from "../scripts/synthetic.mjs";
 import { inspectFile,loadRuntime } from "../scripts/run.mjs";
 const loader=process.env.FORMUALIZER_TEST_RUNTIME;
-const real=(name,fn)=>test(name,{skip:!loader&&"select matching local inspection runtime"},fn);
+const real=(name,fn)=>test(name,fn);
 const cli=fileURLToPath(new URL("../scripts/run.mjs",import.meta.url));
-function invoke(command,input,request) {return spawnSync(process.execPath,[cli,"--dev-runtime",loader,command,input,request],{encoding:"utf8"});}
+function invoke(command,input,request) {const prefix=loader?["--dev-runtime",loader]:[];return spawnSync(process.execPath,[cli,...prefix,command,input,request],{encoding:"utf8"});}
 async function temporary(t) {const path=await mkdtemp(join(tmpdir(),"form270-"));t.after(()=>rm(path,{recursive:true,force:true}));return path;}
 test("read result freed on metadata failure and registry has no implicit inspection fallback",async t=>{
  const dir=await temporary(t),input=join(dir,"input.xlsx");await writeFile(input,syntheticWorkbook());let freed=0;
@@ -23,18 +23,26 @@ real("native read and one-hop CLI trace keep stored cache and engine value disti
  await writeFile(request,JSON.stringify({selection:{kind:"cells",addresses:["Sheet1!B1"]}}));
  const inspected=invoke("inspect",input,request);assert.equal(inspected.status,0,inspected.stderr);
  const sourceWire=JSON.parse(inspected.stdout);
- assert.equal(sourceWire.runtime.kind,"development");
- assert.equal(sourceWire.runtime.module,resolve(loader));
- assert.equal(sourceWire.runtime.registry_version,null);
+ assert.equal(sourceWire.runtime.kind,loader?"development":"registry");
+ if (loader) {
+   assert.equal(sourceWire.runtime.module,resolve(loader));
+   assert.equal(sourceWire.runtime.registry_version,null);
+ } else {
+   assert.equal(sourceWire.runtime.version,"0.17.0");
+ }
  const source=sourceWire.report;
  assert.equal(source.items[0].stored_formula_cache.value.value,42);
  assert.equal(source.items[0].stored_formula_cache.freshness,"unverified");
  await writeFile(request,JSON.stringify({roots:["Sheet1!B1"]}));
  const traced=invoke("trace",input,request);assert.equal(traced.status,0,traced.stderr);
  const traceWire=JSON.parse(traced.stdout);
- assert.equal(traceWire.runtime.kind,"development");
- assert.equal(traceWire.runtime.module,sourceWire.runtime.module);
- assert.equal(traceWire.runtime.registry_version,null);
+ assert.equal(traceWire.runtime.kind,loader?"development":"registry");
+ if (loader) {
+   assert.equal(traceWire.runtime.module,sourceWire.runtime.module);
+   assert.equal(traceWire.runtime.registry_version,null);
+ } else {
+   assert.equal(traceWire.runtime.version,"0.17.0");
+ }
  const trace=traceWire.report;
  assert.equal(trace.items[0].cell.value,null);assert.equal(trace.items[0].cell.staleness,"NeverEvaluated");
  assert.equal(trace.items[1].cell.value.value,21);assert.equal(trace.coverage.engine_limits.max_depth,0);

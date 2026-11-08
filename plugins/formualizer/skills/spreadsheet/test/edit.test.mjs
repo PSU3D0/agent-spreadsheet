@@ -10,7 +10,7 @@ import { syntheticWorkbook } from "../scripts/synthetic.mjs";
 import { editFile, loadRuntime, main } from "../scripts/run.mjs";
 const cli = fileURLToPath(new URL("../scripts/run.mjs", import.meta.url));
 const loader = process.env.FORMUALIZER_TEST_RUNTIME;
-const real = (name, fn) => test(name, { skip: !loader && "Select matching generated stateless-edit loader" }, fn);
+const real = (name, fn) => test(name, fn);
 const set = value => ({ kind: "set_cells", sheet_name: "Sheet1", cells: { A1: { kind: "value", value } } });
 async function temporary(t) {
   const path = await mkdtemp(join(tmpdir(), "formualizer-edit-"));
@@ -18,7 +18,8 @@ async function temporary(t) {
   return path;
 }
 function run(args) {
-  return spawnSync(process.execPath, [cli, "--dev-runtime", loader, "edit", ...args], { encoding: "utf8" });
+  const prefix = loader ? ["--dev-runtime", loader] : [];
+  return spawnSync(process.execPath, [cli, ...prefix, "edit", ...args], { encoding: "utf8" });
 }
 function success(result) {
   assert.equal(result.status, 0, result.stderr);
@@ -46,12 +47,13 @@ function cached(bytes, address) {
   assert.ok(cell, address);
   return cell[1].match(/<v>([^<]*)<\/v>/)?.[1];
 }
-test("pinned registry rejects new stateless editing without resident fallback", async t => {
+test("pinned registry 0.17.0 exposes editXlsx while rejecting missing binding without resident fallback", async t => {
   const directory = await temporary(t), input = join(directory, "input.xlsx");
   await writeFile(input, syntheticWorkbook());
-  const { runtime } = await loadRuntime();
-  assert.equal(typeof runtime.editXlsx, "undefined");
-  await assert.rejects(editFile(runtime, input, "{}", join(directory, "out.xlsx")), /Registry 0.16.0 lacks/);
+  const { runtime, version } = await loadRuntime();
+  assert.equal(version, "0.17.0");
+  assert.equal(typeof runtime.editXlsx, "function");
+  await assert.rejects(editFile({}, input, "{}", join(directory, "out.xlsx")), /does not export editXlsx/);
 });
 test("edit result is freed on decoding/write errors; CLI needs explicit output", async t => {
   const directory = await temporary(t), input = join(directory, "input.xlsx");
@@ -105,7 +107,7 @@ real("two independent CLI invocations reopen output and write a formula with exi
   await writeFile(request, JSON.stringify({ ops: [set(30)] }));
   const receipt = success(run([input, "--operations", request, "--output", first]));
   assert.equal(receipt.mode, "edit");
-  assert.equal(receipt.runtime.kind, "development");
+  assert.equal(receipt.runtime.kind, loader ? "development" : "registry");
   assert.equal(cached(await readFile(first), "B1"), "60");
   await writeFile(request, JSON.stringify({ details: true, ops: [{
     kind: "set_cells", sheet_name: "Sheet1", overwrite_formulas: true,

@@ -1,5 +1,6 @@
 {
   "name": "formualizer-marketplace",
+  "description": "Formualizer spreadsheet recalculation, batch editing, source inspection, and formula dependency tracing plugins.",
   "owner": {
     "name": "Formualizer",
     "url": "https://github.com/PSU3D0/formualizer"

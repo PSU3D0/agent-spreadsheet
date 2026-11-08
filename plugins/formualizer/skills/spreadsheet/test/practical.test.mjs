@@ -42,7 +42,7 @@ test("source option/error failure cannot publish a destination", async t => {
 });
 
 const selected = process.env.FORMUALIZER_TEST_RUNTIME;
-const real = (name, fn) => test(name, { skip: !selected && "Select matching practical source runtime" }, fn);
+const real = (name, fn) => test(name, fn);
 const sheet = "xl/worksheets/sheet1.xml";
 const input = () => syntheticWorkbook({
   [sheet]: '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1"><v>21</v></c><c r="B1"><f>A1*2</f><v>0</v></c></row></sheetData></worksheet>'

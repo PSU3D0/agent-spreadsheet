@@ -1,6 +1,6 @@
 {
   "name": "formualizer-plugin-transport",
-  "version": "0.1.0-alpha.1",
+  "version": "0.17.0",
   "private": true,
   "type": "module",
   "license": "Apache-2.0",
@@ -11,6 +11,6 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "agent-spreadsheet-wasm": "0.16.0"
+    "agent-spreadsheet-wasm": "0.17.0"
   }
 }

@@ -1,8 +1,14 @@
-# Formualizer plugin transport prototype
+# Formualizer Spreadsheet Plugin
 
-Formualizer 0.1.0-alpha.1 is the first delivery packet of a spreadsheet plugin. It supplies one portable skill with a thin Node/WASM runner, a readiness doctor, canonical runtime discovery, and a bounded synthetic XLSX read/export probe. Its default runtime remains registry agent-spreadsheet-wasm 0.16.0. A separate explicitly selected local development runtime can exercise the new Formualizer 0.13 original-source recalculation binding; this does not upgrade or publish the default package. Matching development bindings also provide stateless source inspection and engine-backed one-hop navigation; this does not certify host delivery or full investigation coverage.
+Formualizer 0.17.0 supplies a portable spreadsheet skill, a narrow 4-verb local `stdio` MCP server, and a stateless Cloudflare Edge MCP/OpenAPI worker backed by the pinned `agent-spreadsheet-wasm@0.17.0` (Formualizer 0.14.0) runtime. It provides stateless original-source `.xlsx` recalculation (`source-recalculate`), atomic batch editing with optional recalculation and diff receipts (`edit`), source cell/cache inspection (`inspect`), and engine-backed precedent/dependent tracing (`trace`).
 
-Requires Node >=20, npm, a writable execution environment and either registry access for explicit setup or a prepared skill-local dependency installation. From this directory:
+Requires Node >=20, npm, a writable execution environment and either registry access for explicit setup or a prepared skill-local dependency installation. To install in Claude Code from the marketplace repository:
+
+```text
+/plugin install formualizer --marketplace PSU3D0/formualizer-plugin
+```
+
+From this directory:
 
 ```sh
 cd skills/spreadsheet
@@ -13,10 +19,10 @@ node scripts/run.mjs probe /absolute/writable/path/new-formualizer-probe
 npm test
 ```
 
-The only dependency is exactly agent-spreadsheet-wasm 0.16.0; it has no transitive dependencies. Its lockfile archive integrity is:
+The only dependency is exactly agent-spreadsheet-wasm 0.17.0; it has no transitive dependencies. Its lockfile archive integrity is:
 
 ```text
-sha512-ppq9/qaE1uiUQtKJBL4v2vL2CcClwoG0RhIkzog9T3T2y0+rTFtZUHzGjpbCjj/T21z8hvSYFBab5RGjRe89xQ==
+sha512-LpmEt1GNA91zvalLKJ4/J7VKe+gMpneBsoe8ZukQKwCSulIh7DAoXuiVwrEjCPoVaTRwcwlZa8407zFsSoYtag==
 ```
 
 The wrapper needs Node 20+ for WebCrypto-backed session creation: unflagged Node 18.19.1 failed the real session probe, while Node 20.20.2, 22.22.1, 24.22.0 and 26.5.0 passed. This is a runtime prerequisite, not a Lite/Full distinction.

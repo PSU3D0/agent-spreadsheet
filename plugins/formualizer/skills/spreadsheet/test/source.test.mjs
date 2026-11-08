@@ -12,7 +12,7 @@ import { syntheticWorkbook } from "../scripts/synthetic.mjs";
 const cli = fileURLToPath(new URL("../scripts/run.mjs", import.meta.url));
 // Test-only selection. Production selection is always an explicit CLI argument.
 const developmentModule = process.env.FORMUALIZER_TEST_RUNTIME;
-const sourceTest = (name, fn) => test(name, { skip: !developmentModule && "Set FORMUALIZER_TEST_RUNTIME to matching generated source loader" }, fn);
+const sourceTest = (name, fn) => test(name, fn);
 const sheetName = "xl/worksheets/sheet1.xml";
 const worksheet = rows => `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${rows}</sheetData></worksheet>`;
 const stale = () => syntheticWorkbook({
@@ -54,7 +54,8 @@ function member(bytes, name) {
 }
 
 function runSource(args) {
-  return spawnSync(process.execPath, [cli, "--dev-runtime", developmentModule,
+  const prefix = developmentModule ? ["--dev-runtime", developmentModule] : [];
+  return spawnSync(process.execPath, [cli, ...prefix,
     "source-recalculate", ...args], { encoding: "utf8" });
 }
 function success(result) {
@@ -62,13 +63,13 @@ function success(result) {
   return JSON.parse(result.stdout);
 }
 
-test("default pinned runtime reports source binding unavailable without a session fallback", async t => {
+test("default pinned runtime 0.17.0 exposes recalculateSourceXlsx while rejecting missing binding without a session fallback", async t => {
   const directory = await temporary(t), input = join(directory, "input.xlsx");
   await writeFile(input, stale());
   const pinned = await loadRuntime();
-  assert.equal(pinned.version, "0.16.0");
-  assert.equal(typeof pinned.runtime.recalculateSourceXlsx, "undefined");
-  await assert.rejects(main(["source-recalculate", input]), /Registry 0.16.0 lacks this binding/);
+  assert.equal(pinned.version, "0.17.0");
+  assert.equal(typeof pinned.runtime.recalculateSourceXlsx, "function");
+  await assert.rejects(recalculateFile({}, input), /does not export recalculateSourceXlsx/);
   assert.deepEqual(await readFile(input), stale());
 });
 
@@ -103,7 +104,7 @@ sourceTest("generated source runtime returns typed bytes and metadata; direct re
   const original = stale();
   await writeFile(input, original);
   const { runtime, version } = await loadRuntime(developmentModule);
-  assert.equal(version, null);
+  assert.equal(version, developmentModule ? null : "0.17.0");
   let result;
   try {
     result = runtime.recalculateSourceXlsx(new Uint8Array(original), "{}");
@@ -144,8 +145,9 @@ sourceTest("same CLI check and explicit output produce truthful receipts without
   assert.equal(checked.mode, "check");
   assert.equal(checked.current, false);
   assert.equal(checked.output, null);
-  assert.equal(checked.runtime.kind, "development");
-  assert.equal(checked.runtime.registry_version, null);
+  assert.equal(checked.runtime.kind, developmentModule ? "development" : "registry");
+  if (developmentModule) assert.equal(checked.runtime.registry_version, null);
+  else assert.equal(checked.runtime.version, "0.17.0");
   await assert.rejects(access(output));
   assert.deepEqual(await readFile(input), original);
   const calculated = success(runSource([input]));

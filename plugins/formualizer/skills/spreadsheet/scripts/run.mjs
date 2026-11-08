@@ -6,8 +6,8 @@ import { syntheticWorkbook, probeRequest } from "./synthetic.mjs";
 import { createHash } from "node:crypto";
 
 const require = createRequire(import.meta.url);
-const expectedVersion = "0.16.0";
-const expectedIntegrity = "sha512-ppq9/qaE1uiUQtKJBL4v2vL2CcClwoG0RhIkzog9T3T2y0+rTFtZUHzGjpbCjj/T21z8hvSYFBab5RGjRe89xQ==";
+const expectedVersion = "0.17.0";
+const expectedIntegrity = "sha512-LpmEt1GNA91zvalLKJ4/J7VKe+gMpneBsoe8ZukQKwCSulIh7DAoXuiVwrEjCPoVaTRwcwlZa8407zFsSoYtag==";
 const skillRoot = fileURLToPath(new URL("../", import.meta.url));
 const setup = `Run explicitly in the skill folder (${skillRoot}): npm ci --ignore-scripts. Requires Node >=20 and npm; keep host install/network protections enabled.`;
 
@@ -33,10 +33,10 @@ export async function loadRuntime(developmentModule) {
   if (pkg.version !== expectedVersion) throw new Error(`Expected agent-spreadsheet-wasm ${expectedVersion}, found ${pkg.version}. ${setup}`);
   const lock = JSON.parse(await readFile(new URL("../package-lock.json", import.meta.url), "utf8"));
   const pinned = lock.packages["node_modules/agent-spreadsheet-wasm"];
-  if (pinned?.version !== expectedVersion || pinned?.integrity !== expectedIntegrity) throw new Error("Dependency lock identity differs from the approved 0.16.0 pin.");
+  if (pinned?.version !== expectedVersion || pinned?.integrity !== expectedIntegrity) throw new Error("Dependency lock identity differs from the approved 0.17.0 pin.");
   const { createWasmRuntime } = await import("agent-spreadsheet-wasm");
   const runtime = await createWasmRuntime();
-  for (const name of ["createSession", "operations", "executeOperation", "exportWorkbook", "disposeSession"]) {
+  for (const name of ["createSession", "operations", "executeOperation", "exportWorkbook", "disposeSession", "recalculateSourceXlsx", "editXlsx", "inspectXlsx", "traceXlsx"]) {
     if (typeof runtime[name] !== "function") throw new Error("WASM missing binding: " + name);
   }
   return { runtime, version: pkg.version };
@@ -208,7 +208,11 @@ export async function main(args) {
   if (command === "doctor") return {
     ready: true, node: process.version, package: "agent-spreadsheet-wasm", version,
     lock_integrity: expectedIntegrity, wasm: "instantiated", skill_directory: skillRoot,
-    scope: "transport prototype; actual Claude host execution/artifact delivery still requires a host probe"
+    source_recalculation: typeof runtime.recalculateSourceXlsx === "function",
+    stateless_editing: typeof runtime.editXlsx === "function",
+    stateless_inspection: typeof runtime.inspectXlsx === "function",
+    engine_navigation: typeof runtime.traceXlsx === "function",
+    scope: "pinned registry 0.17.0 runtime with stateless source recalculation, batch editing, inspection, and dependency tracing"
   };
   if (command === "discover") {
     const discovery = JSON.parse(await runtime.operations());
@@ -238,7 +242,7 @@ export async function main(args) {
     throw new Error("Synthetic read/export probe did not return the expected bounded values; inspect the runtime response.");
   }
   const receipt = {
-    scope: `${development_module ? "development runtime" : "0.16.0"} transport feasibility only; B1=42 is a supplied cache, not proof of recalculation or Formualizer 0.13 source preservation`,
+    scope: `${development_module ? "development runtime" : "0.17.0"} transport feasibility only; B1=42 is a supplied cache, not proof of recalculation or Formualizer 0.14 source preservation`,
     node: process.version, package_version: version, input, output, response, reopened
   };
   await writeFile(join(directory, "receipt.json"), JSON.stringify(receipt, null, 2) + "\n");

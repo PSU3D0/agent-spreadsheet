@@ -32,7 +32,11 @@ test("runtime metadata does not impose an unnecessary Node24 minimum", async () 
 test("doctor instantiates the exact pinned WASM and discovery stays canonical", async () => {
   const report = await main(["doctor"]);
   assert.equal(report.ready, true);
-  assert.equal(report.version, "0.16.0");
+  assert.equal(report.version, "0.17.0");
+  assert.equal(report.source_recalculation, true);
+  assert.equal(report.stateless_editing, true);
+  assert.equal(report.stateless_inspection, true);
+  assert.equal(report.engine_navigation, true);
   const { runtime } = await loadRuntime();
   assert.deepEqual(await main(["discover"]), JSON.parse(runtime.operations()));
   assert.deepEqual(await main(["discover", "read_cells"]),
@@ -142,13 +146,13 @@ test("copied skill resolves local assets from unrelated cwd; absent dependency n
   const ready = spawnSync(process.execPath, [copiedCli, "probe", join(directory, "copied-probe")],
     { cwd: tmpdir(), encoding: "utf8" });
   assert.equal(ready.status, 0, ready.stderr);
-  assert.equal(JSON.parse(ready.stdout).package_version, "0.16.0");
+  assert.equal(JSON.parse(ready.stdout).package_version, "0.17.0");
 });
 
 test("directory-compatible manifest and skill resources are present", async () => {
   const manifest = JSON.parse(await readFile(new URL("../../../.claude-plugin/plugin.json", import.meta.url), "utf8"));
   assert.equal(manifest.name, "formualizer");
-  assert.match(manifest.version, /^0\.1\.0-alpha\.1$/);
+  assert.match(manifest.version, /^0\.17\.0$/);
   assert.equal(manifest.license, "Apache-2.0");
   assert.ok(manifest.description.length > 20);
   const skill = await readFile(join(root, "SKILL.md"), "utf8");

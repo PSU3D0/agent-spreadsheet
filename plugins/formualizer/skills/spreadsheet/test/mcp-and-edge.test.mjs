@@ -12,7 +12,7 @@ import { syntheticWorkbook } from "../scripts/synthetic.mjs";
 const skillRoot = fileURLToPath(new URL("../", import.meta.url));
 const pluginRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const loader = process.env.FORMUALIZER_TEST_RUNTIME;
-const real = (name, fn) => test(name, { skip: !loader && "Set FORMUALIZER_TEST_RUNTIME to matching 0.17 loader" }, fn);
+const real = (name, fn) => test(name, fn);
 
 async function temporary(t) {
   const dir = await mkdtemp(join(tmpdir(), "formualizer-mcp-"));
