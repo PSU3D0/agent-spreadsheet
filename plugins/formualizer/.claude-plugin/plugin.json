@@ -5,7 +5,22 @@
   "description": "Fast stateless Excel (.xlsx) formula recalculation, batch editing with diff receipts, source inspection, and precedent/dependent tracing using the pinned agent-spreadsheet WASM runtime.",
   "author": {
     "name": "Formualizer",
-    "url": "https://github.com/PSU3D0/agent-spreadsheet"
+    "url": "https://github.com/PSU3D0/formualizer"
   },
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "keywords": [
+    "spreadsheet",
+    "excel",
+    "xlsx",
+    "recalculation",
+    "formulas",
+    "financial-modeling",
+    "audit"
+  ],
+  "homepage": "https://www.formualizer.dev",
+  "repository": "https://github.com/PSU3D0/formualizer-plugin",
+  "documentationUrl": "https://www.formualizer.dev/docs",
+  "supportUrl": "https://github.com/PSU3D0/formualizer/issues",
+  "privacyPolicyUrl": "https://github.com/PSU3D0/formualizer-plugin/blob/main/README.md#privacy--data-handling",
+  "termsOfServiceUrl": "https://github.com/PSU3D0/formualizer-plugin/blob/main/LICENSE"
 }
