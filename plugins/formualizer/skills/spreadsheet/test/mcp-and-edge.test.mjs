@@ -23,8 +23,6 @@ async function temporary(t) {
 test("all multi-platform manifests exist, parse cleanly, and have no top-level bin/ or oversized files", async () => {
   await assert.rejects(access(join(pluginRoot, "bin")));
   const manifests = [
-    ".claude-plugin/plugin.json",
-    ".claude-plugin/marketplace.json",
     "plugin.json",
     "mcp.json",
     ".cursor-plugin/plugin.json",

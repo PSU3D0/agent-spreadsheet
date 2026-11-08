@@ -3,7 +3,6 @@
   "displayName": "Formualizer",
   "version": "0.17.0",
   "description": "Fast stateless Excel (.xlsx) formula recalculation, batch editing with diff receipts, source inspection, and precedent/dependent tracing using the pinned agent-spreadsheet WASM runtime.",
-  "icon": ".claude-plugin/icon.png",
   "author": {
     "name": "Formualizer",
     "url": "https://github.com/PSU3D0/agent-spreadsheet"
