@@ -1,34 +1,14 @@
-# Local development source-runtime proof
+# Source-runtime recalculation
 
-The default plugin still loads exactly registry agent-spreadsheet-wasm 0.16.0 and its existing lock integrity. That package lacks `recalculateSourceXlsx`; the source command fails with an actionable message on it. No resident-session fallback is used. A new binding has not reached the default package merely because this checkout builds successfully.
-
-For a trusted local development build, use matching generated JS **and** WASM from the same source. Never replace the installed registry binary underneath its old glue. From the agent-spreadsheet source root:
+The default pinned package is `agent-spreadsheet-wasm@0.17.0` (backed by Formualizer 0.14.0), which includes `recalculateSourceXlsx` out of the box.
 
 ```sh
-node scripts/build-wasm-package.js --target nodejs --profile wasm-release --no-opt --out-dir target/practical-source-node
+node scripts/run.mjs doctor
+node scripts/run.mjs source-recalculate /path/input.xlsx --check
+node scripts/run.mjs source-recalculate /path/input.xlsx --options /path/options.json --output /path/repaired.xlsx
 ```
 
-This creates an ignored local build, not a published package. The profile uses opt-level z, fat LTO, one codegen unit, panic abort and stripping; this invocation skips wasm-opt. Keep the source identity and WASM digest separately from registry version/SRI.
-
-Create `target/practical-source-node/loader.mjs` beside that build:
-
-```js
-import { createRequire } from "node:module";
-const require = createRequire(import.meta.url);
-export async function createWasmRuntime() {
-  return require("./agent_spreadsheet_wasm.js");
-}
-```
-
-The optional `--dev-runtime LOCAL_LOADER.mjs` prefix explicitly executes that trusted local module's `createWasmRuntime()`. It accepts paths, not HTTP/file URLs; it does not download anything, mutate global configuration, change dependency pins or consult an environment variable for production runtime selection. Default doctor/transport continues to use registry 0.16.0. Development doctor and source receipts label the selected runtime as development with no registry-version claim.
-
-From the skill folder, substituting the actual absolute loader path:
-
-```sh
-node scripts/run.mjs --dev-runtime /absolute/checkout/target/practical-source-node/loader.mjs doctor
-node scripts/run.mjs --dev-runtime /absolute/checkout/target/practical-source-node/loader.mjs source-recalculate /path/input.xlsx --check
-node scripts/run.mjs --dev-runtime /absolute/checkout/target/practical-source-node/loader.mjs source-recalculate /path/input.xlsx --options /path/options.json --output /path/repaired.xlsx
-```
+For an optional local development build, pass `--dev-runtime /absolute/checkout/target/practical-source-node/loader.mjs` before the command.
 
 Without `--output`, no file is written. `--check` is explicitly read-only and cannot combine with `--output`; successful checking returns exit 0 even when `current:false`. The receipt describes calculation coverage separately; byte inequality alone does not establish cache freshness. A command without either flag also returns a receipt and discards its calculated bytes. Explicit output follows ordinary filesystem overwrite behavior, including the input itself if explicitly selected. Parent directories must exist. There is no shared-file CAS or atomic publication promise.
 

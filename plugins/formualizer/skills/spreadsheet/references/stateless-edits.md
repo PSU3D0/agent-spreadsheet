@@ -2,11 +2,11 @@
 
 The browser-facing operation is file-in → batch edits → optional recalculation → file-out. Each invocation opens its own document and returns bytes; no persistent session ID, caller revision, preview or stage cycle is needed.
 
-The default pinned registry0.16.0 package lacks `editXlsx`. Use an explicitly selected matching local development build as described in source-runtime.md until publication and a matching package/pin update are separately approved. There is no resident fallback.
+The default pinned `agent-spreadsheet-wasm@0.17.0` package includes `editXlsx` out of the box.
 
 ```sh
-node scripts/run.mjs --dev-runtime /absolute/build/loader.mjs edit INPUT.xlsx --operations REQUEST.json --output OUTPUT.xlsx
-node scripts/run.mjs --dev-runtime /absolute/build/loader.mjs edit INPUT.xlsx --operations REQUEST.json --output OUTPUT.xlsx --recalc-options RECALC_OPTIONS.json
+node scripts/run.mjs edit INPUT.xlsx --operations REQUEST.json --output OUTPUT.xlsx
+node scripts/run.mjs edit INPUT.xlsx --operations REQUEST.json --output OUTPUT.xlsx --recalc-options RECALC_OPTIONS.json
 ```
 
 The output path is explicit and follows ordinary overwrite intent, including the input path if explicitly chosen. Calculation/edit/option failures return no successful artifact and do not overwrite an existing destination. Filesystem write failures have ordinary filesystem behavior; no CAS or atomic filesystem publication is promised.
