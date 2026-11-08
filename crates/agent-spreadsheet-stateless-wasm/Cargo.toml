@@ -1,0 +1,23 @@
+[package]
+name = "agent-spreadsheet-stateless-wasm"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+description = "Experimental stateless-only spreadsheet WASM surface"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["edit"]
+edit = []
+
+[dependencies]
+agent-spreadsheet = { path = "../agent-spreadsheet", default-features = false, features = ["recalc-formualizer"] }
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+serde-wasm-bindgen = "0.6"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"

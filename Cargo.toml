@@ -2,6 +2,7 @@
 members = [
     "crates/agent-spreadsheet",
     "crates/agent-spreadsheet-wasm",
+    "crates/agent-spreadsheet-stateless-wasm",
     "crates/agent-spreadsheet-mcp",
     "crates/agent-spreadsheet-render",
 ]
