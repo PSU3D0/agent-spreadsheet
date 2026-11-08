@@ -1,0 +1,11 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "formualizer": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${PLUGIN_ROOT}/server/stdio-mcp.mjs"],
+      "cwd": "${PLUGIN_ROOT}"
+    }
+  }
+}

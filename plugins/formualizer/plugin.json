@@ -1,0 +1,22 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "formualizer",
+  "displayName": "Formualizer",
+  "version": "0.17.0",
+  "description": "Stateless Excel (.xlsx) formula recalculation, batch editing with diff receipts, source inspection, and dependency tracing powered by Formualizer WASM.",
+  "author": {
+    "name": "Formualizer",
+    "url": "https://github.com/PSU3D0/formualizer"
+  },
+  "license": "Apache-2.0",
+  "skills": "./skills/",
+  "mcp": "./mcp.json",
+  "extensions": {
+    "com.openai": {
+      "requires_local_executor": true
+    },
+    "com.github.copilot": {
+      "skills": ["./skills/spreadsheet"]
+    }
+  }
+}

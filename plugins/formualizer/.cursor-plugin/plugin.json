@@ -1,0 +1,18 @@
+{
+  "name": "formualizer",
+  "displayName": "Formualizer",
+  "version": "0.17.0",
+  "description": "Stateless Excel (.xlsx) formula recalculation, batch editing, source inspection, and precedent/dependent tracing.",
+  "author": {
+    "name": "Formualizer",
+    "url": "https://github.com/PSU3D0/formualizer"
+  },
+  "license": "Apache-2.0",
+  "skills": ["./skills/spreadsheet"],
+  "mcpServers": {
+    "formualizer": {
+      "command": "node",
+      "args": ["${CURSOR_PLUGIN_ROOT}/server/stdio-mcp.mjs"]
+    }
+  }
+}

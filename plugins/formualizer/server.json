@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.PSU3D0/formualizer",
+  "title": "Formualizer Spreadsheet Recalc, Edit, Inspect & Trace",
+  "description": "Narrow, stateless 4-verb Excel (.xlsx) formula recalculation, batch editing, source inspection, and dependency tracing.",
+  "version": "0.17.0",
+  "websiteUrl": "https://formualizer.com",
+  "repository": {
+    "url": "https://github.com/PSU3D0/formualizer-plugin",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.formualizer.com/mcp"
+    }
+  ]
+}
