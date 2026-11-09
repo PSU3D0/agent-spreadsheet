@@ -28,7 +28,7 @@ real("native read and one-hop CLI trace keep stored cache and engine value disti
    assert.equal(sourceWire.runtime.module,resolve(loader));
    assert.equal(sourceWire.runtime.registry_version,null);
  } else {
-   assert.equal(sourceWire.runtime.version,"0.17.0-stateless-experiment");
+   assert.equal(sourceWire.runtime.version,"0.18.0");
  }
  const source=sourceWire.report;
  assert.equal(source.items[0].stored_formula_cache.value.value,42);
@@ -41,7 +41,7 @@ real("native read and one-hop CLI trace keep stored cache and engine value disti
    assert.equal(traceWire.runtime.module,sourceWire.runtime.module);
    assert.equal(traceWire.runtime.registry_version,null);
  } else {
-   assert.equal(traceWire.runtime.version,"0.17.0-stateless-experiment");
+   assert.equal(traceWire.runtime.version,"0.18.0");
  }
  const trace=traceWire.report;
  assert.equal(trace.items[0].cell.value,null);assert.equal(trace.items[0].cell.staleness,"NeverEvaluated");

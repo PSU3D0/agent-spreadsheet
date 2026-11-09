@@ -47,11 +47,11 @@ function cached(bytes, address) {
   assert.ok(cell, address);
   return cell[1].match(/<v>([^<]*)<\/v>/)?.[1];
 }
-test("pinned registry 0.17.0 exposes editXlsx while rejecting missing binding without resident fallback", async t => {
+test("bundled engine 0.18.0 exposes editXlsx while rejecting missing binding without resident fallback", async t => {
   const directory = await temporary(t), input = join(directory, "input.xlsx");
   await writeFile(input, syntheticWorkbook());
   const { runtime, version } = await loadRuntime();
-  assert.equal(version, "0.17.0-stateless-experiment");
+  assert.equal(version, "0.18.0");
   assert.equal(typeof runtime.editXlsx, "function");
   await assert.rejects(editFile({}, input, "{}", join(directory, "out.xlsx")), /does not export editXlsx/);
 });

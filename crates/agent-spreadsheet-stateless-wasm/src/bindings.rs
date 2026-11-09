@@ -16,7 +16,7 @@ pub mod wasm_bindings {
         serde_wasm_bindgen::to_value(value).map_err(|e| JsValue::from_str(&e.to_string()))
     }
     #[wasm_bindgen]
-    pub fn version() -> String { "0.17.0-stateless-experiment".into() }
+    pub fn version() -> String { env!("CARGO_PKG_VERSION").into() }
     #[wasm_bindgen]
     pub fn capabilities() -> String {
         serde_json::json!({

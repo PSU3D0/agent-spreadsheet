@@ -63,11 +63,11 @@ function success(result) {
   return JSON.parse(result.stdout);
 }
 
-test("default pinned runtime 0.17.0 exposes recalculateSourceXlsx while rejecting missing binding without a session fallback", async t => {
+test("default bundled runtime 0.18.0 exposes recalculateSourceXlsx while rejecting missing binding without a session fallback", async t => {
   const directory = await temporary(t), input = join(directory, "input.xlsx");
   await writeFile(input, stale());
   const pinned = await loadRuntime();
-  assert.equal(pinned.version, "0.17.0-stateless-experiment");
+  assert.equal(pinned.version, "0.18.0");
   assert.equal(typeof pinned.runtime.recalculateSourceXlsx, "function");
   await assert.rejects(recalculateFile({}, input), /does not export recalculateSourceXlsx/);
   assert.deepEqual(await readFile(input), stale());
@@ -104,7 +104,7 @@ sourceTest("generated source runtime returns typed bytes and metadata; direct re
   const original = stale();
   await writeFile(input, original);
   const { runtime, version } = await loadRuntime(developmentModule);
-  assert.equal(version, developmentModule ? null : "0.17.0-stateless-experiment");
+  assert.equal(version, developmentModule ? null : "0.18.0");
   let result;
   try {
     result = runtime.recalculateSourceXlsx(new Uint8Array(original), "{}");
@@ -147,7 +147,7 @@ sourceTest("same CLI check and explicit output produce truthful receipts without
   assert.equal(checked.output, null);
   assert.equal(checked.runtime.kind, developmentModule ? "development" : "bundled");
   if (developmentModule) assert.equal(checked.runtime.registry_version, null);
-  else assert.equal(checked.runtime.version, "0.17.0-stateless-experiment");
+  else assert.equal(checked.runtime.version, "0.18.0");
   await assert.rejects(access(output));
   assert.deepEqual(await readFile(input), original);
   const calculated = success(runSource([input]));
