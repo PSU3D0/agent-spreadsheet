@@ -1,29 +1,55 @@
-# Formualizer Spreadsheet Plugin
+# Formualizer for Claude
 
-Formualizer 0.17.0 supplies a portable spreadsheet skill, a narrow 4-verb local `stdio` MCP server, and a stateless Cloudflare Edge MCP/OpenAPI worker backed by the bundled stateless WASM engine (Formualizer 0.14.0). It provides stateless original-source `.xlsx` recalculation (`source-recalculate`), atomic batch editing with optional recalculation and diff receipts (`edit`), source cell/cache inspection (`inspect`), and engine-backed precedent/dependent tracing (`trace`).
+Give Claude a real spreadsheet engine. Formualizer lets Claude recalculate, edit, inspect and trace Excel workbooks (`.xlsx`) directly, instead of guessing at formulas or asking you to open Excel.
 
-Requires Node >=20 and a writable execution environment. The engine is bundled; no dependency installation or network is required. To install in Claude Code from the marketplace repository:
+## What you can do
+
+- **Fix stale numbers.** Workbooks produced by scripts and exports often carry outdated formula results. Formualizer recalculates them and writes a corrected copy, leaving everything else in the file untouched.
+- **Edit workbooks safely.** Change inputs, values and formulas in one batch, recalculate, and get a receipt of exactly which cells changed.
+- **Read a workbook accurately.** Look up cells, ranges, formulas and stored results on any sheet.
+- **Find out where a number comes from.** Trace a cell back through every formula that feeds it, or forward to everything that depends on it.
+
+## Try asking
+
+- "Recalculate `forecast.xlsx` and tell me which totals changed."
+- "Set the growth rate in `Inputs!B4` to 6%, recalculate, and show me the new year-5 revenue."
+- "What feeds the NPV in `Summary!C12`? Walk me through it."
+- "Which cells depend on the discount rate in `Inputs!B7`?"
+
+## Install
+
+**Claude Code**
 
 ```text
-/plugin install formualizer --marketplace PSU3D0/formualizer-plugin
+/plugin marketplace add PSU3D0/formualizer-plugin
+/plugin install formualizer@formualizer-marketplace
 ```
 
-From this directory:
+**Codex CLI**
 
 ```sh
-cd skills/spreadsheet
-node scripts/xlsx.mjs doctor
-node --test test/*.test.mjs
+codex plugin marketplace add https://github.com/psu3d0/formualizer-plugin.git
+codex plugin add formualizer@formualizer-marketplace
 ```
 
-Doctor verifies the bundled compressed and raw WASM hashes against PROVENANCE.json and instantiates the engine locally. The compiled engine is held for manual directory review.
+Formualizer needs Node.js 20 or newer where Claude runs its code. Nothing else to install.
 
-For use on a workbook, see [the skill](skills/spreadsheet/SKILL.md). Inspect and trace read source values and unverified caches without recalculation. Only explicit output destinations write files. Rich edits serialize the workbook; cache-only recalculation uses original source bytes. Actual-host execution and artifact delivery still require separate evidence; see [host checks](skills/spreadsheet/references/host-probe.md).
+## Good to know
+
+- Recalculating only updates stored results; the rest of the file stays byte-for-byte the same. Editing rewrites the workbook file.
+- Formualizer writes files only where you ask it to. Your original workbook is never overwritten unless you name it as the output.
+
+## What this plugin runs
+
+The plugin includes the Formualizer spreadsheet engine as one compressed WebAssembly file (`skills/spreadsheet/engine/formualizer_engine.wasm.br`), together with readable JavaScript that loads it. When Claude uses the skill, Node.js checks the file against the SHA-256 recorded in `skills/spreadsheet/engine/PROVENANCE.json`, decompresses it with Node's built-in Brotli support, and runs it locally. `PROVENANCE.json` also records the source repository, commit and toolchain used to build the engine. The plugin installs no packages and downloads nothing.
 
 ## Privacy & Data Handling
 
-Runtime operations (`source-recalculate`, `edit`, `inspect`, `trace`, `doctor`) and the local stdio MCP server execute in the host environment using the bundled engine. The Brotli WASM is decompressed locally with Node zlib. Skill and stdio paths send no network requests or telemetry and require no credentials. Host platform data handling still applies. The optional edge worker runs in its deployment environment and retains its explicit telemetry callback.
+Your workbooks never leave the environment where Claude runs the skill. The skill and its local server make no network requests, send no telemetry, and need no account or credentials. The platform you use Claude on (for example claude.ai or your own machine) handles your files under its own terms.
 
-Layout follows [official plugin guidance](https://claude.com/docs/plugins/build.md) and [skill script guidance](https://claude.com/docs/skills/how-to.md#add-scripts).
+## Links
 
-Stateless inspection and dependency navigation: use `inspect INPUT.xlsx REQUEST.json` or `trace INPUT.xlsx REQUEST.json`. Source caches remain explicitly unverified; engine values/currentness are separate and neither read command evaluates formulas. See [stateless inspection](skills/spreadsheet/references/stateless-inspection.md) for one-hop budgets, rerooting, pagination, and lifetime details.
+- Documentation: https://www.formualizer.dev/docs
+- Engine source: https://github.com/PSU3D0/formualizer
+- Issues and support: https://github.com/PSU3D0/formualizer/issues
+- License: Apache-2.0
