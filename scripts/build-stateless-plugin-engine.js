@@ -7,8 +7,8 @@ const { execFileSync } = require("node:child_process");
 const { createHash } = require("node:crypto");
 const zlib = require("node:zlib");
 const root = path.resolve(__dirname, "..");
-const run = (cmd, args) => execFileSync(cmd, args, { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, env: { ...process.env, RUSTC_WRAPPER: "" } }).trim();
-const target = process.env.CARGO_TARGET_DIR;
+const run = (cmd, args) => execFileSync(cmd, args, { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, env: { ...process.env, CARGO_TARGET_DIR: target, RUSTC_WRAPPER: "" } }).trim();
+const target = process.env.CARGO_TARGET_DIR && path.resolve(process.env.CARGO_TARGET_DIR);
 if (!target) throw new Error("Set CARGO_TARGET_DIR to a dedicated build directory.");
 const opt = process.env.WASM_OPT || "wasm-opt";
 const out = path.join(root, "plugins/formualizer/skills/spreadsheet/engine");
@@ -24,7 +24,7 @@ if (br.length >= 5 * 1024 * 1024) throw new Error("Compressed engine reaches the
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
 const metadata = JSON.parse(run("cargo", ["metadata", "--locked", "--format-version", "1", "--config", 'build.rustc-wrapper=""']));
 const versions = Object.fromEntries(metadata.packages.filter(p => p.name.startsWith("formualizer") || p.name === "agent-spreadsheet-stateless-wasm" || p.name === "agent-spreadsheet").map(p => [p.name, p.version]));
-if (versions.formualizer !== "0.14.0") throw new Error("Expected crates.io formualizer 0.14.0");
+if (versions.formualizer !== "0.14.0" || !metadata.packages.find(p => p.name === "formualizer")?.source?.startsWith("registry+")) throw new Error("Expected crates.io formualizer 0.14.0");
 fs.mkdirSync(out, { recursive: true });
 // Keep readable wasm-bindgen glue, omitting the unused network-capable async
 // initializer. Both Node and Workers use initSync with local bytes/module.
