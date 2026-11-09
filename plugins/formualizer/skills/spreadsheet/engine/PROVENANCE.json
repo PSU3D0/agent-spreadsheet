@@ -1,12 +1,12 @@
 {
   "source": {
     "repository": "https://github.com/PSU3D0/agent-spreadsheet",
-    "commit": "75d3578b88abe718bc990470775dd2ad4be6f896",
+    "commit": "8252739b8d73f91eff57b70688fef55a7a1a7d64",
     "dirty": false
   },
   "crates": {
     "agent-spreadsheet": "0.17.0",
-    "agent-spreadsheet-stateless-wasm": "0.1.0",
+    "agent-spreadsheet-stateless-wasm": "0.18.0",
     "formualizer": "0.14.0",
     "formualizer-common": "4.2.0",
     "formualizer-eval": "0.14.0",
@@ -25,11 +25,11 @@
     "node": "v26.5.0"
   },
   "raw": {
-    "bytes": 8462559,
-    "sha256": "35c5cf8d2476e5eedbf3d9c530d49a0d0260039b019581f4389c9bb5da6aaf39"
+    "bytes": 8462551,
+    "sha256": "9b27fbd168d468e3d2433ce02a8ccbab253f75c7aae8e718275dd13a25f2a2bb"
   },
   "compressed": {
-    "bytes": 2200721,
-    "sha256": "90dfca21f8eaf3444c1b6db51c51d0cf236747c65ff99d8eaa24eadbb0862b0b"
+    "bytes": 2202376,
+    "sha256": "6707b08dd1df3c7071b34542932fbe377ebb8067e1688930fd045bebdeb0d75a"
   }
 }
