@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile, realpath } from "node:fs/promises";
 import { loadEngine } from "./engine.mjs";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
@@ -160,7 +160,9 @@ export async function main(args) {
   };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+// Hosts may mount the skill through a symlink; Node resolves the module URL.
+const invocationPath = process.argv[1] ? await realpath(process.argv[1]).catch(() => null) : null;
+if (invocationPath && import.meta.url === pathToFileURL(invocationPath).href) {
   main(process.argv.slice(2)).then(result => console.log(JSON.stringify(result, null, 2))).catch(error => {
     // Canonical errors may be thrown as serialized envelopes; retain their details.
     console.error(typeof error === "string" ? error : error instanceof Error ? error.message : JSON.stringify(error));

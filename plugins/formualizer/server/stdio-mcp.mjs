@@ -1,6 +1,6 @@
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadRuntime, recalculateFile, editFile, inspectFile } from "../skills/spreadsheet/scripts/xlsx.mjs";
 
 const PROTOCOL_VERSION = "2025-06-18";
@@ -241,7 +241,9 @@ export async function handleJsonRpcMessage(message, devRuntime) {
   };
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, "/"))) {
+// Compare full resolved paths so symlinked launches work and imports stay inert.
+const invocationPath = process.argv[1] ? await realpath(process.argv[1]).catch(() => null) : null;
+if (invocationPath && import.meta.url === pathToFileURL(invocationPath).href) {
   const args = process.argv.slice(2);
   let devRuntime;
   if (args[0] === "--dev-runtime" && args[1]) {
