@@ -1,30 +1,57 @@
 ---
 name: spreadsheet
-description: Recalculate XLSX caches, batch edit workbooks, inspect source cells and caches, and trace formula dependencies with bundled Formualizer 0.14.0.
+description: Fast Excel (.xlsx) formula recalculation, targeted cell reads, batch edits, and dependency tracing. Use to explain unexpected totals, test assumptions, fix stale results, and calculate workbooks created or edited with other tools.
 ---
 
-Requires Node >=20. The engine is bundled inside this skill; no npm install, network access, credentials, or local server is required. Locate this copied SKILL.md and use its parent directory as the skill directory. All required runtime files are inside it.
+Use `formualizer:spreadsheet` for these tasks:
 
-Run the integrity and runtime check:
+- **Inspect selected cells:** read values, formulas and stored results from the user's known sheet/range. Use focused selections and paginate larger results.
+- **Explain unexpected totals:** trace precedents to find what feeds a formula, or dependents to see what an assumption affects. Follow returned requests for more detail; traces are bounded and do not guarantee the entire dependency graph.
+- **Batch edit assumptions or formulas:** collect related changes in one operations request, then inspect the affected outputs and calculation receipt.
+- **Calculate the final deliverable:** when the user requests creating or editing a formula-bearing XLSX, use Formualizer to calculate the final saved workbook before returning it. This complements other tools used to create or style the file; run it after those tools save their final changes.
+
+Inspect and trace do not evaluate formulas. Stored formula caches are unverified. Reading alone does not authorize recalculation.
+
+## Run locally
+
+Requires Node >=20. The engine is bundled; no install, network access, credentials or local server is required. Locate this copied `SKILL.md` and use its parent directory as `CLAUDE_SKILL_DIR`; all required runtime files are inside it.
+
+Check the bundled engine:
 
 ```sh
 node "${CLAUDE_SKILL_DIR}/scripts/xlsx.mjs" doctor
 ```
 
-Use these four file commands:
+Inspect selected cells or trace dependencies using a request JSON file:
 
 ```sh
-node "${CLAUDE_SKILL_DIR}/scripts/xlsx.mjs" source-recalculate /path/input.xlsx --check
-node "${CLAUDE_SKILL_DIR}/scripts/xlsx.mjs" source-recalculate /path/input.xlsx --output /path/recalculated.xlsx
-node "${CLAUDE_SKILL_DIR}/scripts/xlsx.mjs" edit /path/input.xlsx --operations /path/ops.json --output /path/edited.xlsx
 node "${CLAUDE_SKILL_DIR}/scripts/xlsx.mjs" inspect /path/input.xlsx /path/inspect-request.json
 node "${CLAUDE_SKILL_DIR}/scripts/xlsx.mjs" trace /path/input.xlsx /path/trace-request.json
 ```
 
-Use the user's known sheet/range directly. Inspect and trace do not recalculate; stored formula caches are unverified. Reading does not authorize recalculation. See references/stateless-inspection.md for selection, paging and trace budgets; references/stateless-edits.md for batch operations and optional recalculation; references/source-runtime.md for calculation options and receipts.
+See [stateless-inspection.md](references/stateless-inspection.md) for cell/range selections, precedents/dependents, paging and trace budgets. Use the user's known sheet/range directly and follow returned paging or trace requests as needed.
 
-Only an explicit output destination writes a workbook. It overwrites an existing destination, including the input if explicitly selected; parent directories must exist. Rich edits serialize the workbook and do not guarantee original-package preservation. Cache-only recalculation uses original source bytes. Check coverage/completed separately from bytesUnchanged and legacy current (both mean byte equality only); report deferred calculation explicitly.
+Apply a batch of edits:
 
-The readable loader verifies the bundled Brotli file against engine/PROVENANCE.json, decompresses it locally with Node zlib, verifies the raw WASM hash and instantiates it. The skill and local stdio paths send no network requests or telemetry. The compiled engine requires plugin-directory review.
+```sh
+node "${CLAUDE_SKILL_DIR}/scripts/xlsx.mjs" edit /path/input.xlsx --operations /path/ops.json --output /path/edited.xlsx
+```
 
-Return selected values, reported calculation state, and the output artifact if written. Attach or link it using the host's artifact mechanism. Local checks do not establish downloadable artifact delivery in another host. For synthetic host checks see references/host-probe.md.
+See [stateless-edits.md](references/stateless-edits.md) for operations and recalculation modes. Edits can rewrite the workbook, including content unsupported by the editor; they do not guarantee original-package preservation.
+
+Recalculate a saved workbook, either checking without writing or producing the final artifact:
+
+```sh
+node "${CLAUDE_SKILL_DIR}/scripts/xlsx.mjs" source-recalculate /path/input.xlsx --check
+node "${CLAUDE_SKILL_DIR}/scripts/xlsx.mjs" source-recalculate /path/input.xlsx --output /path/recalculated.xlsx
+```
+
+Original-source recalculation preserves non-cache bytes. See [source-runtime.md](references/source-runtime.md) for calculation options and receipt fields.
+
+## Check and deliver
+
+Only an explicit output argument writes a workbook. It overwrites an existing destination, including the input if explicitly selected; parent directories must exist.
+
+Read receipt coverage and `completed` before reporting calculated results. `bytesUnchanged` and legacy `current` mean byte equality only. Report partial or deferred calculation explicitly; an available artifact alone does not establish completed calculation or fresh caches.
+
+Return the selected values, reported calculation state and output artifact if written. Attach or link the saved workbook using the host's artifact mechanism and verify that the output file exists.
