@@ -162,7 +162,7 @@ export function buildOpenApiSpec(serverUrl = "https://mcp.formualizer.com") {
     openapi: "3.1.0",
     info: {
       title: "Formualizer Spreadsheet Recalculation, Edit, Inspect & Trace API",
-      version: "0.18.0",
+      version: "0.18.1",
       description: "Deterministic in-process Excel (.xlsx) recalculation, batch editing, source inspection, and formula dependency tracing powered by Formualizer."
     },
     servers: [{ url: serverUrl }],
@@ -294,7 +294,7 @@ export function createEdgeRecalcWorker({ getRuntime = bundledRuntime, onTelemetr
       const url = new URL(request.url);
       const clientSurface = request.headers.get("x-formualizer-client") || request.headers.get("user-agent") || "http";
       if (request.method === "GET" && url.pathname === "/health") {
-        return Response.json({ ok: true, service: "formualizer-edge-recalc", version: "0.18.0" });
+        return Response.json({ ok: true, service: "formualizer-edge-recalc", version: "0.18.1" });
       }
       if (request.method === "GET" && url.pathname === "/openapi.json") {
         return Response.json(buildOpenApiSpec(url.origin));
@@ -326,7 +326,7 @@ export function createEdgeRecalcWorker({ getRuntime = bundledRuntime, onTelemetr
             result: {
               protocolVersion: msg.params?.protocolVersion || PROTOCOL_VERSION,
               capabilities: { tools: { listChanged: false } },
-              serverInfo: { name: "formualizer-edge-recalc", version: "0.18.0" }
+              serverInfo: { name: "formualizer-edge-recalc", version: "0.18.1" }
             }
           });
         }
