@@ -2,6 +2,19 @@
 // Exposes Streamable HTTP MCP (/mcp) + OpenAPI 3.1 (/openapi.json) + REST (/v1/*)
 // Emits privacy-preserving anonymous structural telemetry (zero cell values, strings, or workbook bytes).
 
+import * as engine from "../skills/spreadsheet/engine/formualizer_engine.mjs";
+
+// Workers receive a precompiled WebAssembly.Module from the build-time import.
+// Node callers can use the same bundled, hash-checked Brotli loader by default.
+export function runtimeFromModule(module) {
+  engine.initSync({ module });
+  return engine;
+}
+async function bundledRuntime() {
+  const { loadEngine } = await import("../skills/spreadsheet/scripts/engine.mjs");
+  return loadEngine().runtime;
+}
+
 const PROTOCOL_VERSION = "2025-06-18";
 
 export const EDGE_TOOLS = [
@@ -202,7 +215,7 @@ export function buildOpenApiSpec(serverUrl = "https://mcp.formualizer.com") {
   };
 }
 
-export function createEdgeRecalcWorker({ getRuntime, onTelemetry } = {}) {
+export function createEdgeRecalcWorker({ getRuntime = bundledRuntime, onTelemetry } = {}) {
   async function invokeTool(name, args = {}, clientSurface = "mcp") {
     const runtime = await getRuntime();
     const start = performance.now();

@@ -6,10 +6,10 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { inflateRawSync } from "node:zlib";
-import { loadRuntime, recalculateFile, editFile, main } from "../scripts/run.mjs";
+import { loadRuntime, recalculateFile, editFile, main } from "../scripts/xlsx.mjs";
 import { syntheticWorkbook } from "../scripts/synthetic.mjs";
 
-const cli = fileURLToPath(new URL("../scripts/run.mjs", import.meta.url));
+const cli = fileURLToPath(new URL("../scripts/xlsx.mjs", import.meta.url));
 // Test-only selection. Production selection is always an explicit CLI argument.
 const developmentModule = process.env.FORMUALIZER_TEST_RUNTIME;
 const sourceTest = (name, fn) => test(name, fn);
@@ -67,7 +67,7 @@ test("default pinned runtime 0.17.0 exposes recalculateSourceXlsx while rejectin
   const directory = await temporary(t), input = join(directory, "input.xlsx");
   await writeFile(input, stale());
   const pinned = await loadRuntime();
-  assert.equal(pinned.version, "0.17.0");
+  assert.equal(pinned.version, "0.17.0-stateless-experiment");
   assert.equal(typeof pinned.runtime.recalculateSourceXlsx, "function");
   await assert.rejects(recalculateFile({}, input), /does not export recalculateSourceXlsx/);
   assert.deepEqual(await readFile(input), stale());
@@ -104,7 +104,7 @@ sourceTest("generated source runtime returns typed bytes and metadata; direct re
   const original = stale();
   await writeFile(input, original);
   const { runtime, version } = await loadRuntime(developmentModule);
-  assert.equal(version, developmentModule ? null : "0.17.0");
+  assert.equal(version, developmentModule ? null : "0.17.0-stateless-experiment");
   let result;
   try {
     result = runtime.recalculateSourceXlsx(new Uint8Array(original), "{}");
@@ -145,9 +145,9 @@ sourceTest("same CLI check and explicit output produce truthful receipts without
   assert.equal(checked.mode, "check");
   assert.equal(checked.current, false);
   assert.equal(checked.output, null);
-  assert.equal(checked.runtime.kind, developmentModule ? "development" : "registry");
+  assert.equal(checked.runtime.kind, developmentModule ? "development" : "bundled");
   if (developmentModule) assert.equal(checked.runtime.registry_version, null);
-  else assert.equal(checked.runtime.version, "0.17.0");
+  else assert.equal(checked.runtime.version, "0.17.0-stateless-experiment");
   await assert.rejects(access(output));
   assert.deepEqual(await readFile(input), original);
   const calculated = success(runSource([input]));

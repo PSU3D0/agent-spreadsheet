@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadRuntime, recalculateFile, editFile, inspectFile } from "../skills/spreadsheet/scripts/run.mjs";
+import { loadRuntime, recalculateFile, editFile, inspectFile } from "../skills/spreadsheet/scripts/xlsx.mjs";
 
 const PROTOCOL_VERSION = "2025-06-18";
 

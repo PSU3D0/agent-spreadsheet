@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadRuntime, recalculateFile } from "../scripts/run.mjs";
+import { loadRuntime, recalculateFile } from "../scripts/xlsx.mjs";
 import { syntheticWorkbook } from "../scripts/synthetic.mjs";
 
 test("byte equality stays separate from deferred coverage and legacy current", async t => {

@@ -1,11 +1,11 @@
 # Source-runtime recalculation
 
-The default pinned package is `agent-spreadsheet-wasm@0.17.0` (backed by Formualizer 0.14.0), which includes `recalculateSourceXlsx` out of the box.
+The bundled stateless engine (backed by Formualizer 0.14.0), which includes `recalculateSourceXlsx` out of the box.
 
 ```sh
-node scripts/run.mjs doctor
-node scripts/run.mjs source-recalculate /path/input.xlsx --check
-node scripts/run.mjs source-recalculate /path/input.xlsx --options /path/options.json --output /path/repaired.xlsx
+node scripts/xlsx.mjs doctor
+node scripts/xlsx.mjs source-recalculate /path/input.xlsx --check
+node scripts/xlsx.mjs source-recalculate /path/input.xlsx --options /path/options.json --output /path/repaired.xlsx
 ```
 
 For an optional local development build, pass `--dev-runtime /absolute/checkout/target/practical-source-node/loader.mjs` before the command.
@@ -28,12 +28,10 @@ The direct binding receives original bytes before createSession/Umya materializa
 
 Only typed `CalculationDeferred` with workbook profile and `requireComplete:false` may return unchanged input or valid edited bytes with `coverage:"deferred"`, `attempted:true`, `completed:false`, and a deferred reason/context. Unknown formula/cache/link/diagnostic counts and summary are null. `calculationFlagsChanged` is the upstream known boolean for completed source publication, and null for deferred bytes; skipped edits have no recalculation metadata. Diagnostics include complete `unavailableFunctions` incidence, `unavailableResultCells`, and `workbookFeatures` independently of bounded samples. Logical operation roots, final error results, and cache invalidations are distinct; unavailable legacy error messages remain unknown. Deferred bytes do not certify fresh caches. Strict/requireComplete requests and actual option, corrupt-package, resource, cancellation or output failures remain errors without successful artifacts.
 
-For local proof against matching generated assets:
+Run the bundled engine tests without installation:
 
 ```sh
-FORMUALIZER_TEST_RUNTIME=/absolute/checkout/target/practical-source-node/loader.mjs node --test test/*.test.mjs
+node --test test/*.test.mjs
 ```
 
-That variable selects a loader only inside the test harness; spawned commands still use the explicit CLI flag. Four generated-source test cases are skipped when it is absent. The original nine registry read/export tests continue to run against the pinned installed package. Cached B1=42 in the Packet1 probe remains transport evidence only.
-
-This is local Node source-runtime proof. It does not certify Code, Cowork, browser execution, artifact delivery or publication.
+Local checks do not certify Code, Cowork, browser execution, artifact delivery or publication.

@@ -7,8 +7,8 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { inflateRawSync } from "node:zlib";
 import { syntheticWorkbook } from "../scripts/synthetic.mjs";
-import { editFile, loadRuntime, main } from "../scripts/run.mjs";
-const cli = fileURLToPath(new URL("../scripts/run.mjs", import.meta.url));
+import { editFile, loadRuntime, main } from "../scripts/xlsx.mjs";
+const cli = fileURLToPath(new URL("../scripts/xlsx.mjs", import.meta.url));
 const loader = process.env.FORMUALIZER_TEST_RUNTIME;
 const real = (name, fn) => test(name, fn);
 const set = value => ({ kind: "set_cells", sheet_name: "Sheet1", cells: { A1: { kind: "value", value } } });
@@ -51,7 +51,7 @@ test("pinned registry 0.17.0 exposes editXlsx while rejecting missing binding wi
   const directory = await temporary(t), input = join(directory, "input.xlsx");
   await writeFile(input, syntheticWorkbook());
   const { runtime, version } = await loadRuntime();
-  assert.equal(version, "0.17.0");
+  assert.equal(version, "0.17.0-stateless-experiment");
   assert.equal(typeof runtime.editXlsx, "function");
   await assert.rejects(editFile({}, input, "{}", join(directory, "out.xlsx")), /does not export editXlsx/);
 });
@@ -107,7 +107,7 @@ real("two independent CLI invocations reopen output and write a formula with exi
   await writeFile(request, JSON.stringify({ ops: [set(30)] }));
   const receipt = success(run([input, "--operations", request, "--output", first]));
   assert.equal(receipt.mode, "edit");
-  assert.equal(receipt.runtime.kind, loader ? "development" : "registry");
+  assert.equal(receipt.runtime.kind, loader ? "development" : "bundled");
   assert.equal(cached(await readFile(first), "B1"), "60");
   await writeFile(request, JSON.stringify({ details: true, ops: [{
     kind: "set_cells", sheet_name: "Sheet1", overwrite_formulas: true,

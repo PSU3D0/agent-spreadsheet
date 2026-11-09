@@ -7,7 +7,7 @@ const { execFileSync } = require("node:child_process");
 const { createHash } = require("node:crypto");
 const zlib = require("node:zlib");
 const root = path.resolve(__dirname, "..");
-const run = (cmd, args) => execFileSync(cmd, args, { cwd: root, encoding: "utf8", env: { ...process.env, RUSTC_WRAPPER: "" } }).trim();
+const run = (cmd, args) => execFileSync(cmd, args, { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, env: { ...process.env, RUSTC_WRAPPER: "" } }).trim();
 const target = process.env.CARGO_TARGET_DIR;
 if (!target) throw new Error("Set CARGO_TARGET_DIR to a dedicated build directory.");
 const opt = process.env.WASM_OPT || "wasm-opt";
