@@ -40,7 +40,7 @@ test("all multi-platform manifests exist, parse cleanly, and have no top-level b
 
   async function walkSizes(dir) {
     for (const entry of await readdir(dir, { withFileTypes: true })) {
-      if (entry.name === "node_modules") continue;
+      if (entry.name === "node_modules" || entry.name === ".git") continue;
       const full = join(dir, entry.name);
       if (entry.isDirectory()) await walkSizes(full);
       else {
