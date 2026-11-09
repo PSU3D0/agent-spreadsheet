@@ -13,13 +13,15 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/agent-spreadsheet-mcp/Cargo.toml crates/agent-spreadsheet-mcp/Cargo.toml
 COPY crates/agent-spreadsheet/Cargo.toml crates/agent-spreadsheet/Cargo.toml
 COPY crates/agent-spreadsheet-wasm/Cargo.toml crates/agent-spreadsheet-wasm/Cargo.toml
+COPY crates/agent-spreadsheet-stateless-wasm/Cargo.toml crates/agent-spreadsheet-stateless-wasm/Cargo.toml
 COPY crates/agent-spreadsheet-render/Cargo.toml crates/agent-spreadsheet-render/Cargo.toml
 
 # Create dummy src to build deps
-RUN mkdir -p crates/agent-spreadsheet-mcp/src crates/agent-spreadsheet/src crates/agent-spreadsheet-wasm/src crates/agent-spreadsheet-render/src \
+RUN mkdir -p crates/agent-spreadsheet-mcp/src crates/agent-spreadsheet/src crates/agent-spreadsheet-wasm/src crates/agent-spreadsheet-stateless-wasm/src crates/agent-spreadsheet-render/src \
     && echo "fn main() {}" > crates/agent-spreadsheet-mcp/src/main.rs \
     && echo "" > crates/agent-spreadsheet/src/lib.rs \
     && echo "" > crates/agent-spreadsheet-wasm/src/lib.rs \
+    && echo "" > crates/agent-spreadsheet-stateless-wasm/src/lib.rs \
     && echo "" > crates/agent-spreadsheet-render/src/lib.rs
 
 # Build dependencies only (cached unless Cargo.toml/lock change)

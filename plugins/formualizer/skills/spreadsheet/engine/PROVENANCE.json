@@ -1,0 +1,35 @@
+{
+  "source": {
+    "repository": "https://github.com/PSU3D0/agent-spreadsheet",
+    "commit": "8252739b8d73f91eff57b70688fef55a7a1a7d64",
+    "dirty": false
+  },
+  "crates": {
+    "agent-spreadsheet": "0.17.0",
+    "agent-spreadsheet-stateless-wasm": "0.18.0",
+    "formualizer": "0.14.0",
+    "formualizer-common": "4.2.0",
+    "formualizer-eval": "0.14.0",
+    "formualizer-macros": "0.14.0",
+    "formualizer-parse": "4.2.0",
+    "formualizer-sheetport": "0.14.0",
+    "formualizer-workbook": "0.14.0"
+  },
+  "profile": "wasm-release",
+  "optimizer": "-Oz",
+  "brotliQuality": 11,
+  "tools": {
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+    "wasmBindgen": "wasm-bindgen 0.2.114",
+    "wasmOpt": "wasm-opt version 123 (version_123)",
+    "node": "v26.5.0"
+  },
+  "raw": {
+    "bytes": 8462551,
+    "sha256": "9b27fbd168d468e3d2433ce02a8ccbab253f75c7aae8e718275dd13a25f2a2bb"
+  },
+  "compressed": {
+    "bytes": 2202376,
+    "sha256": "6707b08dd1df3c7071b34542932fbe377ebb8067e1688930fd045bebdeb0d75a"
+  }
+}

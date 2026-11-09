@@ -5,8 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { handleJsonRpcMessage } from "../../../server/stdio-mcp.mjs";
-import { createEdgeRecalcWorker } from "../../../edge/worker.mjs";
-import { loadRuntime } from "../scripts/run.mjs";
+import { createEdgeRecalcWorker, runtimeFromModule } from "../../../edge/worker.mjs";
+import { loadRuntime } from "../scripts/xlsx.mjs";
+import { brotliDecompressSync } from "node:zlib";
 import { syntheticWorkbook } from "../scripts/synthetic.mjs";
 
 const skillRoot = fileURLToPath(new URL("../", import.meta.url));
@@ -39,12 +40,13 @@ test("all multi-platform manifests exist, parse cleanly, and have no top-level b
 
   async function walkSizes(dir) {
     for (const entry of await readdir(dir, { withFileTypes: true })) {
-      if (entry.name === "node_modules") continue;
+      if (entry.name === "node_modules" || entry.name === ".git") continue;
       const full = join(dir, entry.name);
       if (entry.isDirectory()) await walkSizes(full);
       else {
         const info = await stat(full);
-        assert.ok(info.size < 256 * 1024, `File exceeds 256 KiB scanner threshold: ${full} (${info.size})`);
+        assert.ok(info.size < 5 * 1024 * 1024, `File reaches 5 MiB limit: ${full}`);
+        if (info.size > 256 * 1024) assert.equal(entry.name, "formualizer_engine.wasm.br");
       }
     }
   }
@@ -196,4 +198,16 @@ real("stdio-mcp and edge worker execute all 4 narrow verbs and emit zero-PII str
   const serializedTelemetry = JSON.stringify(telemetryEvents[0]);
   assert.ok(!serializedTelemetry.includes("Sheet1"), "Telemetry must not leak sheet names");
   assert.ok(!serializedTelemetry.includes("21"), "Telemetry must not leak cell values");
+});
+
+test("edge accepts a build-time compiled module and defaults to the bundled Node engine", async () => {
+  const raw = brotliDecompressSync(await readFile(join(skillRoot, "engine/formualizer_engine.wasm.br")));
+  const runtime = runtimeFromModule(new WebAssembly.Module(raw));
+  assert.equal(JSON.parse(runtime.capabilities()).sessions, false);
+  const worker = createEdgeRecalcWorker();
+  const response = await worker.invokeTool("inspect_xlsx", {
+    workbook_base64: Buffer.from(syntheticWorkbook()).toString("base64"),
+    request: { selection: { kind: "cells", addresses: ["Sheet1!A1"] } }
+  });
+  assert.equal(response.report.items[0].source_value.value, 21);
 });

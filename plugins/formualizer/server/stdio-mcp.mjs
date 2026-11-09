@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadRuntime, recalculateFile, editFile, inspectFile } from "../skills/spreadsheet/scripts/run.mjs";
+import { loadRuntime, recalculateFile, editFile, inspectFile } from "../skills/spreadsheet/scripts/xlsx.mjs";
 
 const PROTOCOL_VERSION = "2025-06-18";
 
@@ -192,7 +192,7 @@ export async function handleJsonRpcMessage(message, devRuntime) {
         capabilities: { tools: { listChanged: false } },
         serverInfo: {
           name: "formualizer-spreadsheet",
-          version: "0.17.0"
+          version: "0.18.0"
         }
       }
     };

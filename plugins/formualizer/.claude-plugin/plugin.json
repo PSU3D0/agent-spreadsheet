@@ -1,8 +1,8 @@
 {
   "name": "formualizer",
   "displayName": "Formualizer",
-  "version": "0.17.0",
-  "description": "Fast stateless Excel (.xlsx) formula recalculation, batch editing with diff receipts, source inspection, and precedent/dependent tracing using the pinned agent-spreadsheet WASM runtime.",
+  "version": "0.18.0",
+  "description": "Recalculate, edit, inspect and trace Excel workbooks. Fixes stale formula results, applies batch edits with a change receipt, and shows where any number comes from. Runs locally with a bundled engine.",
   "author": {
     "name": "Formualizer",
     "url": "https://github.com/PSU3D0/formualizer"

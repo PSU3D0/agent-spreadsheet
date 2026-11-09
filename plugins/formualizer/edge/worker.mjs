@@ -2,6 +2,19 @@
 // Exposes Streamable HTTP MCP (/mcp) + OpenAPI 3.1 (/openapi.json) + REST (/v1/*)
 // Emits privacy-preserving anonymous structural telemetry (zero cell values, strings, or workbook bytes).
 
+import * as engine from "../skills/spreadsheet/engine/formualizer_engine.mjs";
+
+// Workers receive a precompiled WebAssembly.Module from the build-time import.
+// Node callers can use the same bundled, hash-checked Brotli loader by default.
+export function runtimeFromModule(module) {
+  engine.initSync({ module });
+  return engine;
+}
+async function bundledRuntime() {
+  const { loadEngine } = await import("../skills/spreadsheet/scripts/engine.mjs");
+  return loadEngine().runtime;
+}
+
 const PROTOCOL_VERSION = "2025-06-18";
 
 export const EDGE_TOOLS = [
@@ -149,7 +162,7 @@ export function buildOpenApiSpec(serverUrl = "https://mcp.formualizer.com") {
     openapi: "3.1.0",
     info: {
       title: "Formualizer Spreadsheet Recalculation, Edit, Inspect & Trace API",
-      version: "0.17.0",
+      version: "0.18.0",
       description: "Deterministic in-process Excel (.xlsx) recalculation, batch editing, source inspection, and formula dependency tracing powered by Formualizer."
     },
     servers: [{ url: serverUrl }],
@@ -202,7 +215,7 @@ export function buildOpenApiSpec(serverUrl = "https://mcp.formualizer.com") {
   };
 }
 
-export function createEdgeRecalcWorker({ getRuntime, onTelemetry } = {}) {
+export function createEdgeRecalcWorker({ getRuntime = bundledRuntime, onTelemetry } = {}) {
   async function invokeTool(name, args = {}, clientSurface = "mcp") {
     const runtime = await getRuntime();
     const start = performance.now();
@@ -281,7 +294,7 @@ export function createEdgeRecalcWorker({ getRuntime, onTelemetry } = {}) {
       const url = new URL(request.url);
       const clientSurface = request.headers.get("x-formualizer-client") || request.headers.get("user-agent") || "http";
       if (request.method === "GET" && url.pathname === "/health") {
-        return Response.json({ ok: true, service: "formualizer-edge-recalc", version: "0.17.0" });
+        return Response.json({ ok: true, service: "formualizer-edge-recalc", version: "0.18.0" });
       }
       if (request.method === "GET" && url.pathname === "/openapi.json") {
         return Response.json(buildOpenApiSpec(url.origin));
@@ -313,7 +326,7 @@ export function createEdgeRecalcWorker({ getRuntime, onTelemetry } = {}) {
             result: {
               protocolVersion: msg.params?.protocolVersion || PROTOCOL_VERSION,
               capabilities: { tools: { listChanged: false } },
-              serverInfo: { name: "formualizer-edge-recalc", version: "0.17.0" }
+              serverInfo: { name: "formualizer-edge-recalc", version: "0.18.0" }
             }
           });
         }
