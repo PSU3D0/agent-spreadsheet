@@ -162,6 +162,11 @@ sourceTest("same CLI check and explicit output produce truthful receipts without
   const noop = success(runSource([output, "--check"]));
   assert.equal(noop.current, true);
   assert.equal(noop.result_sha256, written.result_sha256);
+  const inlineOpts = success(runSource([output, "--options-json", '{"profile":"workbook"}', "--check"]));
+  assert.equal(inlineOpts.current, true);
+  const dupOpts = runSource([output, "--options", output, "--options-json", "{}", "--check"]);
+  assert.equal(dupOpts.status, 1);
+  assert.match(dupOpts.stderr, /Duplicate source argument/);
   assert.deepEqual(await readFile(input), original);
 });
 

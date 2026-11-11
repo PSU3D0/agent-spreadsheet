@@ -1,7 +1,7 @@
 {
   "name": "formualizer",
   "displayName": "Formualizer",
-  "version": "0.18.1",
+  "version": "0.18.2",
   "description": "Stateless Excel (.xlsx) formula recalculation, batch editing, source inspection, and precedent/dependent tracing.",
   "author": {
     "name": "Formualizer",

@@ -6,6 +6,7 @@ The bundled stateless engine (backed by Formualizer 0.14.0), which includes `rec
 node scripts/xlsx.mjs doctor
 node scripts/xlsx.mjs source-recalculate /path/input.xlsx --check
 node scripts/xlsx.mjs source-recalculate /path/input.xlsx --options /path/options.json --output /path/repaired.xlsx
+node scripts/xlsx.mjs source-recalculate /path/input.xlsx --options-json '{"profile":"workbook"}' --output /path/repaired.xlsx
 ```
 
 For an optional local development build, pass `--dev-runtime /absolute/checkout/target/practical-source-node/loader.mjs` before the command.
