@@ -2,7 +2,7 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "formualizer",
   "displayName": "Formualizer",
-  "version": "0.18.1",
+  "version": "0.18.2",
   "description": "Recalculate, edit, inspect and trace Excel workbooks. Fixes stale formula results, applies batch edits with a change receipt, and shows where any number comes from. Runs locally with a bundled engine.",
   "author": {
     "name": "Formualizer",

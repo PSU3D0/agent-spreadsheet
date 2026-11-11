@@ -61,6 +61,24 @@ async function byteFile(input, output, invoke) {
   }
 }
 
+function parsePositiveInt(flag, raw) {
+  if (typeof raw !== "string" || !/^[1-9]\d*$/.test(raw)) {
+    throw new Error(`${flag} requires a positive integer.`);
+  }
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value)) throw new Error(`${flag} exceeds safe integer range.`);
+  return value;
+}
+
+function parseNonNegativeInt(flag, raw) {
+  if (typeof raw !== "string" || !/^\d+$/.test(raw)) {
+    throw new Error(`${flag} requires a non-negative integer.`);
+  }
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value)) throw new Error(`${flag} exceeds safe integer range.`);
+  return value;
+}
+
 function sourceArguments(args) {
   const [input, ...flags] = args;
   if (!input || input.startsWith("--")) throw new Error("source-recalculate requires INPUT.xlsx.");
@@ -71,8 +89,15 @@ function sourceArguments(args) {
     else if ((flag === "--options" || flag === "--output") && flags[index + 1] &&
              !flags[index + 1].startsWith("--")) {
       const key = flag === "--options" ? "options" : "output";
-      if (options[key] !== undefined) throw new Error("Duplicate source argument: " + flag);
+      if (options[key] !== undefined || (key === "options" && options.optionsJson !== undefined)) {
+        throw new Error("Duplicate source argument: " + flag);
+      }
       options[key] = flags[++index];
+    } else if (flag === "--options-json" && index + 1 < flags.length) {
+      if (options.options !== undefined || options.optionsJson !== undefined) {
+        throw new Error("Duplicate source argument: " + flag);
+      }
+      options.optionsJson = flags[++index];
     } else throw new Error("Invalid source argument: " + flag);
   }
   if (options.check && options.output !== undefined) throw new Error("--check cannot be combined with --output.");
@@ -84,14 +109,143 @@ function editArguments(args) {
   if (!input || input.startsWith("--")) throw new Error("edit requires INPUT.xlsx.");
   const parsed = { input };
   for (let index = 0; index < flags.length; index++) {
-    const key = { "--operations": "operations", "--output": "output", "--recalc-options": "recalcOptions" }[flags[index]];
-    if (!key || parsed[key] !== undefined || !flags[index + 1] || flags[index + 1].startsWith("--")) {
-      throw new Error("Invalid edit argument: " + flags[index]);
+    const flag = flags[index];
+    if (flag === "--operations-json" || flag === "--recalc-options-json") {
+      const key = flag === "--operations-json" ? "operationsJson" : "recalcOptionsJson";
+      const fileKey = flag === "--operations-json" ? "operations" : "recalcOptions";
+      if (parsed[key] !== undefined || parsed[fileKey] !== undefined || index + 1 >= flags.length) {
+        throw new Error("Invalid edit argument: " + flag);
+      }
+      parsed[key] = flags[++index];
+      continue;
+    }
+    const key = { "--operations": "operations", "--output": "output", "--recalc-options": "recalcOptions" }[flag];
+    const jsonKey = flag === "--operations" ? "operationsJson" : flag === "--recalc-options" ? "recalcOptionsJson" : null;
+    if (!key || parsed[key] !== undefined || (jsonKey && parsed[jsonKey] !== undefined) ||
+        !flags[index + 1] || flags[index + 1].startsWith("--")) {
+      throw new Error("Invalid edit argument: " + flag);
     }
     parsed[key] = flags[++index];
   }
-  if (!parsed.operations || !parsed.output) throw new Error("edit requires --operations REQUEST.json and --output OUTPUT.xlsx.");
+  if ((!parsed.operations && parsed.operationsJson === undefined) || !parsed.output) {
+    throw new Error("edit requires --operations REQUEST.json (or --operations-json JSON) and --output OUTPUT.xlsx.");
+  }
   return parsed;
+}
+
+function inspectArguments(args) {
+  const [input, ...rest] = args;
+  if (!input || input.startsWith("--") || rest.length === 0) {
+    throw new Error("inspect requires INPUT.xlsx followed by REQUEST.json, --json JSON, --range Sheet!A1:D20, or --cells Sheet!A1 ...");
+  }
+  if (!rest[0].startsWith("--")) {
+    if (rest.length !== 1) {
+      throw new Error("inspect positional REQUEST.json cannot be combined with extra arguments.");
+    }
+    return { input, requestPath: rest[0] };
+  }
+  let requestPath, inlineJson, range, limit;
+  const cells = [];
+  for (let index = 0; index < rest.length; index++) {
+    const flag = rest[index];
+    if (flag === "--request" && rest[index + 1] && !rest[index + 1].startsWith("--") && requestPath === undefined) {
+      requestPath = rest[++index];
+    } else if (flag === "--json" && index + 1 < rest.length && inlineJson === undefined) {
+      inlineJson = rest[++index];
+    } else if (flag === "--range" && rest[index + 1] && !rest[index + 1].startsWith("--") && range === undefined) {
+      range = rest[++index];
+    } else if (flag === "--cell" && rest[index + 1] && !rest[index + 1].startsWith("--")) {
+      cells.push(rest[++index]);
+    } else if (flag === "--cells") {
+      let count = 0;
+      while (index + 1 < rest.length && !rest[index + 1].startsWith("--")) {
+        cells.push(rest[++index]);
+        count++;
+      }
+      if (count === 0) throw new Error("--cells requires at least one sheet-qualified cell address (e.g. Sheet1!A1).");
+    } else if (flag === "--limit" && index + 1 < rest.length && limit === undefined) {
+      limit = parsePositiveInt("--limit", rest[++index]);
+    } else {
+      throw new Error("Invalid inspect argument: " + flag + ". Use REQUEST.json, --json JSON, --range Sheet!A1:D20, --cells Sheet!A1 ..., or --limit N.");
+    }
+  }
+  const selectors = Number(requestPath !== undefined) + Number(inlineJson !== undefined) +
+    Number(range !== undefined) + Number(cells.length > 0);
+  if (selectors !== 1) {
+    throw new Error("inspect requires exactly one selector: REQUEST.json, --request FILE.json, --json JSON, --range Sheet!A1:D20, or --cells Sheet!A1 ...");
+  }
+  if (limit !== undefined && (requestPath !== undefined || inlineJson !== undefined)) {
+    throw new Error("--limit only combines with --range or --cells; set page.limit inside JSON requests.");
+  }
+  if (requestPath !== undefined) return { input, requestPath };
+  if (inlineJson !== undefined) return { input, inlineJson };
+  const body = range !== undefined
+    ? { selection: { kind: "range", address: range } }
+    : { selection: { kind: "cells", addresses: cells } };
+  if (limit !== undefined) body.page = { limit };
+  return { input, inlineJson: JSON.stringify(body) };
+}
+
+function traceArguments(args) {
+  const [input, ...rest] = args;
+  if (!input || input.startsWith("--") || rest.length === 0) {
+    throw new Error("trace requires INPUT.xlsx followed by REQUEST.json, --json JSON, or --roots Sheet!B1 ...");
+  }
+  if (!rest[0].startsWith("--")) {
+    if (rest.length !== 1) {
+      throw new Error("trace positional REQUEST.json cannot be combined with extra arguments.");
+    }
+    return { input, requestPath: rest[0] };
+  }
+  let requestPath, inlineJson, direction, maxDepth, limit, details = false;
+  const roots = [];
+  for (let index = 0; index < rest.length; index++) {
+    const flag = rest[index];
+    if (flag === "--request" && rest[index + 1] && !rest[index + 1].startsWith("--") && requestPath === undefined) {
+      requestPath = rest[++index];
+    } else if (flag === "--json" && index + 1 < rest.length && inlineJson === undefined) {
+      inlineJson = rest[++index];
+    } else if (flag === "--root" && rest[index + 1] && !rest[index + 1].startsWith("--")) {
+      roots.push(rest[++index]);
+    } else if (flag === "--roots") {
+      let count = 0;
+      while (index + 1 < rest.length && !rest[index + 1].startsWith("--")) {
+        roots.push(rest[++index]);
+        count++;
+      }
+      if (count === 0) throw new Error("--roots requires at least one sheet-qualified cell address (e.g. Sheet1!B1).");
+    } else if (flag === "--direction" && rest[index + 1] && direction === undefined) {
+      const value = rest[++index];
+      if (value !== "precedents" && value !== "dependents") {
+        throw new Error("--direction must be precedents or dependents.");
+      }
+      direction = value;
+    } else if (flag === "--max-depth" && index + 1 < rest.length && maxDepth === undefined) {
+      maxDepth = parseNonNegativeInt("--max-depth", rest[++index]);
+    } else if (flag === "--limit" && index + 1 < rest.length && limit === undefined) {
+      limit = parsePositiveInt("--limit", rest[++index]);
+    } else if (flag === "--details" && !details) {
+      details = true;
+    } else {
+      throw new Error("Invalid trace argument: " + flag + ". Use REQUEST.json, --json JSON, --roots Sheet!B1 ..., --direction precedents|dependents, --max-depth N, --limit N, or --details.");
+    }
+  }
+  const selectors = Number(requestPath !== undefined) + Number(inlineJson !== undefined) + Number(roots.length > 0);
+  if (selectors !== 1) {
+    throw new Error("trace requires exactly one selector: REQUEST.json, --request FILE.json, --json JSON, or --roots Sheet!B1 ...");
+  }
+  if ((requestPath !== undefined || inlineJson !== undefined) &&
+      (direction !== undefined || maxDepth !== undefined || limit !== undefined || details)) {
+    throw new Error("Trace flags (--direction, --max-depth, --limit, --details) only combine with --roots; set those fields inside JSON requests.");
+  }
+  if (requestPath !== undefined) return { input, requestPath };
+  if (inlineJson !== undefined) return { input, inlineJson };
+  const body = { roots };
+  if (direction !== undefined) body.direction = direction;
+  if (maxDepth !== undefined) body.limits = { max_depth: maxDepth };
+  if (limit !== undefined) body.page = { limit };
+  if (details) body.details = true;
+  return { input, inlineJson: JSON.stringify(body) };
 }
 
 export async function inspectFile(runtime, input, requestJson, trace = false) {
@@ -114,19 +268,24 @@ export async function main(args) {
   }
   const [command, ...rest] = args;
   if (command === "inspect" || command === "trace") {
-    if (rest.length !== 2 || rest.some(arg => arg.startsWith("--"))) throw new Error(command + " requires INPUT.xlsx REQUEST.json.");
+    const parsed = command === "trace" ? traceArguments(rest) : inspectArguments(rest);
     const loaded = await loadRuntime(developmentModule);
+    const requestJson = parsed.inlineJson ?? await readFile(parsed.requestPath, "utf8");
     return { mode: command,
       runtime: loaded.development_module
         ? { kind: "development", module: loaded.development_module, registry_version: null }
         : { kind: "bundled", version: loaded.version, integrity: loaded.integrity },
-      report: await inspectFile(loaded.runtime, rest[0], await readFile(rest[1], "utf8"), command === "trace") };
+      report: await inspectFile(loaded.runtime, parsed.input, requestJson, command === "trace") };
   }
   if (command === "edit") {
     const edit = editArguments(rest);
     const loaded = await loadRuntime(developmentModule);
-    const request = await readFile(edit.operations, "utf8");
-    const options = edit.recalcOptions === undefined ? undefined : await readFile(edit.recalcOptions, "utf8");
+    const request = edit.operationsJson ?? await readFile(edit.operations, "utf8");
+    const options = edit.recalcOptionsJson !== undefined
+      ? edit.recalcOptionsJson
+      : edit.recalcOptions === undefined
+        ? undefined
+        : await readFile(edit.recalcOptions, "utf8");
     return {
       mode: "edit",
       runtime: loaded.development_module
@@ -138,7 +297,11 @@ export async function main(args) {
   if (command === "source-recalculate") {
     const source = sourceArguments(rest);
     const loaded = await loadRuntime(developmentModule);
-    const options = source.options === undefined ? undefined : await readFile(source.options, "utf8");
+    const options = source.optionsJson !== undefined
+      ? source.optionsJson
+      : source.options === undefined
+        ? undefined
+        : await readFile(source.options, "utf8");
     const receipt = await recalculateFile(loaded.runtime, source.input, options, source.output);
     return {
       mode: source.check ? "check" : "recalculate",
@@ -149,7 +312,7 @@ export async function main(args) {
     };
   }
   if (command !== "doctor" || rest.length) throw new Error(
-    "Usage: node scripts/xlsx.mjs doctor | inspect INPUT.xlsx REQUEST.json | trace INPUT.xlsx REQUEST.json | source-recalculate INPUT.xlsx [--options OPTIONS.json] [--output OUTPUT.xlsx | --check] | edit INPUT.xlsx --operations REQUEST.json --output OUTPUT.xlsx [--recalc-options OPTIONS.json]"
+    "Usage: node scripts/xlsx.mjs doctor | inspect INPUT.xlsx (REQUEST.json | --json JSON | --range Sheet!A1:D20 [--limit N] | --cells Sheet!A1 ... [--limit N]) | trace INPUT.xlsx (REQUEST.json | --json JSON | --roots Sheet!B1 ... [--direction precedents|dependents] [--max-depth N] [--limit N] [--details]) | source-recalculate INPUT.xlsx [--options OPTIONS.json | --options-json JSON] [--output OUTPUT.xlsx | --check] | edit INPUT.xlsx (--operations REQUEST.json | --operations-json JSON) --output OUTPUT.xlsx [--recalc-options OPTIONS.json | --recalc-options-json JSON]"
   );
   const loaded = await loadRuntime(developmentModule);
   return {

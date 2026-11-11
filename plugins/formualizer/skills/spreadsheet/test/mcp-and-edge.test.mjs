@@ -61,6 +61,7 @@ test("stdio-mcp initializes and lists exactly the 4 narrow tools with readOnlyHi
     params: { protocolVersion: "2025-06-18" }
   });
   assert.equal(init.result.serverInfo.name, "formualizer-spreadsheet");
+  assert.equal(init.result.serverInfo.version, "0.18.2");
 
   const list = await handleJsonRpcMessage({
     jsonrpc: "2.0",
@@ -74,6 +75,9 @@ test("stdio-mcp initializes and lists exactly the 4 narrow tools with readOnlyHi
     assert.equal(typeof tool.annotations?.readOnlyHint, "boolean");
     assert.equal(typeof tool.annotations?.destructiveHint, "boolean");
   }
+  assert.equal(list.result.tools[1].inputSchema.properties.request.additionalProperties, false);
+  assert.deepEqual(list.result.tools[2].inputSchema.properties.request.properties.selection.properties.kind.enum, ["cells", "range"]);
+  assert.deepEqual(list.result.tools[3].inputSchema.properties.request.properties.direction.enum, ["precedents", "dependents"]);
   assert.equal(list.result.tools[2].annotations.readOnlyHint, true);
   assert.equal(list.result.tools[3].annotations.readOnlyHint, true);
 });

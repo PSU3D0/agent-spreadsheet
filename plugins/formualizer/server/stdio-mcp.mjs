@@ -5,12 +5,112 @@ import { loadRuntime, recalculateFile, editFile, inspectFile } from "../skills/s
 
 const PROTOCOL_VERSION = "2025-06-18";
 
+const EDIT_REQUEST_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["ops"],
+  description:
+    "StatelessEditRequest object, e.g. { ops: [{ kind: 'set_cells', sheet_name: 'Sheet1', cells: { A1: { kind: 'value', value: 30 } } }], recalculate: 'auto' }.",
+  properties: {
+    ops: {
+      type: "array",
+      items: { type: "object" },
+      description: "Write operations (e.g. kind: 'set_cells' with sheet_name, cells map, and overwrite_formulas: true when replacing formulas)."
+    },
+    recalculate: {
+      type: "string",
+      enum: ["auto", "always", "never"],
+      description: "Recalculation policy after applying ops (default: 'auto')."
+    },
+    details: {
+      type: "boolean",
+      description: "Compute exact cell-level diff in receipt (default: false)."
+    },
+    formula_parse_policy: {
+      type: "string",
+      enum: ["warn", "fail", "off"]
+    }
+  }
+};
+
+const PAGE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    offset: { type: "integer", minimum: 0 },
+    limit: { type: "integer", minimum: 1 },
+    expected_fingerprint: { type: "string" }
+  }
+};
+
+const INSPECT_REQUEST_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["selection"],
+  description:
+    "Inspect request object. Top-level keys are singular `selection` and optional `page` only (never `selections` or `sheets`).",
+  properties: {
+    selection: {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind"],
+      description: "Either { kind: 'cells', addresses: ['Sheet1!A1'] } or { kind: 'range', address: 'Sheet1!A1:D20' }.",
+      properties: {
+        kind: { type: "string", enum: ["cells", "range"] },
+        addresses: {
+          type: "array",
+          items: { type: "string" },
+          description: "Sheet-qualified addresses when kind is 'cells', e.g. ['Sheet1!A1', 'Sheet1!B2']."
+        },
+        address: {
+          type: "string",
+          description: "Finite sheet-qualified range when kind is 'range', e.g. 'Sheet1!A1:D20'."
+        }
+      }
+    },
+    page: PAGE_SCHEMA
+  }
+};
+
+const TRACE_REQUEST_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["roots"],
+  description:
+    "Read-only dependency trace request, e.g. { roots: ['Sheet1!B1'], direction: 'precedents', limits: { max_depth: 2 } }.",
+  properties: {
+    roots: {
+      type: "array",
+      items: { type: "string" },
+      description: "Sheet-qualified root cell addresses, e.g. ['Sheet1!B1']."
+    },
+    direction: {
+      type: "string",
+      enum: ["precedents", "dependents"],
+      description: "Trace upstream inputs ('precedents', default) or downstream formulas ('dependents')."
+    },
+    limits: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        max_depth: { type: "integer", minimum: 0, description: "Hop budget (0 = direct neighbors, 2 = two hops)." },
+        max_nodes: { type: "integer", minimum: 1 },
+        max_links: { type: "integer", minimum: 1 },
+        max_work: { type: "integer", minimum: 1 },
+        range_member_budget: { type: "integer", minimum: 0 }
+      }
+    },
+    details: { type: "boolean" },
+    page: PAGE_SCHEMA
+  }
+};
+
 const TOOLS = [
   {
     name: "source_recalculate",
     title: "Recalculate XLSX Formula Caches",
     description:
-      "Recalculate cached formula values directly on original .xlsx bytes using Formualizer without resident sessions. Returns calculation coverage, changed cache counts, error totals/samples, and unknown functions.",
+      "Recalculate cached formula values directly on original .xlsx bytes using Formualizer without resident sessions. Use when verifying or repairing stale caches or finalizing workbooks written by other tools; use inspect_xlsx/trace_xlsx instead for read-only formula explanation.",
     annotations: {
       title: "Recalculate XLSX Formula Caches",
       readOnlyHint: false,
@@ -63,11 +163,7 @@ const TOOLS = [
           type: "string",
           description: "Path to write the edited and recalculated .xlsx file."
         },
-        request: {
-          type: "object",
-          required: ["ops"],
-          description: "StatelessEditRequest JSON object: { ops: [...], recalculate?: 'auto' | 'always' | 'never', details?: boolean, formula_parse_policy?: 'warn' | 'fail' | 'off' }."
-        },
+        request: EDIT_REQUEST_SCHEMA,
         recalc_options: {
           type: "object",
           description: "Optional XlsxRecalculateOptions JSON object."
@@ -79,7 +175,7 @@ const TOOLS = [
     name: "inspect_xlsx",
     title: "Inspect XLSX Cells & Cached Values",
     description:
-      "Read-only inspection of source values, formulas, and unverified stored formula caches from an .xlsx file without loading a resident session.",
+      "Read-only inspection of source values, formulas, and unverified stored formula caches from an .xlsx file without evaluating formulas or loading a resident session.",
     annotations: {
       title: "Inspect XLSX Cells & Cached Values",
       readOnlyHint: true,
@@ -96,11 +192,7 @@ const TOOLS = [
           type: "string",
           description: "Path to the .xlsx file to inspect."
         },
-        request: {
-          type: "object",
-          required: ["selection"],
-          description: "Inspect request object: { selection: { kind: 'cells', addresses: ['Sheet1!A1'] } | { kind: 'range', address: 'Sheet1!A1:D20' }, page?: { limit?: number, offset?: number, expected_fingerprint?: string } }."
-        }
+        request: INSPECT_REQUEST_SCHEMA
       }
     }
   },
@@ -108,7 +200,7 @@ const TOOLS = [
     name: "trace_xlsx",
     title: "Trace Formula Precedents & Dependents",
     description:
-      "Read-only dependency graph trace (precedents or dependents) rooted at one or more cells in an .xlsx file.",
+      "Read-only dependency graph trace (precedents or dependents) rooted at one or more cells in an .xlsx file without evaluating formulas.",
     annotations: {
       title: "Trace Formula Precedents & Dependents",
       readOnlyHint: true,
@@ -125,11 +217,7 @@ const TOOLS = [
           type: "string",
           description: "Path to the .xlsx file to trace."
         },
-        request: {
-          type: "object",
-          required: ["roots"],
-          description: "Trace request object: { roots: ['Sheet1!B1'], direction?: 'precedents' | 'dependents', limits?: { max_depth?: number, max_nodes?: number, max_links?: number }, details?: boolean }."
-        }
+        request: TRACE_REQUEST_SCHEMA
       }
     }
   }
@@ -192,7 +280,7 @@ export async function handleJsonRpcMessage(message, devRuntime) {
         capabilities: { tools: { listChanged: false } },
         serverInfo: {
           name: "formualizer-spreadsheet",
-          version: "0.18.1"
+          version: "0.18.2"
         }
       }
     };

@@ -17,12 +17,79 @@ async function bundledRuntime() {
 
 const PROTOCOL_VERSION = "2025-06-18";
 
+const PAGE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    offset: { type: "integer", minimum: 0 },
+    limit: { type: "integer", minimum: 1 },
+    expected_fingerprint: { type: "string" }
+  }
+};
+
+const EDIT_REQUEST_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["ops"],
+  description: "StatelessEditRequest JSON ({ ops, recalculate?: 'auto' | 'always' | 'never', details?: boolean, formula_parse_policy?: 'warn' | 'fail' | 'off' }).",
+  properties: {
+    ops: { type: "array", items: { type: "object" } },
+    recalculate: { type: "string", enum: ["auto", "always", "never"] },
+    details: { type: "boolean" },
+    formula_parse_policy: { type: "string", enum: ["warn", "fail", "off"] }
+  }
+};
+
+const INSPECT_REQUEST_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["selection"],
+  description: "Inspect request ({ selection, page? }). Use singular `selection`, never `selections` or `sheets`.",
+  properties: {
+    selection: {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind"],
+      properties: {
+        kind: { type: "string", enum: ["cells", "range"] },
+        addresses: { type: "array", items: { type: "string" } },
+        address: { type: "string" }
+      }
+    },
+    page: PAGE_SCHEMA
+  }
+};
+
+const TRACE_REQUEST_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["roots"],
+  description: "Trace request ({ roots, direction?, limits?, details?, page? }).",
+  properties: {
+    roots: { type: "array", items: { type: "string" } },
+    direction: { type: "string", enum: ["precedents", "dependents"] },
+    limits: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        max_depth: { type: "integer", minimum: 0 },
+        max_nodes: { type: "integer", minimum: 1 },
+        max_links: { type: "integer", minimum: 1 },
+        max_work: { type: "integer", minimum: 1 },
+        range_member_budget: { type: "integer", minimum: 0 }
+      }
+    },
+    details: { type: "boolean" },
+    page: PAGE_SCHEMA
+  }
+};
+
 export const EDGE_TOOLS = [
   {
     name: "source_recalculate",
     title: "Recalculate XLSX Formula Caches",
     description:
-      "Recalculate cached formula values directly on .xlsx bytes using Formualizer. Returns calculation coverage, changed cache counts, error totals/samples, unknown functions, and optional recalculated workbook_base64.",
+      "Recalculate cached formula values directly on .xlsx bytes using Formualizer. Use to verify/repair stale caches or finalize workbooks written by other tools; use inspect_xlsx/trace_xlsx for read-only formula explanation.",
     annotations: {
       title: "Recalculate XLSX Formula Caches",
       readOnlyHint: true,
@@ -59,7 +126,7 @@ export const EDGE_TOOLS = [
       required: ["workbook_base64", "request"],
       properties: {
         workbook_base64: { type: "string", description: "Base64-encoded source .xlsx bytes." },
-        request: { type: "object", required: ["ops"], description: "StatelessEditRequest JSON ({ ops, recalculate?, details? })." },
+        request: EDIT_REQUEST_SCHEMA,
         recalc_options: { type: "object", description: "Optional XlsxRecalculateOptions JSON." },
         return_bytes: { type: "boolean", description: "Include edited .xlsx bytes as output_base64 (default: true)." }
       }
@@ -69,7 +136,7 @@ export const EDGE_TOOLS = [
     name: "inspect_xlsx",
     title: "Inspect XLSX Cells & Cached Values",
     description:
-      "Read-only inspection of source values, formulas, and unverified stored formula caches from .xlsx bytes.",
+      "Read-only inspection of source values, formulas, and unverified stored formula caches from .xlsx bytes without evaluating formulas.",
     annotations: {
       title: "Inspect XLSX Cells & Cached Values",
       readOnlyHint: true,
@@ -83,7 +150,7 @@ export const EDGE_TOOLS = [
       required: ["workbook_base64", "request"],
       properties: {
         workbook_base64: { type: "string", description: "Base64-encoded .xlsx bytes." },
-        request: { type: "object", required: ["selection"], description: "Inspect request ({ selection, page? })." }
+        request: INSPECT_REQUEST_SCHEMA
       }
     }
   },
@@ -91,7 +158,7 @@ export const EDGE_TOOLS = [
     name: "trace_xlsx",
     title: "Trace Formula Precedents & Dependents",
     description:
-      "Read-only dependency graph trace (precedents or dependents) rooted at one or more cells in .xlsx bytes.",
+      "Read-only dependency graph trace (precedents or dependents) rooted at one or more cells in .xlsx bytes without evaluating formulas.",
     annotations: {
       title: "Trace Formula Precedents & Dependents",
       readOnlyHint: true,
@@ -105,7 +172,7 @@ export const EDGE_TOOLS = [
       required: ["workbook_base64", "request"],
       properties: {
         workbook_base64: { type: "string", description: "Base64-encoded .xlsx bytes." },
-        request: { type: "object", required: ["roots"], description: "Trace request ({ roots, direction?, limits?, details? })." }
+        request: TRACE_REQUEST_SCHEMA
       }
     }
   }
@@ -162,7 +229,7 @@ export function buildOpenApiSpec(serverUrl = "https://mcp.formualizer.com") {
     openapi: "3.1.0",
     info: {
       title: "Formualizer Spreadsheet Recalculation, Edit, Inspect & Trace API",
-      version: "0.18.1",
+      version: "0.18.2",
       description: "Deterministic in-process Excel (.xlsx) recalculation, batch editing, source inspection, and formula dependency tracing powered by Formualizer."
     },
     servers: [{ url: serverUrl }],
@@ -294,7 +361,7 @@ export function createEdgeRecalcWorker({ getRuntime = bundledRuntime, onTelemetr
       const url = new URL(request.url);
       const clientSurface = request.headers.get("x-formualizer-client") || request.headers.get("user-agent") || "http";
       if (request.method === "GET" && url.pathname === "/health") {
-        return Response.json({ ok: true, service: "formualizer-edge-recalc", version: "0.18.1" });
+        return Response.json({ ok: true, service: "formualizer-edge-recalc", version: "0.18.2" });
       }
       if (request.method === "GET" && url.pathname === "/openapi.json") {
         return Response.json(buildOpenApiSpec(url.origin));
@@ -326,7 +393,7 @@ export function createEdgeRecalcWorker({ getRuntime = bundledRuntime, onTelemetr
             result: {
               protocolVersion: msg.params?.protocolVersion || PROTOCOL_VERSION,
               capabilities: { tools: { listChanged: false } },
-              serverInfo: { name: "formualizer-edge-recalc", version: "0.18.1" }
+              serverInfo: { name: "formualizer-edge-recalc", version: "0.18.2" }
             }
           });
         }

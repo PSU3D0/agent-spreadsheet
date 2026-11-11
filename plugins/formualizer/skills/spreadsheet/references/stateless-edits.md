@@ -6,6 +6,7 @@ The bundled stateless engine package includes `editXlsx` out of the box.
 
 ```sh
 node scripts/xlsx.mjs edit INPUT.xlsx --operations REQUEST.json --output OUTPUT.xlsx
+node scripts/xlsx.mjs edit INPUT.xlsx --operations-json '{"ops":[{"kind":"set_cells","sheet_name":"Sheet1","cells":{"A1":{"kind":"value","value":30}}}],"recalculate":"auto"}' --output OUTPUT.xlsx
 node scripts/xlsx.mjs edit INPUT.xlsx --operations REQUEST.json --output OUTPUT.xlsx --recalc-options RECALC_OPTIONS.json
 ```
 

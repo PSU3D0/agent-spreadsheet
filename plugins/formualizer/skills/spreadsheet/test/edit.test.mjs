@@ -192,3 +192,20 @@ real("known style-free rich-writer refusal keeps input and destination with a pl
   assert.deepEqual(await readFile(input), original);
   assert.equal(await readFile(output, "utf8"), "keep");
 });
+
+real("edit CLI accepts --operations-json and --recalc-options-json while rejecting duplicate sources", async t => {
+  const directory = await temporary(t), input = join(directory, "input.xlsx"),
+    output = join(directory, "output.xlsx"), request = join(directory, "ops.json");
+  const original = syntheticWorkbook();
+  await writeFile(input, original);
+  const inlineOps = JSON.stringify({ ops: [set(35)], recalculate: "always", details: true });
+  const receipt = success(run([input, "--operations-json", inlineOps, "--recalc-options-json", '{"profile":"workbook"}', "--output", output]));
+  assert.equal(cached(await readFile(output), "B1"), "70");
+  assert.equal(receipt.metadata.edit.diff_exact, true);
+
+  await writeFile(request, inlineOps);
+  const dup = run([input, "--operations", request, "--operations-json", inlineOps, "--output", output]);
+  assert.equal(dup.status, 1);
+  assert.match(dup.stderr, /Invalid edit argument/);
+  assert.deepEqual(await readFile(input), original);
+});

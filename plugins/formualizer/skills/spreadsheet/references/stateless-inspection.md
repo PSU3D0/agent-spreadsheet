@@ -3,7 +3,13 @@
 The bundled stateless engine package includes `inspectXlsx` and `traceXlsx` out of the box. Node 20 or newer is required.
 
 ```sh
+node scripts/xlsx.mjs inspect INPUT.xlsx --cells "Sheet1!A1" "Sheet1!B1"
+node scripts/xlsx.mjs inspect INPUT.xlsx --range "Sheet1!A1:C100" --limit 20
+node scripts/xlsx.mjs inspect INPUT.xlsx --json '{"selection":{"kind":"cells","addresses":["Sheet1!A1"]}}'
 node scripts/xlsx.mjs inspect INPUT.xlsx INSPECT.json
+
+node scripts/xlsx.mjs trace INPUT.xlsx --roots "Sheet1!B1" --direction precedents --max-depth 2
+node scripts/xlsx.mjs trace INPUT.xlsx --json '{"roots":["Sheet1!B1"],"direction":"precedents"}'
 node scripts/xlsx.mjs trace INPUT.xlsx TRACE.json
 ```
 

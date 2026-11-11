@@ -110,3 +110,65 @@ real("signed-zero markers survive actual inspect and trace CLI JSON while positi
  assert.equal(typeof engine.items[0].cell.value.value,"number");
  assert.deepEqual(await readFile(input),original);
 });
+
+real("CLI flag shorthand and --json execute inspect and trace without temporary files and reject conflicting flags",async t=>{
+ const dir=await temporary(t),input=join(dir,"ergonomics.xlsx"),request=join(dir,"request.json");
+ const original=syntheticWorkbook({
+   "xl/workbook.xml":'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="O&apos;Brien, Co" sheetId="1" r:id="rId1"/></sheets></workbook>',
+   "xl/worksheets/sheet1.xml":'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1"><v>10</v></c><c r="B1"><f>A1+5</f><v>15</v></c><c r="C1"><f>B1*2</f><v>30</v></c></row></sheetData></worksheet>'
+ });
+ await writeFile(input,original);
+ const prefix=loader?["--dev-runtime",loader]:[];
+ const runCli=args=>spawnSync(process.execPath,[cli,...prefix,...args],{encoding:"utf8"});
+
+ const cellsRes=runCli(["inspect",input,"--cells","'O''Brien, Co'!A1","'O''Brien, Co'!C1"]);
+ assert.equal(cellsRes.status,0,cellsRes.stderr);
+ const cellsItems=JSON.parse(cellsRes.stdout).report.items;
+ assert.equal(cellsItems.length,2);
+ assert.equal(cellsItems[0].source_value.value,10);
+ assert.equal(cellsItems[1].stored_formula_cache.value.value,30);
+
+ const rangeRes=runCli(["inspect",input,"--range","'O''Brien, Co'!A1:C1","--limit","2"]);
+ assert.equal(rangeRes.status,0,rangeRes.stderr);
+ const rangeReport=JSON.parse(rangeRes.stdout).report;
+ assert.equal(rangeReport.items.length,2);
+ assert.ok(rangeReport.next_request);
+
+ const nextJsonRes=runCli(["inspect",input,"--json",JSON.stringify(rangeReport.next_request)]);
+ assert.equal(nextJsonRes.status,0,nextJsonRes.stderr);
+ assert.equal(JSON.parse(nextJsonRes.stdout).report.items[0].address,"'O''Brien, Co'!C1");
+
+ const tracePrec=runCli(["trace",input,"--roots","'O''Brien, Co'!C1","--direction","precedents","--max-depth","2","--details"]);
+ assert.equal(tracePrec.status,0,tracePrec.stderr);
+ const precReport=JSON.parse(tracePrec.stdout).report;
+ const tracedAddrs=precReport.items.map(item=>item.cell.address);
+ assert.ok(tracedAddrs.includes("'O''Brien, Co'!C1"));
+ assert.ok(tracedAddrs.includes("'O''Brien, Co'!B1"));
+ assert.ok(tracedAddrs.includes("'O''Brien, Co'!A1"));
+ assert.equal(precReport.coverage.engine_limits.max_depth,2);
+
+ const traceDep=runCli(["trace",input,"--root","'O''Brien, Co'!A1","--direction","dependents","--max-depth","1","--limit","10"]);
+ assert.equal(traceDep.status,0,traceDep.stderr);
+ const depAddrs=JSON.parse(traceDep.stdout).report.items.map(item=>item.cell.address);
+ assert.ok(depAddrs.includes("'O''Brien, Co'!B1"));
+
+ await writeFile(request,JSON.stringify({selection:{kind:"cells",addresses:["'O''Brien, Co'!A1"]}}));
+ for(const badArgs of [
+   ["inspect",input],
+   ["inspect",input,request,"--limit","1"],
+   ["inspect",input,"--range","'O''Brien, Co'!A1:B1","--cells","'O''Brien, Co'!A1"],
+   ["inspect",input,"--cells"],
+   ["inspect",input,"--range","'O''Brien, Co'!A1:B1","--limit","0"],
+   ["inspect",input,"--json",'{"selection":{"kind":"cells","addresses":["\'O\'\'Brien, Co\'!A1"]}}',"--limit","5"],
+   ["trace",input],
+   ["trace",input,"--roots"],
+   ["trace",input,"--roots","'O''Brien, Co'!C1","--direction","upstream"],
+   ["trace",input,"--json",'{"roots":["\'O\'\'Brien, Co\'!C1"]}',"--max-depth","2"]
+ ]) {
+   const bad=runCli(badArgs);
+   assert.equal(bad.status,1,badArgs.join(" "));
+   assert.equal(bad.stdout,"");
+   assert.ok(bad.stderr.trim().length>0);
+ }
+ assert.deepEqual(await readFile(input),original);
+});
