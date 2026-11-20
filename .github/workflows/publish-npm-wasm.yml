@@ -44,7 +44,7 @@ jobs:
         working-directory: npm/agent-spreadsheet-wasm
 
       - name: Enforce the size budget
-        run: node scripts/check-wasm-size.js
+        run: node scripts/check-wasm-size.js --no-build --artifact-dir npm/agent-spreadsheet-wasm/pkg
 
       - name: Run package smoke tests
         run: npm test
