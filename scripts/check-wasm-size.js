@@ -10,6 +10,7 @@
 
 const fs = require("node:fs")
 const path = require("node:path")
+const { parseArgs } = require("node:util")
 
 const { build, measure, wasmArtifact } = require("./build-wasm-package.js")
 
@@ -21,10 +22,21 @@ function formatBytes(value) {
 }
 
 function main() {
-  const argv = process.argv.slice(2)
-  const skipBuild = argv.includes("--no-build")
+  const { values: options } = parseArgs({
+    options: {
+      "no-build": { type: "boolean" },
+      "artifact-dir": { type: "string" }
+    }
+  })
+  const skipBuild = options["no-build"]
+  if (options["artifact-dir"] !== undefined && !skipBuild) {
+    throw new Error("--artifact-dir requires --no-build")
+  }
+
   const budget = JSON.parse(fs.readFileSync(budgetPath, "utf8"))
-  const outDir = path.resolve(repositoryRoot, budget.out_dir)
+  const outDir = options["artifact-dir"] !== undefined
+    ? path.resolve(options["artifact-dir"])
+    : path.resolve(repositoryRoot, budget.out_dir)
 
   let measured
   if (skipBuild) {
