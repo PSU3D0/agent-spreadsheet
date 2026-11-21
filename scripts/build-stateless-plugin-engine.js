@@ -24,7 +24,7 @@ if (br.length >= 5 * 1024 * 1024) throw new Error("Compressed engine reaches the
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
 const metadata = JSON.parse(run("cargo", ["metadata", "--locked", "--format-version", "1", "--config", 'build.rustc-wrapper=""']));
 const versions = Object.fromEntries(metadata.packages.filter(p => p.name.startsWith("formualizer") || p.name === "agent-spreadsheet-stateless-wasm" || p.name === "agent-spreadsheet").map(p => [p.name, p.version]));
-if (versions.formualizer !== "0.14.0" || !metadata.packages.find(p => p.name === "formualizer")?.source?.startsWith("registry+")) throw new Error("Expected crates.io formualizer 0.14.0");
+if (versions.formualizer !== "0.15.0" || !metadata.packages.find(p => p.name === "formualizer")?.source?.startsWith("registry+")) throw new Error("Expected crates.io formualizer 0.15.0");
 fs.mkdirSync(out, { recursive: true });
 // Keep readable wasm-bindgen glue, omitting the unused network-capable async
 // initializer. Both Node and Workers use initSync with local bytes/module.

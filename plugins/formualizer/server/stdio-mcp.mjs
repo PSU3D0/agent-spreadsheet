@@ -280,7 +280,7 @@ export async function handleJsonRpcMessage(message, devRuntime) {
         capabilities: { tools: { listChanged: false } },
         serverInfo: {
           name: "formualizer-spreadsheet",
-          version: "0.18.2"
+          version: "0.19.0"
         }
       }
     };
