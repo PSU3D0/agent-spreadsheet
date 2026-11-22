@@ -61,7 +61,7 @@ test("stdio-mcp initializes and lists exactly the 4 narrow tools with readOnlyHi
     params: { protocolVersion: "2025-06-18" }
   });
   assert.equal(init.result.serverInfo.name, "formualizer-spreadsheet");
-  assert.equal(init.result.serverInfo.version, "0.18.2");
+  assert.equal(init.result.serverInfo.version, "0.19.0");
 
   const list = await handleJsonRpcMessage({
     jsonrpc: "2.0",

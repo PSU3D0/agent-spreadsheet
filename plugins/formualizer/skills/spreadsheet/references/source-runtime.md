@@ -1,6 +1,6 @@
 # Source-runtime recalculation
 
-The bundled stateless engine (backed by Formualizer 0.14.0), which includes `recalculateSourceXlsx` out of the box.
+The bundled stateless engine (backed by Formualizer 0.15.0), which includes `recalculateSourceXlsx` out of the box.
 
 ```sh
 node scripts/xlsx.mjs doctor

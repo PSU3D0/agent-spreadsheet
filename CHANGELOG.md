@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Upgraded Formualizer dependencies to 0.15.0 and rebuilt the bundled stateless plugin engine at 0.19.0.
 - Added stateless file editing, inspection and formula tracing for agent workflows, with an explicit workbook-profile recalculation path and complete, partial or deferred calculation receipts.
 - Preserved a valid edited artifact for supported calculation deferrals; retained fatal errors for resource exhaustion, corruption, cancellation, explicit refusal and output failures.
 - Forwarded Formualizer 0.14 calculation settings, finite evidence/publication limits and optional physical telemetry consistently through native and WASM source APIs.

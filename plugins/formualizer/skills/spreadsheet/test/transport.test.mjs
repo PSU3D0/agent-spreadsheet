@@ -12,7 +12,7 @@ test("doctor verifies bundled hashes and caches a session-free runtime", async (
   const report = await main(["doctor"]);
   assert.equal(report.ready, true);
   assert.equal(report.integrity, "verified");
-  assert.equal(report.provenance.crates.formualizer, "0.14.0");
+  assert.equal(report.provenance.crates.formualizer, "0.15.0");
   assert.equal(report.capabilities.sessions, false);
   const first = await loadRuntime();
   assert.equal(first.runtime, (await loadRuntime()).runtime);
@@ -48,7 +48,7 @@ test("symlinked skill CLI emits doctor JSON and writes a recalculated artifact f
   assert.equal(doctor.status, 0, doctor.stderr);
   const report = JSON.parse(doctor.stdout);
   assert.equal(report.ready, true);
-  assert.equal(report.version, "0.18.0");
+  assert.equal(report.version, "0.19.0");
   assert.equal(report.integrity, "verified");
 
   const input = join(dir, "input.xlsx"), output = join(dir, "output.xlsx");
@@ -58,7 +58,7 @@ test("symlinked skill CLI emits doctor JSON and writes a recalculated artifact f
   const recalc = run(["source-recalculate", input, "--output", output]);
   assert.equal(recalc.status, 0, recalc.stderr);
   const receipt = JSON.parse(recalc.stdout);
-  assert.equal(receipt.runtime.version, "0.18.0");
+  assert.equal(receipt.runtime.version, "0.19.0");
   assert.equal(receipt.runtime.integrity, "verified");
   assert.equal(receipt.metadata.cacheCellsChanged, 1);
   assert.equal(receipt.output, output);
