@@ -1,0 +1,78 @@
+name: Publish npm @formualizer/mcp
+
+on:
+  push:
+    tags:
+      - 'mcp-v*'
+
+jobs:
+  publish-formualizer-mcp:
+    name: Publish @formualizer/mcp
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Verify tag matches package.json version
+        working-directory: npm/formualizer-mcp
+        run: |
+          set -euo pipefail
+          TAG_VER="${GITHUB_REF_NAME#mcp-v}"
+          PKG_VER="$(node -p "require('./package.json').version")"
+          test "$TAG_VER" = "$PKG_VER"
+
+      - name: Build and verify package
+        working-directory: npm/formualizer-mcp
+        run: |
+          npm run build
+          npm pack --dry-run
+
+      - name: Smoke test bundled stdio MCP binary
+        working-directory: npm/formualizer-mcp
+        run: |
+          node --input-type=module -e '
+            import { spawn } from "node:child_process";
+            const proc = spawn("node", ["./bin/formualizer-mcp.mjs"], { stdio: ["pipe", "pipe", "pipe"] });
+            let out = "";
+            proc.stdout.on("data", d => out += d.toString());
+            proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "ci", version: "1" } } }) + "\n");
+            proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }) + "\n");
+            setTimeout(() => {
+              proc.kill();
+              const msgs = out.trim().split("\n").map(l => JSON.parse(l));
+              if (msgs.length !== 2 || msgs[1].result.tools.length !== 4) {
+                console.error("Unexpected MCP smoke output:", out);
+                process.exit(1);
+              }
+              console.log("MCP smoke OK:", msgs[1].result.tools.map(t => t.name));
+            }, 1000);
+          '
+
+      - name: Publish @formualizer/mcp to npm
+        working-directory: npm/formualizer-mcp
+        run: npm publish --access public --provenance
+
+      - name: Publish io.github.PSU3D0/formualizer to Official MCP Registry
+        working-directory: plugins/formualizer
+        run: |
+          set -euo pipefail
+          # Wait briefly for npm propagation so the registry can verify mcpName on @formualizer/mcp
+          TAG_VER="${GITHUB_REF_NAME#mcp-v}"
+          for attempt in $(seq 1 12); do
+            if npm view "@formualizer/mcp@${TAG_VER}" mcpName >/dev/null 2>&1; then
+              break
+            fi
+            sleep 5
+          done
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz -C /tmp mcp-publisher
+          /tmp/mcp-publisher login github-oidc
+          /tmp/mcp-publisher publish

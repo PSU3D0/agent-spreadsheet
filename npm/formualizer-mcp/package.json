@@ -1,0 +1,49 @@
+{
+  "name": "@formualizer/mcp",
+  "version": "0.19.0",
+  "mcpName": "io.github.PSU3D0/formualizer",
+  "description": "Local-first stdio MCP server for Excel (.xlsx) formula recalculation, batch editing, inspection, and dependency tracing powered by bundled Formualizer WASM.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": "Formualizer Contributors",
+  "homepage": "https://www.formualizer.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PSU3D0/agent-spreadsheet.git",
+    "directory": "npm/formualizer-mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/PSU3D0/agent-spreadsheet/issues"
+  },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "spreadsheet",
+    "excel",
+    "xlsx",
+    "recalculation",
+    "formulas",
+    "wasm",
+    "formualizer",
+    "local"
+  ],
+  "bin": {
+    "formualizer-mcp": "./bin/formualizer-mcp.mjs"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-formualizer-mcp-package.mjs",
+    "prepack": "node ../../scripts/build-formualizer-mcp-package.mjs"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

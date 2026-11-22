@@ -1,6 +1,6 @@
-# Formualizer for Claude
+# Formualizer Spreadsheet Plugin
 
-Give Claude a real spreadsheet engine. Formualizer lets Claude recalculate, edit, inspect and trace Excel workbooks (`.xlsx`) directly, instead of guessing at formulas or asking you to open Excel.
+Give your AI agent a real spreadsheet engine. Formualizer lets coding and desktop agents recalculate, edit, inspect and trace Excel workbooks (`.xlsx`) directly, instead of guessing at formulas or asking you to open Excel.
 
 ## What you can do
 
@@ -28,11 +28,42 @@ Give Claude a real spreadsheet engine. Formualizer lets Claude recalculate, edit
 **Codex CLI**
 
 ```sh
-codex plugin marketplace add https://github.com/psu3d0/formualizer-plugin.git
+codex plugin marketplace add https://github.com/PSU3D0/formualizer-plugin.git
 codex plugin add formualizer@formualizer-marketplace
 ```
 
-Formualizer needs Node.js 20 or newer where Claude runs its code. Nothing else to install.
+**Gemini CLI**
+
+```sh
+gemini extensions install https://github.com/PSU3D0/formualizer-plugin
+```
+
+**Devin**
+
+```sh
+devin plugins install PSU3D0/formualizer-plugin
+```
+
+**Agent Skills (`skills.sh` — Claude Code, Cursor, Codex, Copilot, Windsurf, OpenClaw, Pi, and more)**
+
+```sh
+npx skills add PSU3D0/formualizer-plugin
+```
+
+**Local stdio MCP (any MCP client — zero cloud upload)**
+
+```json
+{
+  "mcpServers": {
+    "formualizer": {
+      "command": "npx",
+      "args": ["-y", "@formualizer/mcp"]
+    }
+  }
+}
+```
+
+Formualizer needs Node.js 20 or newer where the agent runs its code. Nothing else to install.
 
 ## Good to know
 
@@ -41,11 +72,11 @@ Formualizer needs Node.js 20 or newer where Claude runs its code. Nothing else t
 
 ## What this plugin runs
 
-The plugin includes the Formualizer spreadsheet engine as one compressed WebAssembly file (`skills/spreadsheet/engine/formualizer_engine.wasm.br`), together with readable JavaScript that loads it. When Claude uses the skill, Node.js checks the file against the SHA-256 recorded in `skills/spreadsheet/engine/PROVENANCE.json`, decompresses it with Node's built-in Brotli support, and runs it locally. `PROVENANCE.json` also records the source repository, commit and toolchain used to build the engine. The plugin installs no packages and downloads nothing.
+The plugin includes the Formualizer spreadsheet engine as one compressed WebAssembly file (`skills/spreadsheet/engine/formualizer_engine.wasm.br`), together with readable JavaScript that loads it. When invoked, Node.js checks the file against the SHA-256 recorded in `skills/spreadsheet/engine/PROVENANCE.json`, decompresses it with Node's built-in Brotli support, and runs it locally. `PROVENANCE.json` also records the source repository, commit and toolchain used to build the engine. The plugin installs no packages and downloads nothing.
 
 ## Privacy & Data Handling
 
-Your workbooks never leave the environment where Claude runs the skill. The skill and its local server make no network requests, send no telemetry, and need no account or credentials. The platform you use Claude on (for example claude.ai or your own machine) handles your files under its own terms.
+Your workbooks never leave the environment where the agent runs the skill or local MCP server. The skill and its local server make no network requests, send no telemetry, and need no account or credentials. The host platform you run the agent on (for example claude.ai, Cursor, Codex, or your own machine) handles your files under its own terms.
 
 ## Links
 
