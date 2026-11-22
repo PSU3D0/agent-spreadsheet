@@ -7,6 +7,18 @@
     "name": "Formualizer",
     "url": "https://github.com/PSU3D0/formualizer"
   },
+  "homepage": "https://www.formualizer.dev",
+  "repository": "https://github.com/PSU3D0/formualizer-plugin",
+  "logo": "./.claude-plugin/icon.png",
+  "keywords": [
+    "spreadsheet",
+    "excel",
+    "xlsx",
+    "recalculation",
+    "formulas",
+    "financial-modeling",
+    "audit"
+  ],
   "license": "Apache-2.0",
   "skills": ["./skills/spreadsheet"],
   "mcpServers": {
