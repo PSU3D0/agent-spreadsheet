@@ -4,10 +4,16 @@ on:
   push:
     tags:
       - 'mcp-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (defaults to npm/formualizer-mcp/package.json version)'
+        required: false
+        type: string
 
 jobs:
   publish-formualizer-mcp:
-    name: Publish @formualizer/mcp
+    name: Publish @formualizer/mcp & Official MCP Registry
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -22,13 +28,23 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
-      - name: Verify tag matches package.json version
+      - name: Resolve and verify version
+        id: ver
         working-directory: npm/formualizer-mcp
         run: |
           set -euo pipefail
-          TAG_VER="${GITHUB_REF_NAME#mcp-v}"
           PKG_VER="$(node -p "require('./package.json').version")"
-          test "$TAG_VER" = "$PKG_VER"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TARGET_VER="${{ inputs.version || '' }}"
+            if [ -z "$TARGET_VER" ]; then
+              TARGET_VER="$PKG_VER"
+            fi
+          else
+            TARGET_VER="${GITHUB_REF_NAME#mcp-v}"
+          fi
+          test "$TARGET_VER" = "$PKG_VER"
+          echo "version=${TARGET_VER}" >> "$GITHUB_OUTPUT"
+          echo "Resolved @formualizer/mcp version: ${TARGET_VER}"
 
       - name: Build and verify package
         working-directory: npm/formualizer-mcp
@@ -57,18 +73,24 @@ jobs:
             }, 1000);
           '
 
-      - name: Publish @formualizer/mcp to npm
+      - name: Publish @formualizer/mcp to npm (if not already published)
         working-directory: npm/formualizer-mcp
-        run: npm publish --access public --provenance
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.ver.outputs.version }}"
+          if npm view "@formualizer/mcp@${VERSION}" version >/dev/null 2>&1; then
+            echo "@formualizer/mcp@${VERSION} is already published on npm; skipping npm publish"
+          else
+            npm publish --access public --provenance
+          fi
 
       - name: Publish io.github.PSU3D0/formualizer to Official MCP Registry
         working-directory: plugins/formualizer
         run: |
           set -euo pipefail
-          # Wait briefly for npm propagation so the registry can verify mcpName on @formualizer/mcp
-          TAG_VER="${GITHUB_REF_NAME#mcp-v}"
+          VERSION="${{ steps.ver.outputs.version }}"
           for attempt in $(seq 1 12); do
-            if npm view "@formualizer/mcp@${TAG_VER}" mcpName >/dev/null 2>&1; then
+            if npm view "@formualizer/mcp@${VERSION}" mcpName >/dev/null 2>&1; then
               break
             fi
             sleep 5
