@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="512" height="512" fill="none">
+  <defs>
+    <linearGradient id="fz-df-bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#14182B"/>
+      <stop offset="100%" stop-color="#090A12"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" fill="url(#fz-df-bg)"/>
+  <defs>
+    <linearGradient id="fz-df-gold" x1="39.4" y1="13" x2="52.4" y2="23.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FCC85C"/>
+      <stop offset="100%" stop-color="#FC9F3A"/>
+    </linearGradient>
+    <linearGradient id="fz-df-blue" x1="15.4" y1="27" x2="44.4" y2="37" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3E55F7"/>
+      <stop offset="100%" stop-color="#40D2D4"/>
+    </linearGradient>
+  </defs>
+  <polygon points="19.2,13 38.7,13 36.5,23 17,23" fill="#F8FAFC"/>
+  <polygon points="41.7,13 53.2,13 51,23 39.5,23" fill="url(#fz-df-gold)"/>
+  <polygon points="16.12,27 42.62,27 40.42,37 13.92,37" fill="url(#fz-df-blue)"/>
+  <polygon points="13.04,41 25.04,41 22.84,51 10.84,51" fill="#F8FAFC"/>
+</svg>
